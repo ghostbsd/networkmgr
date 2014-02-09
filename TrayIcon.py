@@ -17,6 +17,11 @@ sgnal25 = '%snm-signal-25.png' % icons24
 sgnal50 = '%snm-signal-50.png' % icons24
 sgnal75 = '%snm-signal-75.png' % icons24
 sgnal100 = '%snm-signal-100.png' % icons24
+secure0 = '%snm-signal-00-secure.png' % icons24
+secure25 = '%snm-signal-25-secure.png' % icons24
+secure50 = '%snm-signal-50-secure.png' % icons24
+secure75 = '%snm-signal-75-secure.png' % icons24
+secure100 = '%snm-signal-100-secure.png' % icons24
 wirec = '%snm-adhoc.png' % icons24
 wirenc = '%snm-no-connection.png' % icons24
 
@@ -141,15 +146,15 @@ class TrayIcon(object):
     def protectedwifi(self, bar):
         img = gtk.Image()
         if bar > 75:
-            img.set_from_file(sgnal100)
+            img.set_from_file(secure100)
         elif bar > 50:
-            img.set_from_file(sgnal75)
+            img.set_from_file(secure75)
         elif bar > 25:
-            img.set_from_file(sgnal50)
+            img.set_from_file(secure50)
         elif bar > 5:
-            img.set_from_file(sgnal25)
+            img.set_from_file(secure25)
         else:
-            img.set_from_file(sgnal0)
+            img.set_from_file(secure0)
         img.show()
         return img
 

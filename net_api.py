@@ -46,10 +46,13 @@ def find_rsn(info):
 def get_ssid():
     if os.path.exists("/etc/wpa_supplicant.conf"):
         wpa_supplican = open("/etc/wpa_supplicant.conf", 'r')
-        for line in wpa_supplican.readlines():
-            info = line.strip()
-            if info.partition('=')[0] == "ssid":
-                ssid = re.sub('["]', '', info.partition('=')[2])
+        if os.stat("/etc/wpa_supplicant.conf")[6] == 0:
+            ssid = None
+        else:
+            for line in wpa_supplican.readlines():
+                info = line.strip()
+                if info.partition('=')[0] == "ssid":
+                    ssid = re.sub('["]', '', info.partition('=')[2])
     else:
         ssid = None
     return ssid
