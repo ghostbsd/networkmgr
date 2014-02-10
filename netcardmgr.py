@@ -38,7 +38,7 @@ from subprocess import Popen, PIPE, call
 ncard = 'sh /usr/local/etc/gbi/backend-query/detect-nics.sh'
 detect_wifi = 'sh /usr/local/etc/gbi/backend-query/detect-wifi.sh'
 nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True)
-netcard = nics.stdout
+netcard = nics.stdout.readlines()
 
 rcconf_out = open('/etc/rc.conf', 'r')
 rcconf = rcconf_out.readlines()

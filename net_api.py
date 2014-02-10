@@ -3,6 +3,25 @@
 from subprocess import Popen, PIPE, STDOUT, call
 import re
 import os
+ncard = 'sh /usr/local/etc/gbi/backend-query/detect-nics.sh'
+detect_wifi = 'sh /usr/local/etc/gbi/backend-query/detect-wifi.sh'
+
+
+def wirecard():
+    nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True)
+    netcard = nics.stdout
+    for line in netcard:
+        card = line.rstrip().partition(':')[0]
+        if card != "wlan0":
+            wifi = Popen("%s %s" % (detect_wifi, card), shell=True,
+            stdout=PIPE, close_fds=True)
+            answer = wifi.stdout.readlines()[0].strip()
+            if answer == "yes":
+                pass
+            else:
+                card0 = card
+                break
+    return card0
 
 
 def netstate():
@@ -21,9 +40,10 @@ def netstate():
             wifi = Popen('ifconfig wlan0  list scan', shell=True, stdin=PIPE,
             stdout=PIPE, stderr=STDOUT, close_fds=True)
             for line in wifi.stdout:
-                info = line.split()
+                info = line.split('   ')
+                info = filter(None, info)
                 if ssid == info[0]:
-                    sn = info[4]
+                    sn = info[3].rstrip().split()[1]
                     sig = int(sn.partition(':')[0])
                     noise = int(sn.partition(':')[2])
                     state = (sig - noise) * 4
@@ -84,7 +104,6 @@ def barpercent(ssid):
         info = filter(None, info)
         if ssid == info[0]:
             sn = info[3].rstrip().split()[1]
-
             sig = int(sn.partition(':')[0])
             noise = int(sn.partition(':')[2])
             bar = (sig - noise) * 4
@@ -138,7 +157,7 @@ def lookinfo(ssid):
 
 
 def wiredonlineinfo():
-    wifi = Popen('ifconfig re0', shell=True, stdin=PIPE, stdout=PIPE,
+    wifi = Popen('ifconfig ' + wirecard(), shell=True, stdin=PIPE, stdout=PIPE,
     stderr=STDOUT, close_fds=True)
     for line in wifi.stdout:
         if "inet" in line:
@@ -146,7 +165,7 @@ def wiredonlineinfo():
 
 
 def wiredconnectedinfo():
-    wifi = Popen('ifconfig re0', shell=True, stdin=PIPE, stdout=PIPE,
+    wifi = Popen('ifconfig ' + wirecard(), shell=True, stdin=PIPE, stdout=PIPE,
     stderr=STDOUT, close_fds=True)
     for line in wifi.stdout:
         if "status: active" in line:
@@ -158,7 +177,7 @@ def stopallnetwork():
 
 
 def stopwirednetwork():
-    call('/etc/rc.d/netif stop re0', shell=True)
+    call('/etc/rc.d/netif stop ' + wirecard(), shell=True)
 
 
 def startallnetwork():
@@ -166,7 +185,7 @@ def startallnetwork():
 
 
 def startwirednetwork():
-    call('/etc/rc.d/netif start re0', shell=True)
+    call('/etc/rc.d/netif start ' + wirecard(), shell=True)
 
 
 def wifidisconnection():
