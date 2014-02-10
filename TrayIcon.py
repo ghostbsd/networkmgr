@@ -91,10 +91,11 @@ class TrayIcon(object):
                 pass
             else:
                 menu_item = gtk.ImageMenuItem(name)
-                menu_item.set_image(self.openwifi(bar))
                 if keyinfo(name) == 'EP':
+                    menu_item.set_image(self.protectedwifi(bar))
                     menu_item.connect("activate", self.menu_click_look, name)
                 elif keyinfo(name) == 'E':
+                    menu_item.set_image(self.openwifi(bar))
                     menu_item.connect("activate", self.menu_click_open, name)
                 menu_item.show()
                 self.menu.append(menu_item)

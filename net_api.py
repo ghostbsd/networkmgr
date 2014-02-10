@@ -66,7 +66,8 @@ def ssidliste():
     for line in wifi.stdout:
         if line[0] == " ":
             line = "Unknown" + line
-        info = line.split()
+        info = line.split('   ')
+        filter(None, info)
         if b is True:
             ssid.append(info[0])
         b = True
@@ -74,14 +75,16 @@ def ssidliste():
 
 
 def barpercent(ssid):
-    wifi = Popen('ifconfig wlan0  list scan', shell=True, stdin=PIPE,
-    stdout=PIPE, stderr=STDOUT, close_fds=True)
+    wifi = Popen('ifconfig wlan0  list scan', shell=True, stdout=PIPE,
+    close_fds=True)
     for line in wifi.stdout:
         if line[0] == " ":
             line = "Unknown" + line
-        info = line.split()
+        info = line.split("   ")
+        info = filter(None, info)
         if ssid == info[0]:
-            sn = info[4]
+            sn = info[3].rstrip().split()[1]
+
             sig = int(sn.partition(':')[0])
             noise = int(sn.partition(':')[2])
             bar = (sig - noise) * 4
@@ -94,10 +97,12 @@ def keyinfo(ssid):
     for line in wifi.stdout:
         if line[0] == " ":
             line = "Unknown" + line
-        info = line.split()
-        if info[0] == ssid:
-            kinfo = info[6]
-
+        info = line.split('   ')
+        info = filter(None, info)
+        if info[0] == ssid and len(info) == 5:
+            kinfo = info[3].split()[3]
+        elif info[0] == ssid and len(info) == 6:
+            kinfo = info[4].split()[1]
     return kinfo
 
 
@@ -108,7 +113,7 @@ def openinfo(ssid):
     for line in wifi.stdout:
         if line[0] == " ":
             line = "Unknown" + line
-        info = line.split()
+        info = line.split('  ')
         if info[0] == ssid:
             oinfo.append(info[1])
             return oinfo
