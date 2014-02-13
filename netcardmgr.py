@@ -88,5 +88,5 @@ class autoConfigure():
                 call('/etc/rc.d/netif restart', shell=True)
                 call('ifconfig wlan0 down', shell=True)
                 call('ifconfig wlan0 up', shell=True)
-        exit()
+
 autoConfigure()

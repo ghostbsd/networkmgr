@@ -26,7 +26,7 @@ wirec = '%snm-adhoc.png' % icons24
 wirenc = '%snm-no-connection.png' % icons24
 
 
-class TrayIcon(object):
+class trayIcon(object):
     """
     Use GTK to create an object in the system tray
     and manipulate icon shown if there is an issue.
@@ -184,6 +184,5 @@ class TrayIcon(object):
         gobject.timeout_add(10000, self.check)
         gtk.main()
 
-
-i = TrayIcon()
+i = trayIcon()
 i.tray()
