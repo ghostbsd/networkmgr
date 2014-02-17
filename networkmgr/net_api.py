@@ -1,10 +1,22 @@
 #!/usr/local/bin/python
 
 from subprocess import Popen, PIPE, STDOUT, call
-import re
-import os
+#import re
+#import os
 ncard = 'sh /usr/local/etc/gbi/backend-query/detect-nics.sh'
 detect_wifi = 'sh /usr/local/etc/gbi/backend-query/detect-wifi.sh'
+scan = "ifconfig wlan0 list scan"
+
+
+def scanWifiSsid(ssid):
+    wifi = Popen(scan, shell=True, stdout=PIPE, close_fds=True)
+    for line in wifi.stdout:
+        if line[0] == " ":
+            line = "Unknown" + line
+        info = line.split('  ')
+        info = filter(None, info)
+        if ssid == info[0]:
+            return info
 
 
 def wirecard():
@@ -24,34 +36,33 @@ def wirecard():
     return card0
 
 
+def wiredonlineinfo():
+    wifi = Popen('ifconfig ' + wirecard(), shell=True, stdin=PIPE, stdout=PIPE,
+    stderr=STDOUT, close_fds=True)
+    for line in wifi.stdout:
+        if "inet" in line:
+            answer = True
+            break
+        else:
+            answer = None
+    return answer
+
+
 def netstate():
-    if os.path.exists("/etc/wpa_supplicant.conf"):
-        wpa_supplican = open("/etc/wpa_supplicant.conf", 'r')
-        if os.stat("/etc/wpa_supplicant.conf")[6] == 0:
-            if wiredonlineinfo() is True:
-                state = 120
-            else:
-                state = 110
-        else:
-            for line in wpa_supplican.readlines():
-                info = line.strip()
-                if info.partition('=')[0] == "ssid":
-                    ssid = re.sub('["]', '', info.partition('=')[2])
-            wifi = Popen('ifconfig wlan0  list scan', shell=True, stdin=PIPE,
-            stdout=PIPE, stderr=STDOUT, close_fds=True)
-            for line in wifi.stdout:
-                info = line.split('   ')
-                info = filter(None, info)
-                if ssid == info[0]:
-                    sn = info[3].rstrip().split()[1]
-                    sig = int(sn.partition(':')[0])
-                    noise = int(sn.partition(':')[2])
-                    state = (sig - noise) * 4
+    if ifWlan() is None and wiredonlineinfo() is None:
+        state = None
+    elif ifWlan() is None and wiredonlineinfo() is True:
+        state = 120
     else:
-        if wiredonlineinfo() is True:
-            state = 120
+        ssid = get_ssid()
+        scn = scanWifiSsid(ssid)
+        if len(scn) == 7:
+            sn = scn[4]
         else:
-            state = 110
+            sn = scn[3].rstrip().split()[1]
+        sig = int(sn.partition(':')[0])
+        noise = int(sn.partition(':')[2])
+        state = (sig - noise) * 4
     return state
 
 
@@ -64,18 +75,28 @@ def find_rsn(info):
 
 
 def get_ssid():
-    if os.path.exists("/etc/wpa_supplicant.conf"):
-        wpa_supplican = open("/etc/wpa_supplicant.conf", 'r')
-        if os.stat("/etc/wpa_supplicant.conf")[6] == 0:
-            ssid = None
-        else:
-            for line in wpa_supplican.readlines():
-                info = line.strip()
-                if info.partition('=')[0] == "ssid":
-                    ssid = re.sub('["]', '', info.partition('=')[2])
+    if ifWlan() is None:
+        return None
     else:
-        ssid = None
-    return ssid
+        wlan = Popen('ifconfig wlan0', shell=True, stdout=PIPE, close_fds=True)
+        for line in wlan.stdout:
+            info = line.split()
+            if "ssid" in info[0]:
+                ssid = info[1]
+                break
+        return ssid
+
+
+def ifWlan():
+        nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True)
+        for line in nics.stdout.readlines():
+            card = line.rstrip().partition(':')[0]
+            if card == "wlan0":
+                answer = True
+                break
+            else:
+                answer = None
+        return answer
 
 
 def ssidliste():
@@ -95,33 +116,23 @@ def ssidliste():
 
 
 def barpercent(ssid):
-    wifi = Popen('ifconfig wlan0  list scan', shell=True, stdout=PIPE,
-    close_fds=True)
-    for line in wifi.stdout:
-        if line[0] == " ":
-            line = "Unknown" + line
-        info = line.split("   ")
-        info = filter(None, info)
-        if ssid == info[0]:
-            sn = info[3].rstrip().split()[1]
-            sig = int(sn.partition(':')[0])
-            noise = int(sn.partition(':')[2])
-            bar = (sig - noise) * 4
+    scn = scanWifiSsid(ssid)
+    if len(scn) == 7:
+        sn = scn[4]
+    else:
+        sn = scn[3].rstrip().split()[1]
+    sig = int(sn.partition(':')[0])
+    noise = int(sn.partition(':')[2])
+    bar = (sig - noise) * 4
     return bar
 
 
 def keyinfo(ssid):
-    wifi = Popen('ifconfig wlan0  list scan', shell=True, stdin=PIPE,
-    stdout=PIPE, stderr=STDOUT, close_fds=True)
-    for line in wifi.stdout:
-        if line[0] == " ":
-            line = "Unknown" + line
-        info = line.split('   ')
-        info = filter(None, info)
-        if info[0] == ssid and len(info) == 5:
-            kinfo = info[3].split()[3]
-        elif info[0] == ssid and len(info) == 6:
-            kinfo = info[4].split()[1]
+    scn = scanWifiSsid(ssid)
+    if len(scn) == 7:
+        kinfo = scn[5].split()[1]
+    else:
+        kinfo = scn[4].split()[1]
     return kinfo
 
 
@@ -156,14 +167,6 @@ def lookinfo(ssid):
     return linfo
 
 
-def wiredonlineinfo():
-    wifi = Popen('ifconfig ' + wirecard(), shell=True, stdin=PIPE, stdout=PIPE,
-    stderr=STDOUT, close_fds=True)
-    for line in wifi.stdout:
-        if "inet" in line:
-            return True
-
-
 def wiredconnectedinfo():
     wifi = Popen('ifconfig ' + wirecard(), shell=True, stdin=PIPE, stdout=PIPE,
     stderr=STDOUT, close_fds=True)
@@ -189,15 +192,8 @@ def startwirednetwork():
 
 
 def wifidisconnection():
-    os.remove("/etc/wpa_supplicant.conf")
-    call('/etc/rc.d/netif stop wlan0', shell=True)
-    call('/etc/rc.d/netif start wlan0', shell=True)
-    call('ifconfig wlan0 up', shell=True)
+    call('ifconfig wlan0 down', shell=True)
 
 
 def wificonnection():
-    call('/etc/rc.d/netif stop wlan0', shell=True)
-    call('/etc/rc.d/netif start wlan0', shell=True)
-    call('ifconfig wlan0 up', shell=True)
-    # Adding ifconfig wlan0 up because some time it fail.
     call('ifconfig wlan0 up', shell=True)

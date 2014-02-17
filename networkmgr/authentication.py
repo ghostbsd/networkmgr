@@ -99,12 +99,13 @@ class Look_Wpa_Supplicant:
             ws = """# /etc/wpa_supplicant.conf written by networkmgr
 
 network={
-        ssid="%s"
-        bssid=%s
-        key_mgmt=WPA-PSK
-        proto=RSN
-        psk="%s"
-}""" % (ssid, lookinfo(ssid)[0], pwd)
+	ssid="%s"
+	bssid=%s
+	key_mgmt=WPA-PSK
+	proto=RSN
+	psk="%s"
+}
+""" % (ssid, lookinfo(ssid)[0], pwd)
             wsf = open(wpa_supplican, 'w')
             wsf.writelines(ws)
             wsf.close()

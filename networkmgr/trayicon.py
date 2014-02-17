@@ -2,12 +2,14 @@
 
 import gtk
 import gobject
-from subprocess import call
+from subprocess import call, PIPE, Popen
 #from time import sleep
 from net_api import netstate, ssidliste, barpercent, keyinfo, get_ssid
 from net_api import wiredonlineinfo, wiredconnectedinfo, stopwirednetwork
 from  net_api import startwirednetwork, wifidisconnection
 from authentication import Authentication, Open_Wpa_Supplicant
+
+ncard = 'sh /usr/local/share/networkmgr/detect-nics.sh'
 
 icons24 = '/usr/ghostbsdcode/networkmgr/icons/24/'
 icons22 = '/usr/ghostbsdcode/networkmgr/icons/22/'
@@ -70,12 +72,17 @@ class trayIcon(object):
             self.menu.append(disconnected)
         self.menu.append(gtk.SeparatorMenuItem())
         w_title = gtk.MenuItem()
-        w_title.set_label("Wi-Fi Network")
-        w_title.set_sensitive(False)
-        self.menu.append(w_title)
         if get_ssid() is None:
             pass
+        elif get_ssid() == '""':
+            w_title.set_label("Wi-Fi Disconnected")
+            w_title.set_sensitive(False)
+            self.menu.append(w_title)
+            self.wifiListMenu()
         else:
+            w_title.set_label("Wi-Fi Connected")
+            w_title.set_sensitive(False)
+            self.menu.append(w_title)
             bar = barpercent(get_ssid())
             connection_item = gtk.ImageMenuItem(get_ssid())
             connection_item.set_image(self.openwifi(bar))
@@ -85,6 +92,11 @@ class trayIcon(object):
             self.menu.append(connection_item)
             self.menu.append(disconnect_item)
             self.menu.append(gtk.SeparatorMenuItem())
+            self.wifiListMenu()
+        self.menu.show_all()
+        return self.menu
+
+    def wifiListMenu(self, widget):
         for name in self.ssid_name:
             bar = barpercent(name)
             if get_ssid() == name:
@@ -94,13 +106,14 @@ class trayIcon(object):
                 if keyinfo(name) == 'EP':
                     menu_item.set_image(self.protectedwifi(bar))
                     menu_item.connect("activate", self.menu_click_look, name)
+                elif keyinfo(name) == 'EPS':
+                    menu_item.set_image(self.protectedwifi(bar))
+                    menu_item.connect("activate", self.menu_click_look, name)
                 elif keyinfo(name) == 'E':
                     menu_item.set_image(self.openwifi(bar))
                     menu_item.connect("activate", self.menu_click_open, name)
                 menu_item.show()
                 self.menu.append(menu_item)
-        self.menu.show_all()
-        return self.menu
 
     def menu_click_open(self, widget, name):
         Open_Wpa_Supplicant(name)
@@ -174,6 +187,8 @@ class trayIcon(object):
             self.statusIcon.set_from_file(sgnal50)
         elif state > 5:
             self.statusIcon.set_from_file(sgnal25)
+        elif state is None:
+            self.statusIcon.set_from_file(wirenc)
         else:
             self.statusIcon.set_from_file(sgnal0)
         return True

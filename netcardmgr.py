@@ -35,8 +35,8 @@
 
 import os
 from subprocess import Popen, PIPE, call
-ncard = 'sh /usr/local/etc/gbi/backend-query/detect-nics.sh'
-detect_wifi = 'sh /usr/local/etc/gbi/backend-query/detect-wifi.sh'
+ncard = 'sh /usr/local/share/networkmgr/detect-nics.sh'
+detect_wifi = 'sh /usr/local/share/networkmgr/detect-wifi.sh'
 nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True)
 netcard = nics.stdout.readlines()
 

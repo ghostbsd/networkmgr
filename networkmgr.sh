@@ -1,7 +1,5 @@
 #!/bin/sh
 
-
-
-netcardmg
+netcardmgr
 cd /usr/local/share/networkmgr/
 python trayicon.py
