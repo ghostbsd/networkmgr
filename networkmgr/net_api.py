@@ -5,7 +5,7 @@ from subprocess import Popen, PIPE, STDOUT, call
 #import os
 ncard = 'sh /usr/local/etc/gbi/backend-query/detect-nics.sh'
 detect_wifi = 'sh /usr/local/etc/gbi/backend-query/detect-wifi.sh'
-scan = "ifconfig wlan0 list scan"
+scan = "ifconfig wlan0 up list scan"
 
 
 def scanWifiSsid(ssid):
@@ -52,6 +52,8 @@ def netstate():
     if ifWlan() is None and wiredonlineinfo() is None:
         state = None
     elif ifWlan() is None and wiredonlineinfo() is True:
+        state = 120
+    elif get_ssid() == '""' and wiredonlineinfo() is True:
         state = 120
     else:
         ssid = get_ssid()
@@ -117,6 +119,7 @@ def ssidliste():
 
 def barpercent(ssid):
     scn = scanWifiSsid(ssid)
+    print scn
     if len(scn) == 7:
         sn = scn[4]
     else:
