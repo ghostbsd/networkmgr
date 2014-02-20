@@ -12,8 +12,7 @@ from authentication import Authentication, Open_Wpa_Supplicant
 
 ncard = 'sh /usr/local/share/networkmgr/detect-nics.sh'
 
-icons24 = '/usr/ghostbsdcode/networkmgr/icons/24/'
-icons22 = '/usr/ghostbsdcode/networkmgr/icons/22/'
+icons24 = '/usr/local/share/networkmgr/icons/24/'
 
 sgnal0 = '%snm-signal-00.png' % icons24
 sgnal25 = '%snm-signal-25.png' % icons24
@@ -38,9 +37,7 @@ class trayIcon(object):
         self.statusIcon = gtk.StatusIcon()
         #self.statusIcon.set_tooltip('Tracker Desktop Search')
         self.statusIcon.set_visible(True)
-
         self.menu = gtk.Menu()
-
         self.menu.show_all()
         self.act = False
         self.statusIcon.connect("activate", self.leftclick)
@@ -113,15 +110,12 @@ class trayIcon(object):
                 pass
             else:
                 menu_item = gtk.ImageMenuItem(name)
-                if keyinfo(name) == 'EP':
-                    menu_item.set_image(self.protectedwifi(bar))
-                    menu_item.connect("activate", self.menu_click_look, name)
-                elif keyinfo(name) == 'EPS':
-                    menu_item.set_image(self.protectedwifi(bar))
-                    menu_item.connect("activate", self.menu_click_look, name)
-                elif keyinfo(name) == 'E':
+                if keyinfo(name) == 'E':
                     menu_item.set_image(self.openwifi(bar))
                     menu_item.connect("activate", self.menu_click_open, name)
+                else:
+                    menu_item.set_image(self.protectedwifi(bar))
+                    menu_item.connect("activate", self.menu_click_look, name)
                 menu_item.show()
                 self.menu.append(menu_item)
 

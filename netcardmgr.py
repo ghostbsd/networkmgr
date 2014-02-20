@@ -55,12 +55,14 @@ class autoConfigure():
             rc.writelines('\n#%s\n' % netcardtext)
             rc.close()
         for line in netcard:
-            card = line.rstrip().partition(':')[0]
+            card = line.rstrip().partition(' ')[0]
+            print card
             if card != "wlan0":
                 wifi = Popen("%s %s" % (detect_wifi, card), shell=True,
                 stdout=PIPE, close_fds=True)
                 answer = wifi.stdout.readlines()[0].strip()
-                if answer == "yes":
+                print answer
+                if answer == '0':
                     if any('wlans_%s=' % card in listed for listed in rcconf):
                         pass
                     else:
@@ -82,11 +84,11 @@ class autoConfigure():
                         rc = open('/etc/rc.conf', 'a')
                         rc.writelines('ifconfig_%s="DHCP"\n' % card)
                         rc.close()
-        for line in rcconf:
-            if line.rstrip() == 'ifconfig_wlan0="WPA DHCP"':
-                print("Your WiFi card is ready to use.")
-                call('/etc/rc.d/netif restart', shell=True)
-                call('ifconfig wlan0 down', shell=True)
-                call('ifconfig wlan0 up', shell=True)
+        if any('wlans_%s=' % card in listed for listed in rcconf):
+            print("Your WiFi card is ready to use.")
+            call('/etc/rc.d/netif restart', shell=True)
+            call('ifconfig wlan0 down', shell=True)
+            call('ifconfig wlan0 up', shell=True)
+        call('/etc/rc.d/netif restart', shell=True)
 
 autoConfigure()

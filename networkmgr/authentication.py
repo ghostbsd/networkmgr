@@ -1,7 +1,7 @@
 #!/usr/local/bin/python
 
 import gtk
-from net_api import openinfo, lookinfo, find_rsn, wificonnection
+from net_api import openinfo, lookinfo, find_rsn, wificonnection, findWPA
 
 wpa_supplican = "/etc/wpa_supplicant.conf"
 
@@ -77,14 +77,13 @@ class Open_Wpa_Supplicant:
 
     def __init__(self, ssid):
 
-        ws = """# /etc/wpa_supplicant.conf written by networkmgr
-
+        ws = """
 network={
-        ssid="%s"
-        bssid=%s
-        key_mgmt=NONE
+	ssid="%s"
+	bssid=%s
+	key_mgmt=NONE
 }""" % (ssid, openinfo(ssid))
-        wsf = open(wpa_supplican, 'w')
+        wsf = open(wpa_supplican, 'a')
         wsf.writelines(ws)
         wsf.close()
         wificonnection()
@@ -94,10 +93,9 @@ class Look_Wpa_Supplicant:
 
     def __init__(self, ssid, pwd):
         self.name_id = ssid
-        print((lookinfo(ssid)))
         if find_rsn(lookinfo(ssid)) is True:
-            ws = """# /etc/wpa_supplicant.conf written by networkmgr
-
+            # /etc/wpa_supplicant.conf written by networkmgr
+            ws = """
 network={
 	ssid="%s"
 	bssid=%s
@@ -106,7 +104,23 @@ network={
 	psk="%s"
 }
 """ % (ssid, lookinfo(ssid)[0], pwd)
-            wsf = open(wpa_supplican, 'w')
+            wsf = open(wpa_supplican, 'a')
+            wsf.writelines(ws)
+            wsf.close()
+            wificonnection()
+        elif findWPA(lookinfo(ssid)) is True:
+            pass
+        else:
+            ws = """
+network={
+	ssid="%s"
+	bssid="%s"
+	key_mgmt=NONE
+	wep_tx_keyidx=0
+	wep_key0="%s"
+}
+""" % (ssid, lookinfo(ssid)[0], pwd)
+            wsf = open(wpa_supplican, 'a')
             wsf.writelines(ws)
             wsf.close()
             wificonnection()

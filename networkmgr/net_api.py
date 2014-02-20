@@ -3,8 +3,8 @@
 from subprocess import Popen, PIPE, STDOUT, call
 #import re
 #import os
-ncard = 'sh /usr/local/etc/gbi/backend-query/detect-nics.sh'
-detect_wifi = 'sh /usr/local/etc/gbi/backend-query/detect-wifi.sh'
+ncard = 'sh detect-nics.sh'
+detect_wifi = 'sh detect-wifi.sh'
 scan = "ifconfig wlan0 up list scan"
 
 
@@ -23,7 +23,7 @@ def wirecard():
     nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True)
     netcard = nics.stdout
     for line in netcard:
-        card = line.rstrip().partition(':')[0]
+        card = line.rstrip().partition(' ')[0]
         if card != "wlan0":
             wifi = Popen("%s %s" % (detect_wifi, card), shell=True,
             stdout=PIPE, close_fds=True)
@@ -37,8 +37,8 @@ def wirecard():
 
 
 def wiredonlineinfo():
-    wifi = Popen('ifconfig ' + wirecard(), shell=True, stdin=PIPE, stdout=PIPE,
-    stderr=STDOUT, close_fds=True)
+    wifi = Popen('ifconfig ' + wirecard(), shell=True, stdout=PIPE,
+    close_fds=True)
     for line in wifi.stdout:
         if "inet" in line:
             answer = True
@@ -55,6 +55,8 @@ def netstate():
         state = 120
     elif get_ssid() == '""' and wiredonlineinfo() is True:
         state = 120
+    elif get_ssid() == '""' and wiredonlineinfo() is None:
+        state = 0
     else:
         ssid = get_ssid()
         scn = scanWifiSsid(ssid)
@@ -76,6 +78,14 @@ def find_rsn(info):
     return var
 
 
+def findWPA(info):
+    var = False
+    for line in info:
+        if line == "WPA":
+            var = True
+    return var
+
+
 def get_ssid():
     if ifWlan() is None:
         return None
@@ -92,7 +102,7 @@ def get_ssid():
 def ifWlan():
         nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True)
         for line in nics.stdout.readlines():
-            card = line.rstrip().partition(':')[0]
+            card = line.rstrip().partition(" ")[0]
             if card == "wlan0":
                 answer = True
                 break
@@ -119,7 +129,7 @@ def ssidliste():
 
 def barpercent(ssid):
     scn = scanWifiSsid(ssid)
-    print scn
+    #print scn
     if len(scn) == 7:
         sn = scn[4]
     else:
@@ -142,14 +152,12 @@ def keyinfo(ssid):
 def openinfo(ssid):
     wifi = Popen('ifconfig wlan0  list scan', shell=True, stdin=PIPE,
     stdout=PIPE, stderr=STDOUT, close_fds=True)
-    oinfo = []
     for line in wifi.stdout:
         if line[0] == " ":
             line = "Unknown" + line
         info = line.split('  ')
         if info[0] == ssid:
-            oinfo.append(info[1])
-            return oinfo
+            return info[1].rstrip()
 
 
 def lookinfo(ssid):
@@ -188,6 +196,7 @@ def stopwirednetwork():
 
 def startallnetwork():
     call('/etc/rc.d/netif start', shell=True)
+    call('service netif restart wlan0', shell=True)
 
 
 def startwirednetwork():
@@ -196,7 +205,8 @@ def startwirednetwork():
 
 def wifidisconnection():
     call('ifconfig wlan0 down', shell=True)
+    call('ifconfig wlan0 up', shell=True)
 
 
 def wificonnection():
-    call('ifconfig wlan0 up', shell=True)
+    call('service netif restart wlan0', shell=True)
