@@ -16,7 +16,8 @@ def scanWifiSsid(ssid):
         info = line.split('  ')
         info = filter(None, info)
         if ssid == info[0]:
-            return info
+            wnet = info
+    return wnet
 
 
 def wirecard():
@@ -93,9 +94,14 @@ def get_ssid():
         wlan = Popen('ifconfig wlan0', shell=True, stdout=PIPE, close_fds=True)
         for line in wlan.stdout:
             info = line.split()
+            info2 = line.split('"')
             if "ssid" in info[0]:
-                ssid = info[1]
-                break
+                if info[1] == '""':
+                    ssid = info[1]
+                    break
+                else:
+                    ssid = info2[1]
+                    break
         return ssid
 
 
@@ -129,7 +135,6 @@ def ssidliste():
 
 def barpercent(ssid):
     scn = scanWifiSsid(ssid)
-    #print scn
     if len(scn) == 7:
         sn = scn[4]
     else:
