@@ -1,7 +1,6 @@
 #!/usr/local/bin/python
 
 import os
-import re
 import shutil
 
 share = "/usr/local/share/networkmgr"

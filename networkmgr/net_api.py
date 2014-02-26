@@ -96,12 +96,15 @@ def get_ssid():
             info = line.split()
             info2 = line.split('"')
             if "ssid" in info[0]:
-                if info[1] == '""':
-                    ssid = info[1]
-                    break
+                if '"' in line:
+                    if info[1] == '""':
+                        ssid = info[1]
+                        break
+                    else:
+                        ssid = info2[1]
+                        break
                 else:
-                    ssid = info2[1]
-                    break
+                    ssid = info[1]
         return ssid
 
 

@@ -56,12 +56,10 @@ class autoConfigure():
             rc.close()
         for line in netcard:
             card = line.rstrip().partition(' ')[0]
-            print card
             if card != "wlan0":
                 wifi = Popen("%s %s" % (detect_wifi, card), shell=True,
                 stdout=PIPE, close_fds=True)
                 answer = wifi.stdout.readlines()[0].strip()
-                print answer
                 if answer == '0':
                     if any('wlans_%s=' % card in listed for listed in rcconf):
                         pass
@@ -89,6 +87,8 @@ class autoConfigure():
             call('/etc/rc.d/netif restart', shell=True)
             call('ifconfig wlan0 down', shell=True)
             call('ifconfig wlan0 up', shell=True)
-        call('/etc/rc.d/netif restart', shell=True)
+            call('/etc/rc.d/netif wlan0 restart', shell=True)
+        else:
+            call('/etc/rc.d/netif restart', shell=True)
 
 #autoConfigure()
