@@ -9,7 +9,7 @@ from net_api import wiredonlineinfo, wiredconnectedinfo, stopwirednetwork
 from  net_api import startwirednetwork, wifidisconnection, ifWlan
 from net_api import stopallnetwork, startallnetwork
 from authentication import Authentication, Open_Wpa_Supplicant
-
+from netcardmgr import autoConfigure
 ncard = 'sh /usr/local/share/networkmgr/detect-nics.sh'
 
 icons24 = '/usr/local/share/networkmgr/icons/24/'
@@ -208,5 +208,6 @@ class trayIcon(object):
         gobject.timeout_add(10000, self.check)
         gtk.main()
 
+autoConfigure()
 i = trayIcon()
 i.tray()
