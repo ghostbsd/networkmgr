@@ -2,8 +2,6 @@
 
 import gtk
 import gobject
-#from subprocess import call
-#from time import sleep
 from net_api import netstate, ssidliste, barpercent, keyinfo, get_ssid
 from net_api import wiredonlineinfo, wiredconnectedinfo, stopwirednetwork
 from  net_api import startwirednetwork, wifidisconnection, ifWlan

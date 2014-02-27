@@ -33,7 +33,6 @@
 #
 # $Id: netcardmgr.py v 0.1 Saturday, February 08 2014 Eric Turgeon $
 
-import os
 from subprocess import Popen, PIPE, call
 ncard = 'sh /usr/local/share/networkmgr/detect-nics.sh'
 detect_wifi = 'sh /usr/local/share/networkmgr/detect-wifi.sh'
@@ -62,33 +61,23 @@ class autoConfigure():
                 answer = wifi.stdout.readlines()[0].strip()
                 if answer == '0':
                     if any('wlans_%s=' % card in listed for listed in rcconf):
-                        pass
+                        print("Your wifi network card is already configured.")
                     else:
                         rc = open('/etc/rc.conf', 'a')
                         rc.writelines('wlans_%s="wlan0"\n' % card)
                         rc.writelines('ifconfig_wlan0="WPA DHCP"\n')
                         rc.close()
-                    if os.path.exists('/etc/wpa_supplicant.conf'):
-                        pass
-                    else:
-                        wsc = open('/etc/wpa_supplicant.conf', 'w')
-                        wsc.writelines('',)
-                    call('ifconfig %s down' % card, shell=True)
-                    call('ifconfig %s up' % card, shell=True)
+                        call('/etc/rc.d/netif restart', shell=True)
+                        call('ifconfig wlan0 up', shell=True)
+                        call('/etc/rc.d/netif restart wlan0', shell=True)
+                        print("Your WiFi card is ready to use.")
                 else:
                     if any('ifconfig_%s=' % card in line for line in rcconf):
-                        pass
+                        print("Your wired network card is already configured.")
                     else:
                         rc = open('/etc/rc.conf', 'a')
                         rc.writelines('ifconfig_%s="DHCP"\n' % card)
                         rc.close()
-        if any('wlans_%s=' % card in listed for listed in rcconf):
-            print("Your WiFi card is ready to use.")
-            call('/etc/rc.d/netif restart', shell=True)
-            call('ifconfig wlan0 down', shell=True)
-            call('ifconfig wlan0 up', shell=True)
-            call('/etc/rc.d/netif wlan0 restart', shell=True)
-        else:
-            call('/etc/rc.d/netif restart', shell=True)
-
-#autoConfigure()
+                        call('/etc/rc.d/netif restart', shell=True)
+                        call('/etc/rc.d/netif restart wlan0', shell=True)
+                        print("Your wired network card is configured.")
