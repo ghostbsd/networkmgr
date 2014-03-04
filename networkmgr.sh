@@ -2,4 +2,4 @@
 
 
 cd /usr/local/share/networkmgr/
-sudo python trayicon.py
+sudo ./trayicon.py
