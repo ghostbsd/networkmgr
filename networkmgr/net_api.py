@@ -198,17 +198,17 @@ def stopallnetwork():
     call('/etc/rc.d/netif stop', shell=True)
 
 
-def stopwirednetwork():
-    call('/etc/rc.d/netif stop ' + wirecard(), shell=True)
-
-
 def startallnetwork():
     call('/etc/rc.d/netif start', shell=True)
-    call('service netif restart wlan0', shell=True)
+    #call('service netif restart wlan0', shell=True)
+
+
+def stopwirednetwork():
+    call('/etc/rc.d/netif stop' + wirecard(), shell=True)
 
 
 def startwirednetwork():
-    call('/etc/rc.d/netif start ' + wirecard(), shell=True)
+    call('/etc/rc.d/netif start' + wirecard(), shell=True)
 
 
 def wifidisconnection():
