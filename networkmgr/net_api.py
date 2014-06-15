@@ -201,7 +201,7 @@ def stopallnetwork():
 def startallnetwork():
     call('/etc/rc.d/netif start', shell=True)
     #call('service netif restart wlan0', shell=True)
-
+    call('wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf', shell=True)
 
 def stopwirednetwork():
     call('/etc/rc.d/netif stop' + wirecard(), shell=True)
@@ -218,3 +218,4 @@ def wifidisconnection():
 
 def wificonnection():
     call('service netif restart wlan0', shell=True)
+    call('wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf', shell=True)
