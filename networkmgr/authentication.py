@@ -1,7 +1,7 @@
 #!/usr/local/bin/python
 
 import gtk
-from net_api import openinfo, lookinfo, find_rsn, wificonnection, findWPA
+from net_api import openinfo, lookinfo, find_rsn, enableWifi, findWPA
 
 wpa_supplican = "/etc/wpa_supplicant.conf"
 
@@ -86,7 +86,7 @@ network={
         wsf = open(wpa_supplican, 'a')
         wsf.writelines(ws)
         wsf.close()
-        wificonnection()
+        enableWifi()
 
 
 class Look_Wpa_Supplicant:
@@ -107,7 +107,7 @@ network={
             wsf = open(wpa_supplican, 'a')
             wsf.writelines(ws)
             wsf.close()
-            wificonnection()
+            enableWifi()
         elif findWPA(lookinfo(ssid)) is True:
             pass
         else:
@@ -123,4 +123,4 @@ network={
             wsf = open(wpa_supplican, 'a')
             wsf.writelines(ws)
             wsf.close()
-            wificonnection()
+            enableWifi()

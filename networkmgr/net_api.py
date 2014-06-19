@@ -5,7 +5,7 @@ from subprocess import Popen, PIPE, STDOUT, call
 #import os
 ncard = 'sh detect-nics.sh'
 detect_wifi = 'sh detect-wifi.sh'
-scan = "ifconfig wlan0 up list scan"
+scan = "ifconfig wlan0 list scan"
 
 
 def scanWifiSsid(ssid):
@@ -38,26 +38,50 @@ def wirecard():
 
 
 def wiredonlineinfo():
-    wifi = Popen('ifconfig ' + wirecard(), shell=True, stdout=PIPE,
+    lan = Popen('ifconfig ' + wirecard(), shell=True, stdout=PIPE,
     close_fds=True)
-    for line in wifi.stdout:
-        if "inet" in line:
+    if 'active' in lan.stdout.read():
+        return True
+    else:
+        return None
+
+
+def ifWlanInRc():
+    rc_conf = open('/etc/rc.conf', 'r').read()
+    if 'Wlan0' in rc_conf:
+        return True
+    else:
+        return False
+
+
+def ifWlan():
+        nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True)
+        if "wlan0" in nics.stdout.read():
             answer = True
-            break
         else:
             answer = None
-    return answer
+        return answer
+
+
+def ifStatue():
+    scan = "ifconfig wlan0"
+    wl = Popen(scan, shell=True, stdout=PIPE, close_fds=True)
+    wlout = wl.stdout.read()
+    if "associated" in wlout:
+        return True
+    else:
+        return None
 
 
 def netstate():
     if ifWlan() is None and wiredonlineinfo() is None:
-        state = None
+        state = 110
     elif ifWlan() is None and wiredonlineinfo() is True:
         state = 120
-    elif get_ssid() == '""' and wiredonlineinfo() is True:
+    elif ifStatue() is None and wiredonlineinfo() is True:
         state = 120
-    elif get_ssid() == '""' and wiredonlineinfo() is None:
-        state = 0
+    elif ifStatue()is None and wiredonlineinfo() is None:
+        state = 110
     else:
         ssid = get_ssid()
         scn = scanWifiSsid(ssid)
@@ -108,16 +132,7 @@ def get_ssid():
         return ssid
 
 
-def ifWlan():
-        nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True)
-        for line in nics.stdout.readlines():
-            card = line.rstrip().partition(" ")[0]
-            if card == "wlan0":
-                answer = True
-                break
-            else:
-                answer = None
-        return answer
+
 
 
 def ssidliste():
@@ -199,16 +214,17 @@ def stopallnetwork():
 
 
 def startallnetwork():
-    call('/etc/rc.d/netif start', shell=True)
-    #call('service netif restart wlan0', shell=True)
-    call('wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf', shell=True)
+    call('/etc/rc.d/netif restart', shell=True)
+    nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True)
+    if "wlan0" in nics.stdout.read():
+        call('wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf', shell=True)
 
 def stopwirednetwork():
-    call('/etc/rc.d/netif stop' + wirecard(), shell=True)
+    call('/etc/rc.d/netif stop ' + wirecard(), shell=True)
 
 
 def startwirednetwork():
-    call('/etc/rc.d/netif start' + wirecard(), shell=True)
+    call('/etc/rc.d/netif start ' + wirecard(), shell=True)
 
 
 def wifidisconnection():
@@ -216,6 +232,17 @@ def wifidisconnection():
     call('ifconfig wlan0 up', shell=True)
 
 
-def wificonnection():
+def disableWifi():
+    call("service netif stop wlan0", shell=True)
+
+
+def enableWifi():
     call('service netif restart wlan0', shell=True)
     call('wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf', shell=True)
+
+
+def connectToSsid(name):
+    call('service netif restart wlan0', shell=True)
+    #call('ifconfig wlan0 ssid %s' % name, shell=True)
+    call('wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf', shell=True)
+    

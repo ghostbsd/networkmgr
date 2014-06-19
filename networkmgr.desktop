@@ -1,7 +1,6 @@
 [Desktop Entry]
 Name=NetworkMgr
 Comment=Network Manager
-Icon=multimedia-volume-control
 Exec=networkmgr
 Terminal=false
 Type=Application
