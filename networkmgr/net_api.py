@@ -204,9 +204,10 @@ def lookinfo(ssid):
 def wiredconnectedinfo():
     wifi = Popen('ifconfig ' + wirecard(), shell=True, stdin=PIPE, stdout=PIPE,
     stderr=STDOUT, close_fds=True)
-    for line in wifi.stdout:
-        if "status: active" in line:
-            return True
+    if 'inet' in wifi.stdout.read():
+        return True
+    else:
+        return False
 
 
 def stopallnetwork():
