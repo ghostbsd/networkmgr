@@ -237,7 +237,7 @@ def disableWifi():
 
 
 def enableWifi():
-    call('service netif restart wlan0', shell=True)
+    call('service netif restart', shell=True)
     call('wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf', shell=True)
 
 
