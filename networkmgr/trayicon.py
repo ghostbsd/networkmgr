@@ -109,7 +109,7 @@ class trayIcon(object):
             close_item.connect("activate", self.closeNetwork)
             self.menu.append(close_item)
             if ifWlan() is None and ifWlanInRc() is True:
-                enawifi = gtk_MenuItem("Enable Wifi")
+                enawifi = gtk.MenuItem("Enable Wifi")
                 enawifi.connect("activate", self.disable_Wifi)
                 self.menu.append(enawifi)
             #elif ifWlan() is True:
@@ -169,7 +169,7 @@ class trayIcon(object):
     def enable_Wifi(self, widget):
         enableWifi()
         self.check
-    
+
     def wiredconnect(self, widget):
         startwirednetwork()
         self.check()
@@ -207,7 +207,7 @@ class trayIcon(object):
         elif bar > 25:
             img.set_from_icon_name(sgnal50, gtk.ICON_SIZE_MENU)
         elif bar > 5:
-            img.set_from_icon_name(sgna25, gtk.ICON_SIZE_MENU)
+            img.set_from_icon_name(sgnal25, gtk.ICON_SIZE_MENU)
         else:
             img.set_from_icon_name(sgnal0, gtk.ICON_SIZE_MENU)
         img.show()

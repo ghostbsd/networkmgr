@@ -95,20 +95,18 @@ def netstate():
     return state
 
 
-def find_rsn(info):
-    var = False
-    for line in info:
-        if line == "RSN":
-            var = True
-    return var
+def findRSN(info):
+    if "RSN" in info:
+        return True
+    else:
+        return False
 
 
 def findWPA(info):
-    var = False
-    for line in info:
-        if line == "WPA":
-            var = True
-    return var
+    if "WPA" in info:
+        return True
+    else:
+        return False
 
 
 def get_ssid():
@@ -130,9 +128,6 @@ def get_ssid():
                 else:
                     ssid = info[1]
         return ssid
-
-
-
 
 
 def ssidliste():
@@ -183,7 +178,7 @@ def openinfo(ssid):
             return info[1].rstrip()
 
 
-def lookinfo(ssid):
+def lockinfo(ssid):
     wifi = Popen('ifconfig wlan0  list scan', shell=True, stdin=PIPE,
     stdout=PIPE, stderr=STDOUT, close_fds=True)
     linfo = []
@@ -218,7 +213,9 @@ def startallnetwork():
     call('/etc/rc.d/netif restart', shell=True)
     nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True)
     if "wlan0" in nics.stdout.read():
-        call('wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf', shell=True)
+        call('wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf',
+        shell=True)
+
 
 def stopwirednetwork():
     call('/etc/rc.d/netif stop ' + wirecard(), shell=True)
@@ -246,4 +243,3 @@ def connectToSsid(name):
     call('service netif restart wlan0', shell=True)
     #call('ifconfig wlan0 ssid %s' % name, shell=True)
     call('wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf', shell=True)
-    

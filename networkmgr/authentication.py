@@ -1,13 +1,12 @@
 #!/usr/local/bin/python
 
 import gtk
-from net_api import openinfo, lookinfo, find_rsn, enableWifi, findWPA
+from net_api import openinfo, lockinfo, findRSN, enableWifi, findWPA
 
 wpa_supplican = "/etc/wpa_supplicant.conf"
 
 
 class Authentication:
-
     def button(self):
         cancel = gtk.Button(stock=gtk.STOCK_CANCEL)
         cancel.connect("clicked", self.close)
@@ -74,15 +73,11 @@ class Authentication:
 
 
 class Open_Wpa_Supplicant:
-
     def __init__(self, ssid):
-
-        ws = """
-network={
-	ssid="%s"
-	bssid=%s
-	key_mgmt=NONE
-}""" % (ssid, openinfo(ssid))
+        ws = '\nnetwork={'
+        ws += '\n\tssid="%s"' % ssid
+        ws += '\n\tbssid=%s' % openinfo(ssid)[0]
+        ws += '\n\tkey_mgmt=NONE\n}'
         wsf = open(wpa_supplican, 'a')
         wsf.writelines(ws)
         wsf.close()
@@ -90,37 +85,31 @@ network={
 
 
 class Look_Wpa_Supplicant:
-
     def __init__(self, ssid, pwd):
         self.name_id = ssid
-        if find_rsn(lookinfo(ssid)) is True:
+        if findRSN(lockinfo(ssid)) is True:
             # /etc/wpa_supplicant.conf written by networkmgr
-            ws = """
-network={
-	ssid="%s"
-	bssid=%s
-	key_mgmt=WPA-PSK
-	proto=RSN
-	psk="%s"
-}
-""" % (ssid, lookinfo(ssid)[0], pwd)
-            wsf = open(wpa_supplican, 'a')
-            wsf.writelines(ws)
-            wsf.close()
-            enableWifi()
-        elif findWPA(lookinfo(ssid)) is True:
-            pass
+            ws = '\nnetwork={'
+            ws += '\n\tssid="%s"' % ssid
+            ws += '\n\tbssid=%s' % lockinfo(ssid)[0]
+            ws += '\n\tkey_mgmt=WPA-PSK'
+            ws += '\n\tproto=RSN'
+            ws += '\n\tpsk="%s"\n}' % pwd
+        elif findWPA(lockinfo(ssid)) is True:
+            ws = '\nnetwork={'
+            ws += '\n\tssid="%s"' % ssid
+            ws += '\n\tbssid=%s' % lockinfo(ssid)[0]
+            ws += '\n\tkey_mgmt=WPA-PSK'
+            ws += '\n\tproto=WPA'
+            ws += '\n\tpsk="%s"\n}' % pwd
         else:
-            ws = """
-network={
-	ssid="%s"
-	bssid="%s"
-	key_mgmt=NONE
-	wep_tx_keyidx=0
-	wep_key0="%s"
-}
-""" % (ssid, lookinfo(ssid)[0], pwd)
-            wsf = open(wpa_supplican, 'a')
-            wsf.writelines(ws)
-            wsf.close()
-            enableWifi()
+            ws = '\nnetwork={'
+            ws += '\n\tssid="%s"' % ssid
+            ws += '\n\tbssid=%s' % lockinfo(ssid)[0]
+            ws += '\n\tkey_mgmt=NONE'
+            ws += '\n\twep_tx_keyidx=0'
+            ws += '\n\twep_key0="%s"\n}' % pwd
+        wsf = open(wpa_supplican, 'a')
+        wsf.writelines(ws)
+        wsf.close()
+        enableWifi()
