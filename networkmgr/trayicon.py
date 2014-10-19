@@ -69,7 +69,6 @@ class trayIcon(object):
                 self.menu.append(disconnected)
             self.menu.append(gtk.SeparatorMenuItem())
             w_title = gtk.MenuItem()
-            #
             if ifWlanInRc()is None:
                 pass
             else:

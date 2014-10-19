@@ -185,14 +185,21 @@ def lockinfo(ssid):
     for line in wifi.stdout:
         if line[0] == " ":
             line = "Unknown" + line
+        if ssid in line:
+            linfo = line
+    return linfo
+
+
+def bssidinfo(ssid):
+    wifi = Popen('ifconfig wlan0  list scan', shell=True, stdin=PIPE,
+    stdout=PIPE, stderr=STDOUT, close_fds=True)
+    linfo = []
+    for line in wifi.stdout:
+        if line[0] == " ":
+            line = "Unknown" + line
         info = line.split()
         if info[0] == ssid:
             linfo.append(info[1])
-            linfo.append(info[6])
-            linfo.append(info[7])
-            linfo.append(info[8])
-            linfo.append(info[9])
-            linfo.append(info[10])
     return linfo
 
 

@@ -1,7 +1,7 @@
 #!/usr/local/bin/python
 
 import gtk
-from net_api import openinfo, lockinfo, findRSN, enableWifi, findWPA
+from net_api import openinfo, bssidinfo, lockinfo, findRSN, enableWifi, findWPA
 
 wpa_supplican = "/etc/wpa_supplicant.conf"
 
@@ -91,21 +91,21 @@ class Look_Wpa_Supplicant:
             # /etc/wpa_supplicant.conf written by networkmgr
             ws = '\nnetwork={'
             ws += '\n\tssid="%s"' % ssid
-            ws += '\n\tbssid=%s' % lockinfo(ssid)[0]
+            ws += '\n\tbssid=%s' % bssidinfo(ssid)[0]
             ws += '\n\tkey_mgmt=WPA-PSK'
             ws += '\n\tproto=RSN'
             ws += '\n\tpsk="%s"\n}' % pwd
         elif findWPA(lockinfo(ssid)) is True:
             ws = '\nnetwork={'
             ws += '\n\tssid="%s"' % ssid
-            ws += '\n\tbssid=%s' % lockinfo(ssid)[0]
+            ws += '\n\tbssid=%s' % bssidinfo(ssid)[0]
             ws += '\n\tkey_mgmt=WPA-PSK'
             ws += '\n\tproto=WPA'
             ws += '\n\tpsk="%s"\n}' % pwd
         else:
             ws = '\nnetwork={'
             ws += '\n\tssid="%s"' % ssid
-            ws += '\n\tbssid=%s' % lockinfo(ssid)[0]
+            ws += '\n\tbssid=%s' % bssidinfo(ssid)[0]
             ws += '\n\tkey_mgmt=NONE'
             ws += '\n\twep_tx_keyidx=0'
             ws += '\n\twep_key0="%s"\n}' % pwd
