@@ -126,14 +126,14 @@ class trayIcon(object):
                     pass
                 else:
                     menu_item = gtk.ImageMenuItem(name)
-                if keyinfo(name) == 'E':
-                    menu_item.set_image(self.openwifi(bar))
-                    menu_item.connect("activate", self.menu_click_open, name)
-                else:
-                    menu_item.set_image(self.protectedwifi(bar))
-                    menu_item.connect("activate", self.menu_click_look, name)
-                menu_item.show()
-                self.menu.append(menu_item)
+                    if keyinfo(name) == 'E':
+                        menu_item.set_image(self.openwifi(bar))
+                        menu_item.connect("activate", self.menu_click_open, name)
+                    else:
+                        menu_item.set_image(self.protectedwifi(bar))
+                        menu_item.connect("activate", self.menu_click_look, name)
+                    menu_item.show()
+                    self.menu.append(menu_item)
             else:
                 menu_item = gtk.ImageMenuItem(name)
                 if keyinfo(name) == 'E':
