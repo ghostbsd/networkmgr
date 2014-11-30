@@ -1,8 +1,8 @@
 #!/usr/local/bin/python
 
 from subprocess import Popen, PIPE, STDOUT, call
-#import re
-#import os
+# import re
+# import os
 ncard = 'sh detect-nics.sh'
 detect_wifi = 'sh detect-wifi.sh'
 scan = "ifconfig wlan0 list scan"
@@ -27,7 +27,7 @@ def wirecard():
         card = line.rstrip().partition(' ')[0]
         if card != "wlan0":
             wifi = Popen("%s %s" % (detect_wifi, card), shell=True,
-            stdout=PIPE, close_fds=True)
+                         stdout=PIPE, close_fds=True)
             answer = wifi.stdout.readlines()[0].strip()
             if answer == "yes":
                 pass
@@ -39,7 +39,7 @@ def wirecard():
 
 def wiredonlineinfo():
     lan = Popen('ifconfig ' + wirecard(), shell=True, stdout=PIPE,
-    close_fds=True)
+                close_fds=True)
     if 'active' in lan.stdout.read():
         return True
     else:

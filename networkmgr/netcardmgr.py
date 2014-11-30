@@ -53,7 +53,7 @@ class autoConfigure():
             card = line.rstrip().partition(' ')[0]
             if card != "wlan0":
                 wifi = Popen("%s %s" % (detect_wifi, card), shell=True,
-                stdout=PIPE, close_fds=True)
+                             stdout=PIPE, close_fds=True)
                 answer = wifi.stdout.readlines()[0].strip()
                 if answer == '0':
                     if any('wlans_%s=' % card in listed for listed in rcconf):
@@ -67,6 +67,7 @@ class autoConfigure():
                         call('ifconfig wlan0 up', shell=True)
                         call('/etc/rc.d/netif restart wlan0', shell=True)
                         print("Your WiFi card is ready to use.")
+                        open('/etc/wpa_supplicant.conf', 'a').close()
                 else:
                     if any('ifconfig_%s=' % card in line for line in rcconf):
                         print("Your wired network card is already configured.")

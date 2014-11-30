@@ -20,12 +20,6 @@ class InstallAndUpdateDataDirectory():
             shutil.copytree("networkmgr", share)
         shutil.copy("networkmgr.sh", "/usr/local/bin/networkmgr")
         shutil.copy("networkmgr.desktop", deskfile)
-        if not sudoline in open(sudoers).read():
-            with open(sudoers, "r") as sources:
-                lines = sources.readlines()
-            with open(sudoers, "w") as sources:
-                for line in lines:
-                    sources.write(line.replace('# %wheel ALL=(ALL) NOPASSWD: ALL', '%wheel ALL=(ALL) NOPASSWD: /usr/local/share/networkmgr/trayicon.py'))
 
 if os.path.exists(sudoers):
     InstallAndUpdateDataDirectory()

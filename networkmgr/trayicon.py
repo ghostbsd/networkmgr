@@ -1,35 +1,44 @@
 #!/usr/local/bin/python
 
 import gtk
-import gobject
+import gobject as GObject
+import threading
+from time import sleep
 from net_api import netstate, ssidliste, barpercent, keyinfo, get_ssid
 from net_api import wiredonlineinfo, wiredconnectedinfo, stopwirednetwork
-from  net_api import startwirednetwork, wifidisconnection, ifWlan, ifStatue
+from net_api import startwirednetwork, wifidisconnection, ifWlan, ifStatue
 from net_api import stopallnetwork, startallnetwork, connectToSsid
 from net_api import ifWlanInRc, disableWifi, enableWifi
 from authentication import Authentication, Open_Wpa_Supplicant
 from netcardmgr import autoConfigure
+import locale
+encoding = locale.getpreferredencoding()
+utf8conv = lambda x: str(x, encoding).encode('utf8')
+threadBreak = False
+GObject.threads_init()
+
 wpa_supplican = "/etc/wpa_supplicant.conf"
 ncard = 'sh /usr/local/share/networkmgr/detect-nics.sh'
+icon_path = '/usr/local/share/networkmgr/icons'
 # Icon name
-sgnal0 = 'nm-signal-00'
-sgnal25 = 'nm-signal-25'
-sgnal50 = 'nm-signal-50'
-sgnal75 = 'nm-signal-75'
-sgnal100 = 'nm-signal-100'
-secure0 = 'nm-signal-00-secure'
-secure25 = 'nm-signal-25-secure'
-secure50 = 'nm-signal-50-secure'
-secure75 = 'nm-signal-75-secure'
-secure100 = 'nm-signal-100-secure'
-wirec = 'nm-adhoc'
-wirenc = 'network-offline'
+sgnal0 = '%s/nm-signal-00.png' % icon_path
+sgnal25 = '%s/nm-signal-25.png' % icon_path
+sgnal50 = '%s/nm-signal-50.png' % icon_path
+sgnal75 = '%s/nm-signal-75.png' % icon_path
+sgnal100 = '%s/nm-signal-100.png' % icon_path
+secure0 = '%s/nm-signal-00-secure.png' % icon_path
+secure25 = '%s/nm-signal-25-secure.png' % icon_path
+secure50 = '%s/nm-signal-50-secure.png' % icon_path
+secure75 = '%s/nm-signal-75-secure.png' % icon_path
+secure100 = '%s/nm-signal-100-secure.png' % icon_path
+wirec = '%s/nm-device-wired.png' % icon_path
+wirenc = '%s/nm-no-connection.png' % icon_path
 
 
 class trayIcon(object):
     def __init__(self):
         self.statusIcon = gtk.StatusIcon()
-        #self.statusIcon.set_tooltip('Tracker Desktop Search')
+        # self.statusIcon.set_tooltip('Tracker Desktop Search')
         self.statusIcon.set_visible(True)
         self.menu = gtk.Menu()
         self.menu.show_all()
@@ -98,7 +107,8 @@ class trayIcon(object):
                     connection_item.set_image(self.openwifi(bar))
                     connection_item.show()
                     disconnect_item = gtk.MenuItem("Disconnect")
-                    disconnect_item.connect("activate", self.disconnectfromwifi)
+                    disconnect_item.connect("activate",
+                                            self.disconnectfromwifi)
                     self.menu.append(connection_item)
                     self.menu.append(disconnect_item)
                     self.menu.append(gtk.SeparatorMenuItem())
@@ -111,10 +121,10 @@ class trayIcon(object):
                 enawifi = gtk.MenuItem("Enable Wifi")
                 enawifi.connect("activate", self.disable_Wifi)
                 self.menu.append(enawifi)
-            #elif ifWlan() is True:
-             #   diswifi = gtk.MenuItem("Disable Wifi")
-             #   diswifi.connect("activate", self.enable_Wifi)
-              #  self.menu.append(diswifi)
+            # elif ifWlan() is True:
+            #    diswifi = gtk.MenuItem("Disable Wifi")
+            #    diswifi.connect("activate", self.enable_Wifi)
+            #    self.menu.append(diswifi)
         self.menu.show_all()
         return self.menu
 
@@ -200,55 +210,61 @@ class trayIcon(object):
     def openwifi(self, bar):
         img = gtk.Image()
         if bar > 75:
-            img.set_from_icon_name(sgnal100, gtk.ICON_SIZE_MENU)
+            img.set_from_file(sgnal100)
         elif bar > 50:
-            img.set_from_icon_name(sgnal75, gtk.ICON_SIZE_MENU)
+            img.set_from_file(sgnal75)
         elif bar > 25:
-            img.set_from_icon_name(sgnal50, gtk.ICON_SIZE_MENU)
+            img.set_from_file(sgnal50)
         elif bar > 5:
-            img.set_from_icon_name(sgnal25, gtk.ICON_SIZE_MENU)
+            img.set_from_file(sgnal25)
         else:
-            img.set_from_icon_name(sgnal0, gtk.ICON_SIZE_MENU)
+            img.set_from_file(sgnal0)
         img.show()
         return img
 
     def protectedwifi(self, bar):
         img = gtk.Image()
         if bar > 75:
-            img.set_from_icon_name(secure100, gtk.ICON_SIZE_MENU)
+            img.set_from_file(secure100)
         elif bar > 50:
-            img.set_from_icon_name(secure75, gtk.ICON_SIZE_MENU)
+            img.set_from_file(secure75)
         elif bar > 25:
-            img.set_from_icon_name(secure50, gtk.ICON_SIZE_MENU)
+            img.set_from_file(secure50)
         elif bar > 5:
-            img.set_from_icon_name(secure25, gtk.ICON_SIZE_MENU)
+            img.set_from_file(secure25)
         else:
-            img.set_from_icon_name(secure0, gtk.ICON_SIZE_MENU)
+            img.set_from_file(secure0)
         img.show()
         return img
 
+    def checkloop(self):
+        while 1:
+            self.check()
+            sleep(10)
+        
     def check(self):
         state = netstate()
-        #print state
+        print state
         if state == 120:
-            self.statusIcon.set_from_icon_name(wirec)
+            self.statusIcon.set_from_file(wirec)
         elif state == 110:
-            self.statusIcon.set_from_icon_name(wirenc)
+            self.statusIcon.set_from_file(wirenc)
         elif state > 75:
-            self.statusIcon.set_from_icon_name(sgnal100)
+            self.statusIcon.set_from_file(sgnal100)
         elif state > 50:
-            self.statusIcon.set_from_icon_name(sgnal75)
+            self.statusIcon.set_from_file(sgnal75)
         elif state > 25:
-            self.statusIcon.set_from_icon_name(sgnal50)
+            self.statusIcon.set_from_file(sgnal50)
         elif state > 5:
-            self.statusIcon.set_from_icon_name(sgnal25)
+            self.statusIcon.set_from_file(sgnal25)
         else:
             self.statusIcon.set_from_file(sgnal0)
         return True
 
     def tray(self):
-        self.check()
-        gobject.timeout_add(10000, self.check)
+        thr = threading.Thread(target=self.checkloop)
+        thr.setDaemon(True)
+        thr.start()
         gtk.main()
 
 autoConfigure()
