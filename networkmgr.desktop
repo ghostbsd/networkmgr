@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=NetworkMgr
 Comment=Network Manager
-Exec=sudo operator networkmgr
+Exec=networkmgr
 Terminal=false
 Type=Application
 Categories=

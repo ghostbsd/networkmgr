@@ -244,7 +244,6 @@ class trayIcon(object):
         
     def check(self):
         state = netstate()
-        print state
         if state == 120:
             self.statusIcon.set_from_file(wirec)
         elif state == 110:
@@ -267,6 +266,6 @@ class trayIcon(object):
         thr.start()
         gtk.main()
 
-autoConfigure()
+#autoConfigure()
 i = trayIcon()
 i.tray()

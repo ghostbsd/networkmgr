@@ -3,9 +3,9 @@
 from subprocess import Popen, PIPE, STDOUT, call
 # import re
 # import os
-ncard = 'sh detect-nics.sh'
-detect_wifi = 'sh detect-wifi.sh'
-scan = "ifconfig wlan0 list scan"
+ncard = 'sudo operator sh detect-nics.sh'
+detect_wifi = 'sudo operator sh detect-wifi.sh'
+scan = "sudo operator ifconfig wlan0 list scan"
 
 
 def scanWifiSsid(ssid):
@@ -17,6 +17,7 @@ def scanWifiSsid(ssid):
         info = filter(None, info)
         if ssid == info[0]:
             wnet = info
+            break
     return wnet
 
 
@@ -38,7 +39,7 @@ def wirecard():
 
 
 def wiredonlineinfo():
-    lan = Popen('ifconfig ' + wirecard(), shell=True, stdout=PIPE,
+    lan = Popen('sudo operator ifconfig ' + wirecard(), shell=True, stdout=PIPE,
                 close_fds=True)
     if 'active' in lan.stdout.read():
         return True
@@ -64,7 +65,7 @@ def ifWlan():
 
 
 def ifStatue():
-    scan = "ifconfig wlan0"
+    scan = "sudo operator ifconfig wlan0"
     wl = Popen(scan, shell=True, stdout=PIPE, close_fds=True)
     wlout = wl.stdout.read()
     if "associated" in wlout:
@@ -88,7 +89,7 @@ def netstate():
         if len(scn) == 7:
             sn = scn[4]
         else:
-            sn = scn[3].rstrip().split()[1]
+            sn = scn[4].rstrip().split()[1]
         sig = int(sn.partition(':')[0])
         noise = int(sn.partition(':')[2])
         state = (sig - noise) * 4
@@ -113,7 +114,7 @@ def get_ssid():
     if ifWlan() is None:
         return None
     else:
-        wlan = Popen('ifconfig wlan0', shell=True, stdout=PIPE, close_fds=True)
+        wlan = Popen('sudo operator ifconfig wlan0', shell=True, stdout=PIPE, close_fds=True)
         for line in wlan.stdout:
             info = line.split()
             info2 = line.split('"')
@@ -131,14 +132,14 @@ def get_ssid():
 
 
 def ssidliste():
-    wifi = Popen('ifconfig wlan0  list scan', shell=True, stdin=PIPE,
-    stdout=PIPE, stderr=STDOUT, close_fds=True)
+    wifi = Popen('sudo operator ifconfig wlan0  list scan', shell=True, stdin=PIPE,
+                 stdout=PIPE, stderr=STDOUT, close_fds=True)
     b = False
     ssid = []
     for line in wifi.stdout:
         if line[0] == " ":
             line = "Unknown" + line
-        info = line.split('   ')
+        info = line.split('  ')
         filter(None, info)
         if b is True:
             ssid.append(info[0])
@@ -168,8 +169,8 @@ def keyinfo(ssid):
 
 
 def openinfo(ssid):
-    wifi = Popen('ifconfig wlan0  list scan', shell=True, stdin=PIPE,
-    stdout=PIPE, stderr=STDOUT, close_fds=True)
+    wifi = Popen('sudo operator ifconfig wlan0  list scan', shell=True, stdin=PIPE,
+                 stdout=PIPE, stderr=STDOUT, close_fds=True)
     for line in wifi.stdout:
         if line[0] == " ":
             line = "Unknown" + line
@@ -179,8 +180,8 @@ def openinfo(ssid):
 
 
 def lockinfo(ssid):
-    wifi = Popen('ifconfig wlan0  list scan', shell=True, stdin=PIPE,
-    stdout=PIPE, stderr=STDOUT, close_fds=True)
+    wifi = Popen('sudo operator ifconfig wlan0  list scan', shell=True, stdin=PIPE,
+                 stdout=PIPE, stderr=STDOUT, close_fds=True)
     linfo = []
     for line in wifi.stdout:
         if line[0] == " ":
@@ -191,8 +192,8 @@ def lockinfo(ssid):
 
 
 def bssidinfo(ssid):
-    wifi = Popen('ifconfig wlan0  list scan', shell=True, stdin=PIPE,
-    stdout=PIPE, stderr=STDOUT, close_fds=True)
+    wifi = Popen('sudo operator ifconfig wlan0  list scan', shell=True, stdin=PIPE,
+                 stdout=PIPE, stderr=STDOUT, close_fds=True)
     linfo = []
     for line in wifi.stdout:
         if line[0] == " ":
@@ -204,8 +205,8 @@ def bssidinfo(ssid):
 
 
 def wiredconnectedinfo():
-    wifi = Popen('ifconfig ' + wirecard(), shell=True, stdin=PIPE, stdout=PIPE,
-    stderr=STDOUT, close_fds=True)
+    wifi = Popen('sudo operator ifconfig ' + wirecard(), shell=True, stdin=PIPE, stdout=PIPE,
+                 stderr=STDOUT, close_fds=True)
     if 'inet' in wifi.stdout.read():
         return True
     else:
@@ -213,40 +214,40 @@ def wiredconnectedinfo():
 
 
 def stopallnetwork():
-    call('/etc/rc.d/netif stop', shell=True)
+    call('sudo operator /etc/rc.d/netif stop', shell=True)
 
 
 def startallnetwork():
-    call('/etc/rc.d/netif restart', shell=True)
+    call('sudo operator /etc/rc.d/netif restart', shell=True)
     nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True)
     if "wlan0" in nics.stdout.read():
-        call('wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf',
-        shell=True)
+        call('sudo operator wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf',
+             shell=True)
 
 
 def stopwirednetwork():
-    call('/etc/rc.d/netif stop ' + wirecard(), shell=True)
+    call('sudo operator /etc/rc.d/netif stop ' + wirecard(), shell=True)
 
 
 def startwirednetwork():
-    call('/etc/rc.d/netif start ' + wirecard(), shell=True)
+    call('sudo operator /etc/rc.d/netif start ' + wirecard(), shell=True)
 
 
 def wifidisconnection():
-    call('ifconfig wlan0 down', shell=True)
-    call('ifconfig wlan0 up', shell=True)
+    call('sudo operator ifconfig wlan0 down', shell=True)
+    call('sudo operator ifconfig wlan0 up', shell=True)
 
 
 def disableWifi():
-    call("service netif stop wlan0", shell=True)
+    call("sudo operator service netif stop wlan0", shell=True)
 
 
 def enableWifi():
-    call('service netif restart', shell=True)
-    call('wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf', shell=True)
+    call('sudo operator service netif restart', shell=True)
+    call('sudo operator wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf', shell=True)
 
 
 def connectToSsid(name):
-    call('service netif restart wlan0', shell=True)
+    call('sudo operator service netif restart wlan0', shell=True)
     #call('ifconfig wlan0 ssid %s' % name, shell=True)
-    call('wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf', shell=True)
+    call('sudo operator wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf', shell=True)
