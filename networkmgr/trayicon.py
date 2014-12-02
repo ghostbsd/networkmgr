@@ -10,7 +10,6 @@ from net_api import startwirednetwork, wifidisconnection, ifWlan, ifStatue
 from net_api import stopallnetwork, startallnetwork, connectToSsid
 from net_api import ifWlanInRc, disableWifi, enableWifi
 from authentication import Authentication, Open_Wpa_Supplicant
-from netcardmgr import autoConfigure
 import locale
 encoding = locale.getpreferredencoding()
 utf8conv = lambda x: str(x, encoding).encode('utf8')
@@ -138,10 +137,12 @@ class trayIcon(object):
                     menu_item = gtk.ImageMenuItem(name)
                     if keyinfo(name) == 'E':
                         menu_item.set_image(self.openwifi(bar))
-                        menu_item.connect("activate", self.menu_click_open, name)
+                        menu_item.connect("activate", self.menu_click_open,
+                                          name)
                     else:
                         menu_item.set_image(self.protectedwifi(bar))
-                        menu_item.connect("activate", self.menu_click_look, name)
+                        menu_item.connect("activate", self.menu_click_look,
+                                          name)
                     menu_item.show()
                     self.menu.append(menu_item)
             else:
@@ -265,7 +266,3 @@ class trayIcon(object):
         thr.setDaemon(True)
         thr.start()
         gtk.main()
-
-#autoConfigure()
-i = trayIcon()
-i.tray()

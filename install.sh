@@ -29,6 +29,6 @@ if [ ! -d "${LOCALBASE}/bin" ] ; then
   mkdir -p ${LOCALBASE}/bin
 fi
 
-cp networkmgr.sh ${LOCALBASE}/bin/networkmgr
+cp networkmgr.py ${LOCALBASE}/bin/networkmgr
 wchown root:wheel ${LOCALBASE}/bin/networkmgr
 chmod 755 ${LOCALBASE}/bin/networkmgr
