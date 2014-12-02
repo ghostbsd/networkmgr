@@ -41,7 +41,6 @@ netcardtext = 'Netork card configuration by Networkmgr'
 
 
 class autoConfigure():
-
     def __init__(self):
         if any(netcardtext in listed for listed in rcconf):
             pass
@@ -68,6 +67,9 @@ class autoConfigure():
                         call('/etc/rc.d/netif restart wlan0', shell=True)
                         print("Your WiFi card is ready to use.")
                         open('/etc/wpa_supplicant.conf', 'a').close()
+                        call('chown root:wheel /etc/wpa_supplicant.conf',
+                             shell=True)
+                        call('chmod 765 /etc/wpa_supplicant.conf', shell=True)
                 else:
                     if any('ifconfig_%s=' % card in line for line in rcconf):
                         print("Your wired network card is already configured.")
