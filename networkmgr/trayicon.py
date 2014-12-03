@@ -3,6 +3,8 @@
 import gtk
 import gobject as GObject
 import threading
+from sys import path
+path.append("/usr/local/share/networkmgr")
 from time import sleep
 from net_api import netstate, ssidliste, barpercent, keyinfo, get_ssid
 from net_api import wiredonlineinfo, wiredconnectedinfo, stopwirednetwork

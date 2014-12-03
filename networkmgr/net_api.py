@@ -3,8 +3,10 @@
 from subprocess import Popen, PIPE, STDOUT, call
 # import re
 # import os
-ncard = 'sudo operator sh detect-nics.sh'
-detect_wifi = 'sudo operator sh detect-wifi.sh'
+from sys import path
+path.append("/usr/local/share/networkmgr")
+ncard = 'sudo operator sh /usr/local/share/networkmgr/detect-nics.sh'
+detect_wifi = 'sudo operator sh /usr/local/share/networkmgr/detect-wifi.sh'
 scan = "sudo operator ifconfig wlan0 list scan"
 
 
@@ -89,7 +91,7 @@ def netstate():
         if len(scn) == 7:
             sn = scn[4]
         else:
-            sn = scn[4].rstrip().split()[1]
+            sn = scn[3].rstrip().split()[1]
         sig = int(sn.partition(':')[0])
         noise = int(sn.partition(':')[2])
         state = (sig - noise) * 4
