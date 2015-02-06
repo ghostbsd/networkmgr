@@ -18,7 +18,7 @@ if [ ! -d "${LOCALBASE}/etc/xdg/autostart" ] ; then
    mkdir -p ${LOCALBASE}/etc/xdg/autostart/
 fi
 
-cp -f networkmgr.desktop ${LOCALBASE}etc/xdg/autostart/networkmgr.desktop
+cp -f networkmgr.desktop ${LOCALBASE}/etc/xdg/autostart/networkmgr.desktop
 
 # Install the executable
 if [ ! -d "${LOCALBASE}/bin" ] ; then
