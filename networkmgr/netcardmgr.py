@@ -82,3 +82,5 @@ class autoConfigure():
                         call('dhclient wlan0', shell=True)
                         call('dhclient ' + card, shell=True)
                         print("Your wired network card is configured.")
+
+autoConfigure()
