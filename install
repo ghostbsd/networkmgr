@@ -7,22 +7,22 @@ else
 fi
 
 if [ -d "${LOCALBASE}/share/networkmgr" ] ; then
-  rm -rf ${LOCALBASE}/share/networkmgr
+   rm -rf ${LOCALBASE}/share/networkmgr
 fi
 
 mkdir -p ${LOCALBASE}/share/networkmgr 
 
 cp -rf networkmgr/* ${LOCALBASE}/share/networkmgr/ 
 
-if [ ! -d "${LOCALBASE}etc/xdg/autostart" ] ; then
-  mkdir -p ${LOCALBASE}etc/xdg/autostart/
+if [ ! -d "${LOCALBASE}/etc/xdg/autostart" ] ; then
+   mkdir -p ${LOCALBASE}/etc/xdg/autostart/
 fi
 
-cp -f networkmgr.sh ${LOCALBASE}etc/xdg/autostart/networkmgr.desktop
+cp -f networkmgr.desktop ${LOCALBASE}/etc/xdg/autostart/networkmgr.desktop
 
 # Install the executable
 if [ ! -d "${LOCALBASE}/bin" ] ; then
-  mkdir -p ${LOCALBASE}/bin
+   mkdir -p ${LOCALBASE}/bin
 fi
 
 cp networkmgr.py ${LOCALBASE}/bin/networkmgr

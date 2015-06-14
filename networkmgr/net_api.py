@@ -41,9 +41,9 @@ def wirecard():
 
 
 def wiredonlineinfo():
-    lan = Popen('sudo operator ifconfig ' + wirecard(), shell=True, stdout=PIPE,
-                close_fds=True)
-    if 'active' in lan.stdout.read():
+    lan = Popen('sudo operator ifconfig ' + wirecard(), shell=True,
+                stdout=PIPE, close_fds=True)
+    if 'inet' in lan.stdout.read():
         return True
     else:
         return None

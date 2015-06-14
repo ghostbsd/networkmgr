@@ -244,7 +244,7 @@ class trayIcon(object):
         while 1:
             self.check()
             sleep(10)
-        
+
     def check(self):
         state = netstate()
         if state == 120:
