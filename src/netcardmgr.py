@@ -63,13 +63,13 @@ class autoConfigure():
                         rc.writelines('ifconfig_wlan0="WPA DHCP"\n')
                         rc.close()
                         call('/etc/rc.d/netif restart', shell=True)
-                        call('ifconfig wlan0 up', shell=True)
                         call('/etc/rc.d/netif restart wlan0', shell=True)
-                        print("Your WiFi card is ready to use.")
+                        call('dhclient wlan0', shell=True)
                         open('/etc/wpa_supplicant.conf', 'a').close()
                         call('chown root:wheel /etc/wpa_supplicant.conf',
                              shell=True)
                         call('chmod 765 /etc/wpa_supplicant.conf', shell=True)
+                        call('ifconfig wlan0 up', shell=True)
                 else:
                     if any('ifconfig_%s=' % card in line for line in rcconf):
                         print("Your wired network card is already configured.")
@@ -78,8 +78,6 @@ class autoConfigure():
                         rc.writelines('ifconfig_%s="DHCP"\n' % card)
                         rc.close()
                         call('/etc/rc.d/netif restart', shell=True)
-                        call('/etc/rc.d/netif restart wlan0', shell=True)
-                        call('dhclient wlan0', shell=True)
                         call('dhclient ' + card, shell=True)
                         print("Your wired network card is configured.")
 
