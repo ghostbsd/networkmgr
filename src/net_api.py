@@ -6,12 +6,20 @@ from sys import path
 path.append("/usr/local/share/networkmgr")
 ncard = 'sudo operator sh /usr/local/share/networkmgr/detect-nics.sh'
 detect_wifi = 'sudo operator sh /usr/local/share/networkmgr/detect-wifi.sh'
-scan = "ifconfig wlan0 scan | grep -v SSID"
-grepssid = "sudo operator ifconfig wlan0 list scan | grep "
+scan = "ifconfig wlan0 list scan | grep -v SSID"
+grepListScan = "ifconfig wlan0 list scan | grep "
+grepScan = "sudo operator ifconfig wlan0 scan | grep "
 
 
 def scanWifiSsid(ssid):
-    wifi = Popen(grepssid + ssid, shell=True, stdout=PIPE, close_fds=True)
+    wifi = Popen(grepListScan + ssid, shell=True, stdout=PIPE, close_fds=True)
+    info = wifi.stdout.readlines()[0].rstrip().split(' ')
+    info = filter(None, info)
+    return info
+
+
+def scanSsid(ssid):
+    wifi = Popen(grepScan + ssid, shell=True, stdout=PIPE, close_fds=True)
     info = wifi.stdout.readlines()[0].rstrip().split(' ')
     info = filter(None, info)
     return info
@@ -76,8 +84,7 @@ def get_ssid():
     else:
         wlan = Popen('sudo operator ifconfig wlan0 | grep ssid',
                      shell=True, stdout=PIPE, close_fds=True)
-        ssid = wlan.stdout.readlines()[0].rstrip().split()[1]
-        return ssid
+        return wlan.stdout.readlines()[0].rstrip().split()[1]
 
 
 def netstate():
@@ -91,7 +98,7 @@ def netstate():
         state = None
     else:
         ssid = get_ssid()
-        scn = scanWifiSsid(ssid)
+        scn = scanSsid(ssid)
         sn = scn[4]
         sig = int(sn.partition(':')[0])
         noise = int(sn.partition(':')[2])
