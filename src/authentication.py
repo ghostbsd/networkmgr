@@ -93,21 +93,21 @@ class Look_Wpa_Supplicant:
             ws += '\n\tbssid=%s' % scanWifiSsid(ssid)[1]
             ws += '\n\tkey_mgmt=WPA-PSK'
             ws += '\n\tproto=RSN'
-            ws += '\n\tpsk="%s"\n}' % pwd
+            ws += '\n\tpsk="%s"\n}\n' % pwd
         elif 'WPA' in scanWifiSsid(ssid):
             ws = '\nnetwork={'
             ws += '\n\tssid="%s"' % ssid
             ws += '\n\tbssid=%s' % scanWifiSsid(ssid)[1]
             ws += '\n\tkey_mgmt=WPA-PSK'
             ws += '\n\tproto=WPA'
-            ws += '\n\tpsk="%s"\n}' % pwd
+            ws += '\n\tpsk="%s"\n}\n' % pwd
         else:
             ws = '\nnetwork={'
             ws += '\n\tssid="%s"' % ssid
             ws += '\n\tbssid=%s' % scanWifiSsid(ssid)[1]
             ws += '\n\tkey_mgmt=NONE'
             ws += '\n\twep_tx_keyidx=0'
-            ws += '\n\twep_key0="%s"\n}' % pwd
+            ws += '\n\twep_key0=%s\n}\n' % pwd
         wsf = open(wpa_supplican, 'a')
         wsf.writelines(ws)
         wsf.close()
