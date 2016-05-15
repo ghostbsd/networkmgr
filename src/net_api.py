@@ -118,7 +118,6 @@ def wifiListe():
         info = filter(None, info)
         wlist.append(info)
     return wlist
-print wifiListe()
 
 def barpercent(sn):
     sig = int(sn.partition(':')[0])
