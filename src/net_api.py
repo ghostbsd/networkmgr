@@ -7,6 +7,7 @@ path.append("/usr/local/share/networkmgr")
 ncard = 'sudo operator sh /usr/local/share/networkmgr/detect-nics.sh'
 detect_wifi = 'sudo operator sh /usr/local/share/networkmgr/detect-wifi.sh'
 scan = "ifconfig wlan0 list scan | grep -v SSID"
+scanv = "ifconfig -v wlan0 list scan | grep -v SSID/"
 grepListScan = "ifconfig wlan0 list scan | grep "
 grepScan = "sudo operator ifconfig wlan0 scan | grep "
 
@@ -107,7 +108,7 @@ def netstate():
 
 
 def wifiListe():
-    wifi = Popen(scan, shell=True, stdin=PIPE,
+    wifi = Popen(scanv, shell=True, stdin=PIPE,
                  stdout=PIPE, stderr=STDOUT, close_fds=True)
     wlist = []
     for line in wifi.stdout:
@@ -117,7 +118,7 @@ def wifiListe():
         info = filter(None, info)
         wlist.append(info)
     return wlist
-
+print wifiListe()
 
 def barpercent(sn):
     sig = int(sn.partition(':')[0])
