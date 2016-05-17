@@ -30,6 +30,7 @@
 # $Id: netcardmgr.py v 0.1 Saturday, February 08 2014 Eric Turgeon $
 
 from subprocess import Popen, PIPE, call
+import os
 ncard = 'sh /usr/local/share/networkmgr/detect-nics.sh'
 detect_wifi = 'sh /usr/local/share/networkmgr/detect-wifi.sh'
 nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True)
@@ -57,6 +58,9 @@ class autoConfigure():
                 if answer == '0':
                     if any('wlans_%s=' % card in listed for listed in rcconf):
                         print("Your wifi network card is already configured.")
+                        if os.path.exists('/etc/wpa_supplicant.conf') is False:
+                            call('chmod 765 /etc/wpa_supplicant.conf', shell=True)
+
                     else:
                         rc = open('/etc/rc.conf', 'a')
                         rc.writelines('wlans_%s="wlan0"\n' % card)
