@@ -1,7 +1,7 @@
 #!/usr/local/bin/python
 
 import gtk
-from net_api import scanWifiSsid, enableWifi
+from net_api import scanWifiBssid, enableWifi
 
 wpa_supplican = "/etc/wpa_supplicant.conf"
 
@@ -22,9 +22,8 @@ class Authentication:
         self.window.hide()
 
     def add_to_wpa_supplicant(self, widget):
-        # /etc/wpa_supplicant.conf
         pwd = self.password.get_text()
-        Look_Wpa_Supplicant(self.g_ssid, pwd)
+        Look_Wpa_Supplicant(self.ssid, self.bssid, pwd)
         self.window.hide()
 
     def on_check(self, widget):
@@ -33,8 +32,9 @@ class Authentication:
         else:
             self.password.set_visibility(False)
 
-    def __init__(self, ssid):
-        self.g_ssid = ssid
+    def __init__(self, ssid, bssid):
+        self.ssid = ssid
+        self.bssid = bssid
         self.window = gtk.Window()
         self.window.set_title("wi-Fi Network Authetification Required")
         self.window.set_border_width(0)
@@ -73,10 +73,10 @@ class Authentication:
 
 
 class Open_Wpa_Supplicant:
-    def __init__(self, ssid):
+    def __init__(self, ssid, bssid):
         ws = '\nnetwork={'
         ws += '\n\tssid="%s"' % ssid
-        ws += '\n\tbssid=%s' % scanWifiSsid(ssid)[1]
+        ws += '\n\tbssid=%s' % bssid
         ws += '\n\tkey_mgmt=NONE\n}'
         wsf = open(wpa_supplican, 'a')
         wsf.writelines(ws)
@@ -85,26 +85,26 @@ class Open_Wpa_Supplicant:
 
 
 class Look_Wpa_Supplicant:
-    def __init__(self, ssid, pwd):
-        if 'RSN' in scanWifiSsid(ssid):
+    def __init__(self, ssid, bssid, pwd):
+        if 'RSN' in scanWifiBssid(bssid):
             # /etc/wpa_supplicant.conf written by networkmgr
             ws = '\nnetwork={'
             ws += '\n\tssid="%s"' % ssid
-            ws += '\n\tbssid=%s' % scanWifiSsid(ssid)[1]
+            ws += '\n\tbssid=%s' % bssid
             ws += '\n\tkey_mgmt=WPA-PSK'
             ws += '\n\tproto=RSN'
             ws += '\n\tpsk="%s"\n}\n' % pwd
-        elif 'WPA' in scanWifiSsid(ssid):
+        elif 'WPA' in scanWifiBssid(bssid):
             ws = '\nnetwork={'
             ws += '\n\tssid="%s"' % ssid
-            ws += '\n\tbssid=%s' % scanWifiSsid(ssid)[1]
+            ws += '\n\tbssid=%s' % bssid
             ws += '\n\tkey_mgmt=WPA-PSK'
             ws += '\n\tproto=WPA'
             ws += '\n\tpsk="%s"\n}\n' % pwd
         else:
             ws = '\nnetwork={'
-            ws += '\n\tssid="%s"' % ssid
-            ws += '\n\tbssid=%s' % scanWifiSsid(ssid)[1]
+            ws += '\n\tssid="%s"' % ssid
+            ws += '\n\tbssid=%s' % bssid
             ws += '\n\tkey_mgmt=NONE'
             ws += '\n\twep_tx_keyidx=0'
             ws += '\n\twep_key0=%s\n}\n' % pwd

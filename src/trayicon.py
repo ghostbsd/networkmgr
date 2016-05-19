@@ -13,7 +13,7 @@ from net_api import startwirednetwork, wifiDisconnection, ifWlan, ifStatue
 from net_api import stopallnetwork, startallnetwork, connectToSsid
 from net_api import ifWlanInRc, disableWifi, enableWifi
 from authentication import Authentication, Open_Wpa_Supplicant
-from net_api import wifiListe, scanWifiSsid
+from net_api import wifiListe, scanWifiBssid
 encoding = locale.getpreferredencoding()
 
 threadBreak = False
@@ -107,7 +107,7 @@ class trayIcon(object):
                     w_title.set_label("WiFi Networks")
                     w_title.set_sensitive(False)
                     self.menu.append(w_title)
-                    bar = barpercent(scanWifiSsid(get_ssid())[4])
+                    bar = barpercent(scanWifiBssid(get_ssid())[4])
                     connection_item = gtk.ImageMenuItem(get_ssid())
                     connection_item.set_image(self.openwifi(bar))
                     connection_item.show()
@@ -143,11 +143,11 @@ class trayIcon(object):
                     if wifiData[6] == 'E' or wifiData[6] == 'ES':
                         menu_item.set_image(self.openwifi(barpercent(wifiData[4])))
                         menu_item.connect("activate", self.menu_click_open,
-                                          wifiData[0])
+                                          wifiData[0], wifiData[1])
                     else:
                         menu_item.set_image(self.securewifi(barpercent(wifiData[4])))
                         menu_item.connect("activate", self.menu_click_lock,
-                                          wifiData[0])
+                                          wifiData[0], wifiData[1])
                     menu_item.show()
                     self.menu.append(menu_item)
             else:
@@ -155,24 +155,24 @@ class trayIcon(object):
                 if wifiData[6] == 'E' or wifiData[6] == 'ES':
                     menu_item.set_image(self.openwifi(barpercent(wifiData[4])))
                     menu_item.connect("activate", self.menu_click_open,
-                                      wifiData[0])
+                                      wifiData[0], wifiData[1])
                 else:
                     menu_item.set_image(self.securewifi(barpercent(wifiData[4])))
                     menu_item.connect("activate", self.menu_click_lock,
-                                      wifiData[0])
+                                      wifiData[0], wifiData[1])
                 menu_item.show()
                 self.menu.append(menu_item)
 
-    def menu_click_open(self, widget, name):
-        Open_Wpa_Supplicant(name)
+    def menu_click_open(self, widget, ssid, bssid):
+        Open_Wpa_Supplicant(ssid, bssid)
         self.check()
 
-    def menu_click_lock(self, widget, name):
+    def menu_click_lock(self, widget, ssid, bssid):
         if name in open(wpa_supplican).read():
-            connectToSsid(name)
+            connectToSsid(ssid)
             self.check()
         else:
-            Authentication(name)
+            Authentication(ssid, bssid)
             self.check()
 
     def disconnectfromwifi(self, widget):

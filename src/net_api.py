@@ -12,8 +12,8 @@ grepListScan = "ifconfig wlan0 list scan | grep "
 grepScan = "sudo operator ifconfig wlan0 scan | grep "
 
 
-def scanWifiSsid(ssid):
-    wifi = Popen(grepListScan + ssid, shell=True, stdout=PIPE, close_fds=True)
+def scanWifiBssid(bssid):
+    wifi = Popen(grepListScan + bssid, shell=True, stdout=PIPE, close_fds=True)
     info = wifi.stdout.readlines()[0].rstrip().split(' ')
     info = filter(None, info)
     return info
