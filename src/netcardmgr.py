@@ -59,8 +59,10 @@ class autoConfigure():
                     if any('wlans_%s=' % card in listed for listed in rcconf):
                         print("Your wifi network card is already configured.")
                         if os.path.exists('/etc/wpa_supplicant.conf') is False:
-                            call('chmod 765 /etc/wpa_supplicant.conf', shell=True)
-
+                            open('/etc/wpa_supplicant.conf', 'a').close()
+                            call('chown root:wheel /etc/wpa_supplicant.conf',
+                                 shell=True)
+                            call('chmod 765 /etc/wpa_supplicant.conf', shell=True) 
                     else:
                         rc = open('/etc/rc.conf', 'a')
                         rc.writelines('wlans_%s="wlan0"\n' % card)

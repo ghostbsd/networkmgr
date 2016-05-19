@@ -168,7 +168,7 @@ class trayIcon(object):
         self.check()
 
     def menu_click_lock(self, widget, ssid, bssid):
-        if name in open(wpa_supplican).read():
+        if ssid in open(wpa_supplican).read():
             connectToSsid(ssid)
             self.check()
         else:

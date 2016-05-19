@@ -187,8 +187,8 @@ def disableWifi():
 def enableWifi():
     call('sudo operator ifconfig wlan0 up scan', shell=True, close_fds=True)
     call('sudo operator ifconfig wlan0 up scan', shell=True, close_fds=True)
-    call('sudo operator wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf',
-         shell=True)
+    #call('sudo operator wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf',
+    #     shell=True)
 
 
 def connectToSsid(name):

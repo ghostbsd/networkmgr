@@ -1,7 +1,7 @@
 #!/usr/local/bin/python
 
 import gtk
-from net_api import scanWifiBssid, enableWifi
+from net_api import scanWifiBssid, connectToSsid
 
 wpa_supplican = "/etc/wpa_supplicant.conf"
 
@@ -81,7 +81,7 @@ class Open_Wpa_Supplicant:
         wsf = open(wpa_supplican, 'a')
         wsf.writelines(ws)
         wsf.close()
-        enableWifi()
+        connectToSsid(ssid)
 
 
 class Look_Wpa_Supplicant:
@@ -103,7 +103,7 @@ class Look_Wpa_Supplicant:
             ws += '\n\tpsk="%s"\n}\n' % pwd
         else:
             ws = '\nnetwork={'
-            ws += '\n\tssid="%s"' % ssid
+            ws += '\n\tssid="%s"' % ssid
             ws += '\n\tbssid=%s' % bssid
             ws += '\n\tkey_mgmt=NONE'
             ws += '\n\twep_tx_keyidx=0'
@@ -111,4 +111,4 @@ class Look_Wpa_Supplicant:
         wsf = open(wpa_supplican, 'a')
         wsf.writelines(ws)
         wsf.close()
-        enableWifi()
+        connectToSsid(ssid)
