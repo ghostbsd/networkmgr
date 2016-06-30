@@ -42,9 +42,6 @@ class trayIcon(object):
         self.statusIcon = gtk.StatusIcon()
         self.statusIcon.set_tooltip('Network Manager')
         self.statusIcon.set_visible(True)
-        self.menu = gtk.Menu()
-        self.menu.show_all()
-        self.act = False
         self.statusIcon.connect("activate", self.leftclick)
         self.statusIcon.connect('popup-menu', self.icon_clicked)
 
@@ -163,6 +160,18 @@ class trayIcon(object):
                 menu_item.show()
                 self.menu.append(menu_item)
 
+    def leftclick(self, status_icon):
+        button = 1
+        position = gtk.status_icon_position_menu
+        time = gtk.get_current_event_time()
+        #self.nm_menu().popup(None, None, position, button, time, status_icon)
+        self.nmMenu.popup(None, None, position, button, time, status_icon)
+
+    def icon_clicked(self, status_icon, button, time):
+        position = gtk.status_icon_position_menu
+        #self.nm_menu().popup(None, None, position, button, time, status_icon)
+        self.nmMenu.popup(None, None, position, button, time, status_icon)
+
     def menu_click_open(self, widget, ssid, bssid):
         Open_Wpa_Supplicant(ssid, bssid)
         self.check()
@@ -203,18 +212,6 @@ class trayIcon(object):
         startallnetwork()
         self.check()
 
-    def leftclick(self, status_icon):
-        button = 1
-        position = gtk.status_icon_position_menu
-        time = gtk.get_current_event_time()
-        self.nm_menu()
-        self.menu.popup(None, None, position, button, time, status_icon)
-
-    def icon_clicked(self, status_icon, button, time):
-        position = gtk.status_icon_position_menu
-        self.nm_menu()
-        self.menu.popup(None, None, position, button, time, status_icon)
-
     def openwifi(self, bar):
         img = gtk.Image()
         if bar > 75:
@@ -247,8 +244,9 @@ class trayIcon(object):
 
     def checkloop(self):
         while 1:
+            self.nmMenu = self.nm_menu()
             self.check()
-            sleep(10)
+            sleep(20)
 
     def check(self):
         state = netstate()
@@ -269,7 +267,7 @@ class trayIcon(object):
         return True
 
     def tray(self):
-        thr = threading.Thread(target=self.checkloop)
-        thr.setDaemon(True)
-        thr.start()
+        self.thr = threading.Thread(target=self.checkloop)
+        self.thr.setDaemon(True)
+        self.thr.start()
         gtk.main()
