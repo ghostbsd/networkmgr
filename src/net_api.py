@@ -64,9 +64,9 @@ def ifWlanDisable():
         cmd = "sudo operator ifconfig wlan0 list scan"
         nics = Popen(cmd, shell=True, stdout=PIPE, close_fds=True)
         if "" == nics.stdout.read():
-            return False
-        else:
             return True
+        else:
+            return False
 
 
 def ifStatue():
@@ -196,3 +196,17 @@ def connectToSsid(name):
     call('sudo operator ifconfig wlan0 ssid %s' % name, shell=True)
     call('sudo operator wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf',
          shell=True)
+
+
+def conectionStatus():
+    if ifWlan() is True:
+        if ifWlanDisable() is False:
+            cmd = "ifconfig wlan0 | grep ssid"
+            out = Popen(cmd, shell=True, stdout=PIPE, close_fds=True)
+            netstate = out.stdout.read().strip()
+        else:
+            netstate = "Network Manager"
+    else:
+        netstate = "Network Manager"
+    return netstate
+
