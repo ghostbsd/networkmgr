@@ -1,11 +1,39 @@
 #!/usr/local/bin/python
+"""
+Copyright (c) 2014-2016, GhostBSD. All rights reserved.
 
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+1. Redistribution's of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+
+2. Redistribution's in binary form must reproduce the above
+   copyright notice,this list of conditions and the following
+   disclaimer in the documentation and/or other materials provided
+   with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES(INCLUDING,
+BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+"""
 import gtk
 import gobject as GObject
 import threading
 from sys import path
 import locale
 path.append("/usr/local/share/networkmgr")
+
 from time import sleep
 from net_api import netstate, barpercent, get_ssid, ifWlanDisable
 from net_api import wiredonlineinfo, wiredconnectedinfo, stopwirednetwork
@@ -165,14 +193,14 @@ class trayIcon(object):
         button = 1
         position = gtk.status_icon_position_menu
         time = gtk.get_current_event_time()
-        #self.nm_menu().popup(None, None, position, button, time, status_icon)
+        # self.nm_menu().popup(None, None, position, button, time, status_icon)
         self.nmMenu.popup(None, None, position, button, time, status_icon)
 
     def icon_clicked(self, status_icon, button, time):
         if not self.thr.is_alive():
             self.thr.start()
         position = gtk.status_icon_position_menu
-        #self.nm_menu().popup(None, None, position, button, time, status_icon)
+        # self.nm_menu().popup(None, None, position, button, time, status_icon)
         self.nmMenu.popup(None, None, position, button, time, status_icon)
 
     def menu_click_open(self, widget, ssid, bssid):
@@ -181,7 +209,6 @@ class trayIcon(object):
             self.thr.start()
         else:
             self.nmMenu = self.nm_menu()
-
 
     def menu_click_lock(self, widget, ssid, bssid):
         if ssid in open(wpa_supplican).read():
