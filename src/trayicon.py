@@ -27,6 +27,7 @@ LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
 ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 """
+
 import gtk
 import gobject as GObject
 import threading
@@ -39,7 +40,7 @@ from net_api import netstate, barpercent, get_ssid, ifWlanDisable
 from net_api import wiredonlineinfo, wiredconnectedinfo, stopwirednetwork
 from net_api import startwirednetwork, wifiDisconnection, ifWlan, ifStatue
 from net_api import stopallnetwork, startallnetwork, connectToSsid
-from net_api import ifWlanInRc, disableWifi, enableWifi
+from net_api import ifWlanInRc, disableWifi, enableWifi, bssidsn
 from authentication import Authentication, Open_Wpa_Supplicant
 from net_api import wifiListe, scanWifiBssid, conectionStatus
 encoding = locale.getpreferredencoding()
@@ -131,7 +132,7 @@ class trayIcon(object):
                     w_title.set_label("WiFi Networks")
                     w_title.set_sensitive(False)
                     self.menu.append(w_title)
-                    bar = barpercent(scanWifiBssid(get_ssid())[4])
+                    bar = bssidsn(get_ssid())
                     connection_item = gtk.ImageMenuItem(get_ssid())
                     connection_item.set_image(self.openwifi(bar))
                     connection_item.show()

@@ -36,6 +36,7 @@ detect_wifi = 'sudo operator sh /usr/local/share/networkmgr/detect-wifi.sh'
 scan = "ifconfig wlan0 list scan | grep -v SSID"
 scanv = "ifconfig -v wlan0 list scan | grep -v SSID/"
 grepListScan = "ifconfig wlan0 list scan | grep "
+grepListScanv = "ifconfig -v wlan0 list scan | grep "
 grepScan = "sudo operator ifconfig wlan0 scan | grep "
 
 
@@ -44,6 +45,17 @@ def scanWifiBssid(bssid):
     info = wifi.stdout.readlines()[0].rstrip().split(' ')
     info = filter(None, info)
     return info
+
+def bssidsn(bssid):
+    wifi = Popen(grepListScanv + bssid, shell=True, stdout=PIPE, close_fds=True)
+    info = wifi.stdout.readlines()
+    if len(info) == 0:
+        return 0
+    else:
+        newline = info[0][33:]
+        bssidlist = newline.split(' ')
+        bssidlist = filter(None, bssidlist)
+        return barpercent(bssidlist[3])
 
 
 def scanSsid(ssid):

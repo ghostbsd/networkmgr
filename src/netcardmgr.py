@@ -62,7 +62,8 @@ class autoConfigure():
                             open('/etc/wpa_supplicant.conf', 'a').close()
                             call('chown root:wheel /etc/wpa_supplicant.conf',
                                  shell=True)
-                            call('chmod 765 /etc/wpa_supplicant.conf', shell=True) 
+                            call('chmod 765 /etc/wpa_supplicant.conf',
+                                 shell=True)
                     else:
                         rc = open('/etc/rc.conf', 'a')
                         rc.writelines('wlans_%s="wlan0"\n' % card)
