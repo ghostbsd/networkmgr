@@ -34,10 +34,10 @@ path.append("/usr/local/share/networkmgr")
 ncard = 'sudo operator sh /usr/local/share/networkmgr/detect-nics.sh'
 detect_wifi = 'sudo operator sh /usr/local/share/networkmgr/detect-wifi.sh'
 scan = "ifconfig wlan0 list scan | grep -v SSID"
-scanv = "ifconfig -v wlan0 list scan | grep -v SSID/"
-grepListScan = "ifconfig wlan0 list scan | grep "
-grepListScanv = "ifconfig -v wlan0 list scan | grep "
-grepScan = "sudo operator ifconfig wlan0 scan | grep "
+scanv = "ifconfig -v wlan0 list scan | grep -va BSSID"
+grepListScan = "ifconfig wlan0 list scan | grep -a "
+grepListScanv = "ifconfig -v wlan0 list scan | grep -a "
+grepScan = "sudo operator ifconfig wlan0 scan | grep -a "
 
 
 def scanWifiBssid(bssid):
@@ -45,6 +45,7 @@ def scanWifiBssid(bssid):
     info = wifi.stdout.readlines()[0].rstrip().split(' ')
     info = filter(None, info)
     return info
+
 
 def bssidsn(bssid):
     wifi = Popen(grepListScanv + bssid, shell=True, stdout=PIPE, close_fds=True)
