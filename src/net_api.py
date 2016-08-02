@@ -60,7 +60,7 @@ def bssidsn(bssid):
 
 
 def scanSsid(ssid):
-    wifi = Popen(grepScan + ssid, shell=True, stdout=PIPE, close_fds=True)
+    wifi = Popen(grepListScanv + ssid, shell=True, stdout=PIPE, close_fds=True)
     info = wifi.stdout.readlines()[0].rstrip().split(' ')
     info = filter(None, info)
     return info
