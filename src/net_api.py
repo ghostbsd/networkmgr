@@ -31,13 +31,13 @@ POSSIBILITY OF SUCH DAMAGE.
 from subprocess import Popen, PIPE, STDOUT, call
 from sys import path
 path.append("/usr/local/share/networkmgr")
-ncard = 'sudo operator sh /usr/local/share/networkmgr/detect-nics.sh'
-detect_wifi = 'sudo operator sh /usr/local/share/networkmgr/detect-wifi.sh'
+ncard = 'doas detect-nics'
+detect_wifi = 'doas detect-wifi'
 scan = "ifconfig wlan0 list scan | grep -v SSID"
 scanv = "ifconfig -v wlan0 list scan | grep -va BSSID"
 grepListScan = "ifconfig wlan0 list scan | grep -a "
 grepListScanv = "ifconfig -v wlan0 list scan | grep -a "
-grepScan = "sudo operator ifconfig wlan0 scan | grep -a "
+grepScan = "doas ifconfig wlan0 scan | grep -a "
 
 
 def scanWifiBssid(bssid):
@@ -75,7 +75,7 @@ def wirecard():
 
 
 def wiredonlineinfo():
-    lan = Popen('sudo operator ifconfig ' + wirecard(), shell=True,
+    lan = Popen('doas ifconfig ' + wirecard(), shell=True,
                 stdout=PIPE, close_fds=True)
     if 'inet' in lan.stdout.read():
         return True
@@ -92,7 +92,7 @@ def ifWlanInRc():
 
 
 def ifWlan():
-        cmd = "sudo operator ifconfig wlan0"
+        cmd = "doas ifconfig wlan0"
         nics = Popen(cmd, shell=True, stdout=PIPE, close_fds=True)
         if "wlan0" in nics.stdout.read():
             return True
@@ -101,7 +101,7 @@ def ifWlan():
 
 
 def ifWlanDisable():
-        cmd = "sudo operator ifconfig wlan0 list scan"
+        cmd = "doas ifconfig wlan0 list scan"
         nics = Popen(cmd, shell=True, stdout=PIPE, close_fds=True)
         if "" == nics.stdout.read():
             return True
@@ -110,7 +110,7 @@ def ifWlanDisable():
 
 
 def ifStatue():
-    cmd = "sudo operator ifconfig wlan0"
+    cmd = "doas ifconfig wlan0"
     wl = Popen(cmd, shell=True, stdout=PIPE, close_fds=True)
     wlout = wl.stdout.read()
     if "associated" in wlout:
@@ -123,7 +123,7 @@ def get_ssid():
     if ifWlan() is False:
         return None
     else:
-        wlan = Popen('sudo operator ifconfig wlan0 | grep ssid',
+        wlan = Popen('doas ifconfig wlan0 | grep ssid',
                      shell=True, stdout=PIPE, close_fds=True)
         return wlan.stdout.readlines()[0].rstrip().split()[1]
 
@@ -173,7 +173,7 @@ def barpercent(sn):
 
 
 def lockinfo(ssid):
-    wifi = Popen('sudo operator ifconfig wlan0 list scan',
+    wifi = Popen('doas ifconfig wlan0 list scan',
                  shell=True, stdin=PIPE,
                  stdout=PIPE, stderr=STDOUT, close_fds=True)
     linfo = []
@@ -186,7 +186,7 @@ def lockinfo(ssid):
 
 
 def wiredconnectedinfo():
-    wifi = Popen('sudo operator ifconfig ' + wirecard(),
+    wifi = Popen('doas ifconfig ' + wirecard(),
                  shell=True, stdin=PIPE, stdout=PIPE,
                  stderr=STDOUT, close_fds=True)
     if 'status: active' in wifi.stdout.read():
@@ -196,51 +196,51 @@ def wiredconnectedinfo():
 
 
 def stopallnetwork():
-    call('sudo operator /etc/rc.d/netif stop', shell=True)
+    call('doas service netif stop', shell=True)
 
 
 def startallnetwork():
-    call('sudo operator /etc/rc.d/netif restart', shell=True)
+    call('doas service netif restart', shell=True)
     nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True)
     if "wlan0" in nics.stdout.read():
-        call('sudo operator wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf',
+        call('doas wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf',
              shell=True)
 
 
 def stopwirednetwork():
-    call('sudo operator /etc/rc.d/netif stop ' + wirecard(), shell=True)
+    call('doas service netif stop ' + wirecard(), shell=True)
 
 
 def startwirednetwork():
-    call('sudo operator /etc/rc.d/netif start ' + wirecard(), shell=True)
+    call('doas service netif start ' + wirecard(), shell=True)
 
 
 def wifiDisconnection():
-    call('sudo operator ifconfig wlan0 down', shell=True, close_fds=True)
-    call('sudo operator ifconfig wlan0 up scan', shell=True, close_fds=True)
-    call('sudo operator ifconfig wlan0 up scan', shell=True, close_fds=True)
+    call('doas ifconfig wlan0 down', shell=True, close_fds=True)
+    call('doas ifconfig wlan0 up scan', shell=True, close_fds=True)
+    call('doas ifconfig wlan0 up scan', shell=True, close_fds=True)
 
 
 def wifiConnection():
-    call('sudo operator ifconfig wlan0 up', shell=True)
-    call("sudo operator service netif restart wlan0", shell=True)
+    call('doas ifconfig wlan0 up', shell=True)
+    call("doas service netif restart wlan0", shell=True)
 
 
 def disableWifi():
-    call('sudo operator ifconfig wlan0 down', shell=True, close_fds=True)
+    call('doas ifconfig wlan0 down', shell=True, close_fds=True)
 
 
 def enableWifi():
-    call('sudo operator ifconfig wlan0 up scan', shell=True, close_fds=True)
-    call('sudo operator ifconfig wlan0 up scan', shell=True, close_fds=True)
-    #call('sudo operator wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf',
+    call('doas ifconfig wlan0 up scan', shell=True, close_fds=True)
+    call('doas ifconfig wlan0 up scan', shell=True, close_fds=True)
+    #call('doas wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf',
     #     shell=True)
 
 
 def connectToSsid(name):
-    # call('sudo operator service netif restart wlan0', shell=True)
-    call('sudo operator ifconfig wlan0 ssid %s' % name, shell=True)
-    call('sudo operator wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf',
+    # call('doas service netif restart wlan0', shell=True)
+    call('doas ifconfig wlan0 ssid %s' % name, shell=True)
+    call('doas wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf',
          shell=True)
 
 

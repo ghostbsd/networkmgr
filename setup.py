@@ -20,8 +20,7 @@
 
 import os
 import sys
-
-from glob import glob
+# from glob import glob
 
 from setuptools import setup
 
@@ -39,6 +38,7 @@ __VERSION__ = '1.0'
 #        exec(line.strip())
 PROGRAM_VERSION = __VERSION__
 
+
 def datafilelist(installbase, sourcebase):
     datafileList = []
     for root, subFolders, files in os.walk(sourcebase):
@@ -47,51 +47,52 @@ def datafilelist(installbase, sourcebase):
             fileList.append(os.path.join(root, f))
         datafileList.append((root.replace(sourcebase, installbase), fileList))
     return datafileList
+
 # '{prefix}/share/man/man1'.format(prefix=sys.prefix), glob('data/*.1')),
 data_files = [
-    ('{prefix}/etc/xdg/autostart'.format(prefix=sys.prefix), ['src/networkmgr.desktop',]),
-    ('{prefix}/share/networkmgr'.format(prefix=sys.prefix), ['src/authentication.py',]),
-    ('{prefix}/share/networkmgr'.format(prefix=sys.prefix), ['src/detect-nics.sh',]),
-    ('{prefix}/share/networkmgr'.format(prefix=sys.prefix), ['src/detect-wifi.sh',]),
-    ('{prefix}/share/networkmgr'.format(prefix=sys.prefix), ['src/enable-net.sh',]),
-    ('{prefix}/share/networkmgr'.format(prefix=sys.prefix), ['src/net_api.py',]),
-    ('{prefix}/share/networkmgr'.format(prefix=sys.prefix), ['src/netcardmgr.py',]),
-    ('{prefix}/share/networkmgr'.format(prefix=sys.prefix), ['src/test-netup.sh',]),
-    ('{prefix}/share/networkmgr'.format(prefix=sys.prefix), ['src/trayicon.py',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-adhoc.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-device-wired-autoip.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-device-wired.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-device-wireless.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-device-wwan.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-mb-roam.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-no-connection.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-secure-lock.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-signal-0-secure.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-signal-0.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-signal-00-secure.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-signal-00.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-signal-100-secure.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-signal-100.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-signal-25-secure.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-signal-25.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-signal-50-secure.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-signal-50.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-signal-75-secure.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-signal-75.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-tech-3g.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-tech-cdma-1x.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-tech-edge.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-tech-evdo.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-tech-gprs.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-tech-hspa.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-tech-umts.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-vpn-active-lock.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-vpn-connecting12.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-vpn-connecting13.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-vpn-connecting14.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-vpn-lock.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-vpn-standalone-lock.png',]),
-    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-wwan-tower.png',]),
+    ('{prefix}/etc/xdg/autostart'.format(prefix=sys.prefix), ['src/networkmgr.desktop']),
+    ('{prefix}/share/networkmgr'.format(prefix=sys.prefix), ['src/authentication.py']),
+    ('{prefix}/bin'.format(prefix=sys.prefix), ['src/detect-nics']),
+    ('{prefix}/bin'.format(prefix=sys.prefix), ['src/detect-wifi']),
+    ('{prefix}/share/networkmgr'.format(prefix=sys.prefix), ['src/enable-net.sh']),
+    ('{prefix}/share/networkmgr'.format(prefix=sys.prefix), ['src/net_api.py']),
+    ('{prefix}/bin'.format(prefix=sys.prefix), ['src/netcardmgr']),
+    ('{prefix}/share/networkmgr'.format(prefix=sys.prefix), ['src/test-netup.sh']),
+    ('{prefix}/share/networkmgr'.format(prefix=sys.prefix), ['src/trayicon.py']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-adhoc.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-device-wired-autoip.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-device-wired.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-device-wireless.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-device-wwan.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-mb-roam.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-no-connection.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-secure-lock.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-signal-0-secure.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-signal-0.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-signal-00-secure.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-signal-00.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-signal-100-secure.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-signal-100.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-signal-25-secure.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-signal-25.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-signal-50-secure.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-signal-50.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-signal-75-secure.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-signal-75.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-tech-3g.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-tech-cdma-1x.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-tech-edge.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-tech-evdo.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-tech-gprs.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-tech-hspa.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-tech-umts.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-vpn-active-lock.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-vpn-connecting12.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-vpn-connecting13.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-vpn-connecting14.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-vpn-lock.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-vpn-standalone-lock.png']),
+    ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix), ['src/icons/nm-wwan-tower.png'])
 ]
 data_files.extend(datafilelist('{prefix}/share/locale'.format(prefix=sys.prefix), 'build/mo'))
 
@@ -102,15 +103,14 @@ data_files.extend(datafilelist('{prefix}/share/locale'.format(prefix=sys.prefix)
 # }
 
 setup(
-    name = "networkmgr",
-    version = PROGRAM_VERSION,
-    description = "Networkmgr is a tool to manage FreeBSD/GHostBSD network",
-    license = 'BSD',
-    author = 'Eric Turgeon',
-    url = 'https://github/GhostBSD/networkmgr/',
-    package_dir = {'': '.'},
-    data_files = data_files,
-    install_requires = [ 'setuptools', ],
-    scripts = ['networkmgr'],
-)
+    name="networkmgr",
+    version=PROGRAM_VERSION,
+    description="Networkmgr is a tool to manage FreeBSD/GHostBSD network",
+    license='BSD',
+    author='Eric Turgeon',
+    url='https://github/GhostBSD/networkmgr/',
+    package_dir={'': '.'},
+    data_files=data_files,
+    install_requires=['setuptools'],
+    scripts=['networkmgr'])
 # cmdclass = cmdclass,
