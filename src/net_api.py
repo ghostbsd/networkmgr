@@ -31,8 +31,7 @@ POSSIBILITY OF SUCH DAMAGE.
 from subprocess import Popen, PIPE, STDOUT, call
 from sys import path
 path.append("/usr/local/share/networkmgr")
-ncard = 'doas detect-nics'
-detect_wifi = 'doas detect-wifi'
+ncard = 'doas ifconfig -l'
 scan = "ifconfig wlan0 list scan | grep -v SSID"
 scanv = "ifconfig -v wlan0 list scan | grep -va BSSID"
 grepListScan = "ifconfig wlan0 list scan | grep -a "
