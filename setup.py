@@ -32,7 +32,7 @@ from setuptools import setup
 # ,,python setup.py build_i18n -m''
 
 # silence pyflakes, __VERSION__ is properly assigned below...
-__VERSION__ = '1.0'
+__VERSION__ = '1.10'
 # for line in file('networkmgr').readlines():
 #    if (line.startswith('__VERSION__')):
 #        exec(line.strip())
