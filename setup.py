@@ -56,7 +56,7 @@ data_files = [
         ['src/authentication.py']),
     ('{prefix}/share/networkmgr'.format(prefix=sys.prefix),
         ['src/net_api.py']),
-    ('{prefix}/bin'.format(prefix=sys.prefix), ['src/netcardmgr']),
+    # ('{prefix}/bin'.format(prefix=sys.prefix), ['src/netcardmgr']),
     ('{prefix}/share/networkmgr'.format(prefix=sys.prefix),
         ['src/trayicon.py']),
     ('{prefix}/share/networkmgr/icons'.format(prefix=sys.prefix),
@@ -146,6 +146,6 @@ setup(
     package_dir={'': '.'},
     data_files=data_files,
     install_requires=['setuptools'],
-    scripts=['networkmgr']
+    scripts=['networkmgr', 'src/netcardmgr']
 )
 # cmdclass = cmdclass,
