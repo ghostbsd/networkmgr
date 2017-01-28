@@ -50,7 +50,6 @@ def datafilelist(installbase, sourcebase):
 
 # '{prefix}/share/man/man1'.format(prefix=sys.prefix), glob('data/*.1')),
 data_files = [
-    ('{prefix}/bin'.format(prefix=sys.prefix), ['networkmgr']),
     ('{prefix}/etc/xdg/autostart'.format(prefix=sys.prefix),
         ['src/networkmgr.desktop']),
     ('{prefix}/share/networkmgr'.format(prefix=sys.prefix),
@@ -147,6 +146,6 @@ setup(
     package_dir={'': '.'},
     data_files=data_files,
     install_requires=['setuptools'],
-    # scripts=['networkmgr']
+    scripts=['networkmgr']
 )
 # cmdclass = cmdclass,

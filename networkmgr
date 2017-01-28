@@ -7,8 +7,7 @@ path.append("/usr/local/share/networkmgr")
 from trayicon import trayIcon
 
 if os.path.exists("/usr/local/bin/netcardmgr"):
-    call("doas netcardmgr",
-         shell=True)
+    call("doas netcardmgr", shell=True)
 
 i = trayIcon()
 i.tray()
