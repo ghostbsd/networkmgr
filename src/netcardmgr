@@ -40,7 +40,7 @@ wifiscards = wifinics.stdout.readlines()
 
 rcconf_out = open('/etc/rc.conf', 'r')
 rcconf = rcconf_out.readlines()
-notnics = ["wlan0", "lo0", "fwe", "fwip", "lo1", "plip", "pfsync", "pflog", "tun"]
+notnics = ["wlan0", "lo0", "fwe", "fwip", "lo1", "plip", "pfsync", "pflog", "tun", "sl", "faith"]
 
 
 class autoConfigure():
