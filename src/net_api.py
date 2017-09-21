@@ -30,6 +30,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 from subprocess import Popen, PIPE, STDOUT, call
 from sys import path
+import os.path
 path.append("/usr/local/share/networkmgr")
 ncard = 'doas ifconfig -l'
 scan = "ifconfig wlan0 list scan | grep -v SSID"
@@ -37,6 +38,12 @@ scanv = "ifconfig -v wlan0 list scan | grep -va BSSID"
 grepListScan = "ifconfig wlan0 list scan | grep -a "
 grepListScanv = "ifconfig -v wlan0 list scan | grep -a "
 grepScan = "doas ifconfig wlan0 scan | grep -a "
+if os.path.exists("/usr/local/etc/pkg/repos/trueos.conf") is True:
+    start_network = 'doas service network start'
+    stop_network = 'doas service network stop'
+else:
+    start_network = 'doas service netif start'
+    stop_network = 'doas service netif stop'
 
 
 def scanWifiBssid(bssid):
@@ -91,21 +98,21 @@ def ifWlanInRc():
 
 
 def ifWlan():
-        cmd = "doas ifconfig wlan0"
-        nics = Popen(cmd, shell=True, stdout=PIPE, close_fds=True)
-        if "wlan0" in nics.stdout.read():
-            return True
-        else:
-            return False
+    cmd = "doas ifconfig -l"
+    nics = Popen(cmd, shell=True, stdout=PIPE, close_fds=True)
+    if "wlan0" in nics.stdout.read():
+        return True
+    else:
+        return False
 
 
 def ifWlanDisable():
-        cmd = "doas ifconfig wlan0 list scan"
-        nics = Popen(cmd, shell=True, stdout=PIPE, close_fds=True)
-        if "" == nics.stdout.read():
-            return True
-        else:
-            return False
+    cmd = "doas ifconfig wlan0 list scan"
+    nics = Popen(cmd, shell=True, stdout=PIPE, close_fds=True)
+    if "" == nics.stdout.read():
+        return True
+    else:
+        return False
 
 
 def ifStatue():
@@ -195,11 +202,11 @@ def wiredconnectedinfo():
 
 
 def stopallnetwork():
-    call('doas service netif stop', shell=True)
+    call(stop_network, shell=True)
 
 
 def startallnetwork():
-    call('doas service netif restart', shell=True)
+    call(start_network, shell=True)
     nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True)
     if "wlan0" in nics.stdout.read():
         call('doas wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf',
@@ -232,8 +239,8 @@ def disableWifi():
 def enableWifi():
     call('doas ifconfig wlan0 up scan', shell=True, close_fds=True)
     call('doas ifconfig wlan0 up scan', shell=True, close_fds=True)
-    #call('doas wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf',
-    #     shell=True)
+    call('doas wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf',
+         shell=True)
 
 
 def connectToSsid(name):
