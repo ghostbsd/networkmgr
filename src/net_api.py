@@ -107,23 +107,27 @@ def ifWlan():
 
 
 def ifWlanDisable():
-    cmd = "doas ifconfig wlan0 list scan"
-    nics = Popen(cmd, shell=True, stdout=PIPE, close_fds=True)
-    if "" == nics.stdout.read():
-        return True
+    if ifWlan is True:
+        cmd = "doas ifconfig wlan0 list scan"
+        nics = Popen(cmd, shell=True, stdout=PIPE, close_fds=True)
+        if "" == nics.stdout.read():
+            return True
+        else:
+            return False
     else:
         return False
-
 
 def ifStatue():
-    cmd = "doas ifconfig wlan0"
-    wl = Popen(cmd, shell=True, stdout=PIPE, close_fds=True)
-    wlout = wl.stdout.read()
-    if "associated" in wlout:
-        return True
+    if ifWlan is True:
+        cmd = "doas ifconfig wlan0"
+        wl = Popen(cmd, shell=True, stdout=PIPE, close_fds=True)
+        wlout = wl.stdout.read()
+        if "associated" in wlout:
+            return True
+        else:
+            return False
     else:
         return False
-
 
 def get_ssid():
     if ifWlan() is False:
