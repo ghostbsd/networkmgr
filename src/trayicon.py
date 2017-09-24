@@ -305,7 +305,7 @@ class trayIcon(object):
             self.nmMenu = self.nm_menu()
             self.check()
             self.trayStatus()
-            sleep(15)
+            sleep(20)
 
     def check(self):
         state = netstate()

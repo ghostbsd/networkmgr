@@ -32,12 +32,16 @@ from subprocess import Popen, PIPE, STDOUT, call
 from sys import path
 import os.path
 path.append("/usr/local/share/networkmgr")
-ncard = 'doas ifconfig -l'
+ncard = 'ifconfig -l'
+
+# these command does not supports mutiple WiFi card
 scan = "ifconfig wlan0 list scan | grep -v SSID"
 scanv = "ifconfig -v wlan0 list scan | grep -va BSSID"
 grepListScan = "ifconfig wlan0 list scan | grep -a "
 grepListScanv = "ifconfig -v wlan0 list scan | grep -a "
 grepScan = "doas ifconfig wlan0 scan | grep -a "
+
+
 if os.path.exists("/usr/local/etc/pkg/repos/trueos.conf") is True:
     start_network = 'doas service network start'
     stop_network = 'doas service network stop'
@@ -71,7 +75,7 @@ def scanSsid(ssid):
     info = filter(None, info)
     return info
 
-
+# need a better way to find card active card.
 def wirecard():
     wireNics = Popen('cat /etc/rc.conf | grep ifconfig_ | grep -v wlan',
                      shell=True, stdout=PIPE, close_fds=True)
@@ -91,23 +95,22 @@ def wiredonlineinfo():
 
 def ifWlanInRc():
     rc_conf = open('/etc/rc.conf', 'r').read()
-    if 'wlan0' in rc_conf:
+    if 'wlan' in rc_conf:
         return True
     else:
         return False
 
 
 def ifWlan():
-    cmd = "doas ifconfig -l"
-    nics = Popen(cmd, shell=True, stdout=PIPE, close_fds=True)
-    if "wlan0" in nics.stdout.read():
+    nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True)
+    if "wlan" in nics.stdout.read():
         return True
     else:
         return False
 
 
 def ifWlanDisable():
-    if ifWlan is True:
+    if ifWlan() is True:
         cmd = "doas ifconfig wlan0 list scan"
         nics = Popen(cmd, shell=True, stdout=PIPE, close_fds=True)
         if "" == nics.stdout.read():
@@ -115,10 +118,10 @@ def ifWlanDisable():
         else:
             return False
     else:
-        return False
+        return True
 
 def ifStatue():
-    if ifWlan is True:
+    if ifWlan() is True:
         cmd = "doas ifconfig wlan0"
         wl = Popen(cmd, shell=True, stdout=PIPE, close_fds=True)
         wlout = wl.stdout.read()
@@ -212,7 +215,7 @@ def stopallnetwork():
 def startallnetwork():
     call(start_network, shell=True)
     nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True)
-    if "wlan0" in nics.stdout.read():
+    if ifWlan() is True:
         call('doas wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf',
              shell=True)
 
