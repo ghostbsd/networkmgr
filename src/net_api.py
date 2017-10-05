@@ -252,7 +252,7 @@ def enableWifi():
 
 def connectToSsid(name):
     # call('doas service netif restart wlan0', shell=True)
-    call('doas ifconfig wlan0 ssid %s' % name, shell=True)
+    call("doas ifconfig wlan0 ssid '%s'" % name, shell=True)
     call('doas wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf',
          shell=True)
 
