@@ -42,6 +42,13 @@ rcconf = rcconf_out.readlines()
 notnics = ["lo0", "fwe0", "fwip0", "lo1", "plip0", "pfsync0", "pflog0",
            "tun0", "sl0", "faith0", "ppp0", "lo2", "lo3"]
 
+if os.path.exists("/usr/local/etc/pkg/repos/trueos.conf") is True:
+    start_network = 'doas service network start'
+    stop_network = 'doas service network stop'
+else:
+    start_network = 'doas service netif start'
+    stop_network = 'doas service netif stop'
+
 
 class autoConfigure():
 
@@ -57,7 +64,8 @@ class autoConfigure():
                         rc = open('/etc/rc.conf', 'a')
                         rc.writelines('ifconfig_%s="DHCP"\n' % card)
                         rc.close()
-                        call('/etc/rc.d/netif restart', shell=True)
+                        call(start_network, shell=True)
+                        call(stop_network, shell=True)
                         call('dhclient ' + card, shell=True)
                         print("Your wired network card is configured.")
 
@@ -88,8 +96,8 @@ class autoConfigure():
                     rc.writelines('wlans_%s="wlan%s"\n' % (card, wlanNum))
                     rc.writelines('ifconfig_wlan%s="WPA DHCP"\n' % wlanNum)
                     rc.close()
-                    call('/etc/rc.d/netif restart', shell=True)
-                    call('/etc/rc.d/netif restart wlan%s' % wlanNum,
+                    call(start_network, shell=True)
+                    call(stop_network, shell=True)
                          shell=True)
                     call('dhclient wlan%s' % wlanNum, shell=True)
                     open('/etc/wpa_supplicant.conf', 'a').close()
