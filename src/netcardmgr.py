@@ -38,17 +38,10 @@ netcard = nics.stdout.readlines()
 
 rcconf_out = open('/etc/rc.conf', 'r')
 rcconf = rcconf_out.readlines()
-netcardtext = 'Netork card configuration by Networkmgr'
 
 
 class autoConfigure():
     def __init__(self):
-        if any(netcardtext in listed for listed in rcconf):
-            pass
-        else:
-            rc = open('/etc/rc.conf', 'a')
-            rc.writelines('\n#%s\n' % netcardtext)
-            rc.close()
         for line in netcard:
             card = line.rstrip().partition(' ')[0]
             if card != "wlan0":

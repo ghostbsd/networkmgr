@@ -51,34 +51,38 @@ else:
 
 
 def scanWifiBssid(bssid):
-    wifi = Popen(grepListScan + bssid, shell=True, stdout=PIPE, close_fds=True)
+    wifi = Popen(grepListScan + bssid, shell=True, stdout=PIPE, close_fds=True,
+                 universal_newlines=True)
     info = wifi.stdout.readlines()[0].rstrip().split(' ')
-    info = filter(None, info)
+    info = list(filter(None, info))
     return info
 
 
 def bssidsn(bssid):
-    wifi = Popen(grepListScanv + bssid, shell=True, stdout=PIPE, close_fds=True)
+    wifi = Popen(grepListScanv + bssid, shell=True, stdout=PIPE,close_fds=True,
+                universal_newlines=True)
     info = wifi.stdout.readlines()
     if len(info) == 0:
         return 0
     else:
         newline = info[0][33:]
         bssidlist = newline.split(' ')
-        bssidlist = filter(None, bssidlist)
+        bssidlist = list(filter(None, bssidlist))
         return barpercent(bssidlist[3])
 
 
 def scanSsid(ssid):
-    wifi = Popen(grepListScanv + ssid, shell=True, stdout=PIPE, close_fds=True)
+    wifi = Popen(grepListScanv + ssid, shell=True, stdout=PIPE, close_fds=True,
+                universal_newlines=True)
     info = wifi.stdout.readlines()[0].rstrip().split(' ')
-    info = filter(None, info)
+    info = list(filter(None, info))
     return info
 
 # need a better way to find card active card.
 def wirecard():
     wireNics = Popen('cat /etc/rc.conf | grep ifconfig_ | grep -v wlan',
-                     shell=True, stdout=PIPE, close_fds=True)
+                     shell=True, stdout=PIPE, close_fds=True,
+                     universal_newlines=True)
     # for line in wireNics.stdout:
     card = wireNics.stdout.readlines()[0].partition('=')[0].partition('_')[2]
     return card
@@ -86,7 +90,7 @@ def wirecard():
 
 def wiredonlineinfo():
     lan = Popen('doas ifconfig ' + wirecard(), shell=True,
-                stdout=PIPE, close_fds=True)
+                stdout=PIPE, close_fds=True, universal_newlines=True)
     if 'inet' in lan.stdout.read():
         return True
     else:
@@ -102,7 +106,8 @@ def ifWlanInRc():
 
 
 def ifWlan():
-    nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True)
+    nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True,
+            universal_newlines=True)
     if "wlan" in nics.stdout.read():
         return True
     else:
@@ -112,7 +117,8 @@ def ifWlan():
 def ifWlanDisable():
     if ifWlan() is True:
         cmd = "doas ifconfig wlan0 list scan"
-        nics = Popen(cmd, shell=True, stdout=PIPE, close_fds=True)
+        nics = Popen(cmd, shell=True, stdout=PIPE, close_fds=True,
+                universal_newlines=True)
         if "" == nics.stdout.read():
             return True
         else:
@@ -123,7 +129,8 @@ def ifWlanDisable():
 def ifStatue():
     if ifWlan() is True:
         cmd = "doas ifconfig wlan0"
-        wl = Popen(cmd, shell=True, stdout=PIPE, close_fds=True)
+        wl = Popen(cmd, shell=True, stdout=PIPE, close_fds=True,
+                universal_newlines=True)
         wlout = wl.stdout.read()
         if "associated" in wlout:
             return True
@@ -137,7 +144,8 @@ def get_ssid():
         return None
     else:
         wlan = Popen('doas ifconfig wlan0 | grep ssid',
-                     shell=True, stdout=PIPE, close_fds=True)
+                     shell=True, stdout=PIPE, close_fds=True,
+                     universal_newlines=True)
         return wlan.stdout.readlines()[0].rstrip().split()[1]
 
 
@@ -162,7 +170,8 @@ def netstate():
 
 def wifiListe():
     wifi = Popen(scanv, shell=True, stdin=PIPE,
-                 stdout=PIPE, stderr=STDOUT, close_fds=True)
+                 stdout=PIPE, stderr=STDOUT, close_fds=True,
+                 universal_newlines=True)
     wlist = []
     for line in wifi.stdout:
         if line[0] == " ":
@@ -172,7 +181,7 @@ def wifiListe():
             ssid = [line[:33].strip()]
             newline = line[33:]
         info = newline.split(' ')
-        info = filter(None, info)
+        info = list(filter(None, info))
         newinfo = ssid + info
         wlist.append(newinfo)
     return wlist
@@ -186,9 +195,9 @@ def barpercent(sn):
 
 
 def lockinfo(ssid):
-    wifi = Popen('doas ifconfig wlan0 list scan',
-                 shell=True, stdin=PIPE,
-                 stdout=PIPE, stderr=STDOUT, close_fds=True)
+    wifi = Popen('doas ifconfig wlan0 list scan', shell=True, stdin=PIPE,
+                 stdout=PIPE, stderr=STDOUT, close_fds=True,
+                 universal_newlines=True)
     linfo = []
     for line in wifi.stdout:
         if line[0] == " ":
@@ -201,7 +210,7 @@ def lockinfo(ssid):
 def wiredconnectedinfo():
     wifi = Popen('doas ifconfig ' + wirecard(),
                  shell=True, stdin=PIPE, stdout=PIPE,
-                 stderr=STDOUT, close_fds=True)
+                 stderr=STDOUT, close_fds=True, universal_newlines=True)
     if 'status: active' in wifi.stdout.read():
         return True
     else:
@@ -214,7 +223,8 @@ def stopallnetwork():
 
 def startallnetwork():
     call(start_network, shell=True)
-    nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True)
+    nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True,
+            universal_newlines=True)
     if ifWlan() is True:
         call('doas wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf',
              shell=True)
@@ -261,7 +271,8 @@ def conectionStatus():
     if ifWlan() is True:
         if ifWlanDisable() is False:
             cmd = "ifconfig wlan0 | grep ssid"
-            out = Popen(cmd, shell=True, stdout=PIPE, close_fds=True)
+            out = Popen(cmd, shell=True, stdout=PIPE, close_fds=True,
+                    universal_newlines=True)
             netstate = out.stdout.read().strip()
         else:
             netstate = "Network Manager"

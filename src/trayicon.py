@@ -31,6 +31,7 @@ POSSIBILITY OF SUCH DAMAGE.
 import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GObject, GLib
+from gi.repository.GdkPixbuf import Pixbuf
 import threading
 from sys import path
 import locale
@@ -51,21 +52,6 @@ GObject.threads_init()
 
 wpa_supplican = "/etc/wpa_supplicant.conf"
 ncard = 'sh /usr/local/share/networkmgr/detect-nics.sh'
-icon_path = '/usr/local/share/networkmgr/icons'
-# Icon name
-sgnal0 = '%s/nm-signal-00.png' % icon_path
-sgnal25 = '%s/nm-signal-25.png' % icon_path
-sgnal50 = '%s/nm-signal-50.png' % icon_path
-sgnal75 = '%s/nm-signal-75.png' % icon_path
-sgnal100 = '%s/nm-signal-100.png' % icon_path
-secure0 = '%s/nm-signal-00-secure.png' % icon_path
-secure25 = '%s/nm-signal-25-secure.png' % icon_path
-secure50 = '%s/nm-signal-50-secure.png' % icon_path
-secure75 = '%s/nm-signal-75-secure.png' % icon_path
-secure100 = '%s/nm-signal-100-secure.png' % icon_path
-wirec = '%s/nm-device-wired.png' % icon_path
-wirenc = '%s/nm-no-connection.png' % icon_path
-
 
 class trayIcon(object):
     def __init__(self):
@@ -273,30 +259,30 @@ class trayIcon(object):
     def openwifi(self, bar):
         img = Gtk.Image()
         if bar > 75:
-            img.set_from_file(sgnal100)
+            img.set_from_icon_name("nm-signal-100", Gtk.IconSize.MENU)
         elif bar > 50:
-            img.set_from_file(sgnal75)
+            img.set_from_icon_name("nm-signal-75", Gtk.IconSize.MENU)
         elif bar > 25:
-            img.set_from_file(sgnal50)
+            img.set_from_icon_name("nm-signal-50", Gtk.IconSize.MENU)
         elif bar > 5:
-            img.set_from_file(sgnal25)
+            img.set_from_icon_name("nm-signal-25", Gtk.IconSize.MENU)
         else:
-            img.set_from_file(sgnal0)
+            img.set_from_icon_name("nm-signal-00", Gtk.IconSize.MENU)
         img.show()
         return img
 
     def securewifi(self, bar):
         img = Gtk.Image()
         if bar > 75:
-            img.set_from_file(secure100)
+            img.set_from_icon_name("nm-signal-100-secure", Gtk.IconSize.MENU)
         elif bar > 50:
-            img.set_from_file(secure75)
+            img.set_from_icon_name("nm-signal-75-secure", Gtk.IconSize.MENU)
         elif bar > 25:
-            img.set_from_file(secure50)
+            img.set_from_icon_name("nm-signal-50-secure", Gtk.IconSize.MENU)
         elif bar > 5:
-            img.set_from_file(secure25)
+            img.set_from_icon_name("nm-signal-25-secure", Gtk.IconSize.MENU)
         else:
-            img.set_from_file(secure0)
+            img.set_from_icon_name("nm-signal-00-secure", Gtk.IconSize.MENU)
         img.show()
         return img
 
@@ -314,19 +300,19 @@ class trayIcon(object):
     def check(self):
         state = netstate()
         if state == 200:
-            self.statusIcon.set_from_file(wirec)
+            self.statusIcon.set_from_icon_name('nm-adhoc')
         elif state is None:
-            self.statusIcon.set_from_file(wirenc)
+            self.statusIcon.set_from_icon_name('nm-no-connection')
         elif state > 75:
-            self.statusIcon.set_from_file(sgnal100)
+            self.statusIcon.set_from_icon_name('nm-signal-100')
         elif state > 50:
-            self.statusIcon.set_from_file(sgnal75)
+            self.statusIcon.set_from_icon_name('nm-signal-75')
         elif state > 25:
-            self.statusIcon.set_from_file(sgnal50)
+            self.statusIcon.set_from_icon_name('nm-signal-50')
         elif state > 5:
-            self.statusIcon.set_from_file(sgnal25)
+            self.statusIcon.set_from_icon_name('nm-signal-25')
         else:
-            self.statusIcon.set_from_file(sgnal0)
+            self.statusIcon.set_from_icon_name('nm-signal-00')
         return True
 
     def trayStatus(self):
