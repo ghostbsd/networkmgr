@@ -34,7 +34,8 @@ class Authentication:
         else:
             self.password.set_visibility(False)
 
-    def __init__(self, ssid, bssid):
+    def __init__(self, ssid, bssid, wificard):
+        self.wificard = wificard
         self.ssid = ssid
         self.bssid = bssid
         self.window = Gtk.Window()
@@ -83,12 +84,12 @@ class Open_Wpa_Supplicant:
         wsf = open(wpa_supplican, 'a')
         wsf.writelines(ws)
         wsf.close()
-        connectToSsid(ssid)
+        connectToSsid(ssid, self.wificard)
 
 
 class Look_Wpa_Supplicant:
     def __init__(self, ssid, bssid, pwd):
-        if 'RSN' in scanWifiBssid(bssid):
+        if 'RSN' in scanWifiBssid(bssid, self.wificard):
             # /etc/wpa_supplicant.conf written by networkmgr
             ws = '\nnetwork={'
             ws += '\n ssid="%s"' % ssid
@@ -96,7 +97,7 @@ class Look_Wpa_Supplicant:
             ws += '\n key_mgmt=WPA-PSK'
             ws += '\n proto=RSN'
             ws += '\n psk="%s"\n}\n' % pwd
-        elif 'WPA' in scanWifiBssid(bssid):
+        elif 'WPA' in scanWifiBssid(bssid, self.wificard):
             ws = '\nnetwork={'
             ws += '\n ssid="%s"' % ssid
             ws += '\n bssid=%s' % bssid
@@ -113,4 +114,4 @@ class Look_Wpa_Supplicant:
         wsf = open(wpa_supplican, 'a')
         wsf.writelines(ws)
         wsf.close()
-        connectToSsid(ssid)
+        connectToSsid(ssid, self.wificard)

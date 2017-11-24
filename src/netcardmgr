@@ -31,6 +31,7 @@
 
 from subprocess import Popen, PIPE, call
 import os
+import re
 ncard = 'ifconfig -l'
 nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True, universal_newlines=True)
 netcard = nics.stdout.readlines()
@@ -39,8 +40,8 @@ wifinics = Popen(wifis, shell=True, stdout=PIPE, close_fds=True, universal_newli
 wifiscards = wifinics.stdout.readlines()
 rcconf_out = open('/etc/rc.conf', 'r')
 rcconf = rcconf_out.readlines()
-notnics = ["lo0", "fwe0", "fwip0", "lo1", "plip0", "pfsync0", "pflog0",
-           "tun0", "sl0", "faith0", "ppp0", "lo2", "lo3"]
+notnics = ["lo", "fwe", "fwip", "tap", "plip", "pfsync", "pflog",
+           "tun", "sl", "faith", "ppp", "wlan", "brige", "ixautomation"]
 
 if os.path.exists("/usr/local/etc/pkg/repos/trueos.conf") is True:
     start_network = 'doas service network start'
@@ -57,7 +58,8 @@ class autoConfigure():
         if ifncard != '':
             for line in netcard[0].split():
                 card = line.rstrip()
-                if card not in notnics or 'wlan' not in card:
+                nc = re.sub(r'\d+', '', line.rstrip())
+                if nc not in notnics:
                     if any('ifconfig_%s=' % card in line for line in rcconf):
                         print("Your wired network card is already configured.")
                     else:
@@ -98,7 +100,6 @@ class autoConfigure():
                     rc.close()
                     call(start_network, shell=True)
                     call(stop_network, shell=True)
-                         shell=True)
                     call('dhclient wlan%s' % wlanNum, shell=True)
                     open('/etc/wpa_supplicant.conf', 'a').close()
                     call('chown root:wheel /etc/wpa_supplicant.conf',

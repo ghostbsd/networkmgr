@@ -3,8 +3,11 @@
 from subprocess import call
 from sys import path
 import os
+import signal
 path.append("/usr/local/share/networkmgr")
 from trayicon import trayIcon
+
+signal.signal(signal.SIGINT, signal.SIG_DFL)
 
 if os.path.exists("/usr/local/bin/netcardmgr"):
     call("doas netcardmgr", shell=True)
