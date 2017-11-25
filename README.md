@@ -1,7 +1,7 @@
 NetworkMgr
 ==========
+NetworkMgr is a Python GTK3 network manager for FreeBSD, GhostBSD, TrueOS and DragonFlyBSD. NetworkMgr support both netif and OpenRC network.
 
-NetworkMgr is a network manager for FreeBSD and GhostBSD built with Python GTK.
 
 Installation
 ============
