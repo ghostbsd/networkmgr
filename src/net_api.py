@@ -79,6 +79,45 @@ def wired_list():
             wiredlist.append(wnc)
     return wiredlist
 
+def ifwificardadded():
+    wifis = 'sysctl -in net.wlan.devices'
+    wifinics = Popen(wifis, shell=True, stdout=PIPE, close_fds=True, universal_newlines=True)
+    wifiscards = wifinics.stdout.readlines()
+    ifwifi = wifiscards[0].rstrip()
+    rc_conf = open('/etc/rc.conf', 'r').read()
+    if ifwifi != '':
+        wificardlist = ifwifi.split()
+        for wfcard in wificardlist:
+            if 'wlans_%s=' % wfcard not in rc_conf:
+                answer = True
+                break
+            else:
+                answer = False
+    else:
+        answer = False
+    return answer
+
+def ifwiredcardadded():
+    rc_conf = open('/etc/rc.conf', 'r').read()
+    cardlist = wired_list()
+    if len(cardlist) != 0:
+        for card in cardlist:
+            if 'ifconfig_%s=' % card not in rc_conf:
+                answer = True
+                break
+            else:
+                answer = False
+    else:
+        answer = False
+    return answer
+
+
+def isanewnetworkcardinstall():
+    if ifwificardadded() is True or ifwiredcardadded() is True:
+        return True
+    else:
+        return False
+
 
 def bssidsn(bssid, wificard):
     grepListScanv = "ifconfig -v %s list scan | grep -a %s" % (wificard, bssid)  
@@ -175,14 +214,17 @@ def get_ssid(wificard):
 
 
 def netstate():
+    wlist = wlan_list()
     if wiredonlineinfo() is True:
         state = 200
     elif ifWlan() is False and wiredonlineinfo() is False:
         state = None
-    elif ifStatue() is False and wiredonlineinfo() is False:
+    elif len(wlist) == 0 and wiredonlineinfo() is False:
+        state = None
+    elif ifStatue(wlist[0]) is False and wiredonlineinfo() is False:
         state = None
     else:
-        ssid = get_ssid()
+        ssid = get_ssid(wlist[0])
         scn = scanSsid(ssid)
         sn = scn[4]
         sig = int(sn.partition(':')[0])
@@ -296,7 +338,7 @@ def connectToSsid(name, wificard):
         call('doas service network.%s restart ' % wificard, shell=True)
     else:
         call('doas service netif restart %s' % wificard, shell=True)
-    #call('doas wpa_supplicant -B -i %s -c /etc/wpa_supplicant.conf' % wificard, shell=True)
+    # call('doas wpa_supplicant -B -i %s -c /etc/wpa_supplicant.conf' % wificard, shell=True)
 
 
 def conectionStatus():

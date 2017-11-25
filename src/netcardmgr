@@ -38,8 +38,8 @@ netcard = nics.stdout.readlines()
 wifis = 'sysctl -in net.wlan.devices'
 wifinics = Popen(wifis, shell=True, stdout=PIPE, close_fds=True, universal_newlines=True)
 wifiscards = wifinics.stdout.readlines()
-rcconf_out = open('/etc/rc.conf', 'r')
-rcconf = rcconf_out.readlines()
+rcconf = open('/etc/rc.conf', 'r').read()
+
 notnics = ["lo", "fwe", "fwip", "tap", "plip", "pfsync", "pflog",
            "tun", "sl", "faith", "ppp", "wlan", "brige", "ixautomation"]
 
@@ -60,27 +60,23 @@ class autoConfigure():
                 card = line.rstrip()
                 nc = re.sub(r'\d+', '', line.rstrip())
                 if nc not in notnics:
-                    if any('ifconfig_%s=' % card in line for line in rcconf):
+                    if 'ifconfig_%s=' % card in rcconf:
                         print("Your wired network card is already configured.")
                     else:
                         rc = open('/etc/rc.conf', 'a')
                         rc.writelines('ifconfig_%s="DHCP"\n' % card)
                         rc.close()
-                        call(start_network, shell=True)
                         call(stop_network, shell=True)
-                        call('dhclient ' + card, shell=True)
+                        call(start_network, shell=True)
                         print("Your wired network card is configured.")
 
         ifwifi = wifiscards[0].rstrip()
         if ifwifi != '':
-            wlanNum = 0
-            for line in netcard[0].split():
-                card = line.rstrip()
-                if 'wlan' in card:
-                    if any('wlan%s' % wlanNum in listed for listed in rcconf):
-                        wlanNum += 1
+            for wlanNum in range(0, 9):
+                if 'wlan%s' % wlanNum not in rcconf:
+                    break
             for card in wifiscards[0].rstrip().split():
-                if any('wlans_%s=' % card in listed for listed in rcconf):
+                if 'wlans_%s=' % card in rcconf:
                     print("Your wifi network card is already configured.")
                     if os.path.exists('/etc/wpa_supplicant.conf') is False:
                         open('/etc/wpa_supplicant.conf', 'a').close()
@@ -98,9 +94,8 @@ class autoConfigure():
                     rc.writelines('wlans_%s="wlan%s"\n' % (card, wlanNum))
                     rc.writelines('ifconfig_wlan%s="WPA DHCP"\n' % wlanNum)
                     rc.close()
-                    call(start_network, shell=True)
                     call(stop_network, shell=True)
-                    call('dhclient wlan%s' % wlanNum, shell=True)
+                    call(start_network, shell=True)
                     open('/etc/wpa_supplicant.conf', 'a').close()
                     call('chown root:wheel /etc/wpa_supplicant.conf',
                          shell=True)

@@ -32,14 +32,15 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GObject, GLib
 from gi.repository.GdkPixbuf import Pixbuf
+from time import sleep
+from subprocess import call
 import threading
 from sys import path
 import locale
+import os
 path.append("/usr/local/share/networkmgr")
-
-from time import sleep
 from net_api import netstate, barpercent, get_ssid, ifWlanDisable
-from net_api import wiredonlineinfo, stopnetworkcard
+from net_api import wiredonlineinfo, stopnetworkcard, isanewnetworkcardinstall
 from net_api import startnetworkcard, wifiDisconnection, ifWlan, ifStatue
 from net_api import stopallnetwork, startallnetwork, connectToSsid
 from net_api import ifWlanInRc, disableWifi, enableWifi, bssidsn, wired_list
@@ -52,7 +53,6 @@ threadBreak = False
 GObject.threads_init()
 
 wpa_supplican = "/etc/wpa_supplicant.conf"
-ncard = 'sh /usr/local/share/networkmgr/detect-nics.sh'
 
 class trayIcon(object):
 
@@ -209,6 +209,7 @@ class trayIcon(object):
 
     def menu_click_open(self, widget, ssid, bssid, wificard):
         Open_Wpa_Supplicant(ssid, bssid, wificard)
+        sleep(5)
         self.nmMenu = self.nm_menu()
 
     def menu_click_lock(self, widget, ssid, bssid, wificard):
@@ -216,37 +217,47 @@ class trayIcon(object):
             connectToSsid(ssid, wificard)
         else:
             Authentication(ssid, bssid, wificard)
+        sleep(5)
         self.nmMenu = self.nm_menu()
 
     def disconnectfromwifi(self, widget, wificard):
         wifiDisconnection(wificard)
+        sleep(5)
         self.nmMenu = self.nm_menu()
 
     def disable_Wifi(self, widget, wificard):
         disableWifi(wificard)
+        sleep(5)
         self.nmMenu = self.nm_menu()
 
     def enable_Wifi(self, widget, wificard):
         enableWifi(wificard)
+        sleep(5)
         self.nmMenu = self.nm_menu()
 
     def connectcard(self, widget, netcard):
         startnetworkcard(netcard)
+        sleep(5)
         self.nmMenu = self.nm_menu()
 
     def disconnectcard(self, widget, netcard):
         stopnetworkcard(netcard)
+        sleep(5)
         self.nmMenu = self.nm_menu()
 
     def restartcardconnection(self, widget, netcard):
         restartnetworkcard(netcard)
+        sleep(5)
+        self.nmMenu = self.nm_menu()
 
     def closeNetwork(self, widget):
         stopallnetwork()
+        sleep(5)
         self.nmMenu = self.nm_menu()
 
     def openNetwork(self, widget):
         startallnetwork()
+        sleep(5)
         self.nmMenu = self.nm_menu()
 
     def openwifi(self, bar):
@@ -286,8 +297,14 @@ class trayIcon(object):
         while True:
             self.nmMenu = self.nm_menu()
             GLib.idle_add(self.update_everything)
-            self.trayStatus()
+            #self.trayStatus()
             sleep(20)
+            self.checkfornewcard()
+
+    def checkfornewcard(self):
+        if os.path.exists("/usr/local/bin/netcardmgr"):
+            if isanewnetworkcardinstall() is True:
+                call("doas netcardmgr", shell=True)
 
     def check(self):
         state = netstate()
@@ -308,8 +325,7 @@ class trayIcon(object):
         return True
 
     def trayStatus(self):
-        pass
-        # self.statusIcon.set_tooltip_text("%s" % conectionStatus())
+        self.statusIcon.set_tooltip_text("%s" % conectionStatus())
 
     def tray(self):
         self.thr = threading.Thread(target=self.checkloop)
