@@ -1,14 +1,15 @@
 NetworkMgr
 ==========
+NetworkMgr is a Python GTK3 network manager for FreeBSD, GhostBSD, TrueOS and DragonFlyBSD. NetworkMgr support both netif and OpenRC network.
 
-NetworkMgr is a network manager for FreeBSD and GhostBSD built with Python GTK.
+![alt text](https://image.ibb.co/bWha3R/Screenshot_at_2017_11_24_20_57_33.png)
 
 Installation
 ============
 
-PyGtk and doas need to be installed before NetworkMgr.
+Packages to be installed before NetworkMgr.
 
-`pkg install py27-gtk2 doas`
+`pkg install py36-setuptools py36-gobject3 doas gtk-update-icon-cache hicolor-icon-theme`
 
 Download NetworkMgr or clone it:
 
@@ -18,7 +19,7 @@ To install NetworkMgr:
 
 `cd networkmgr`
 
-`python setup.py install`
+`python3.6 setup.py install`
 
 Make sure that /usr/local/etc/doas.conf exists.  If not, create it.
 
@@ -26,13 +27,15 @@ Make sure that /usr/local/etc/doas.conf exists.  If not, create it.
 
 Make sure that doas.conf has something similar to this:
 ```
+permit nopass keepenv root
 permit :wheel
 permit nopass keepenv :wheel cmd netcardmgr
-permit nopass keepenv :wheel cmd detect-nics
-permit nopass keepenv :wheel cmd detect-wifi
 permit nopass keepenv :wheel cmd ifconfig
 permit nopass keepenv :wheel cmd service
-permit nopass keepenv :wheel cmd wpa_supplicant
-permit nopass keepenv root
+
 ```
-When rebooting NetworkMgr should automaticaly start if the desktop supports xdg.  Make sure that the user using NetworkMgr is in the wheel group.
+Update Hicolor icons cahes.
+
+`sudo gtk-update-icon-cache -f /usr/local/share/icons/hicolor`
+
+When rebooting NetworkMgr should automatically start if the desktop supports xdg.  Make sure that the user using NetworkMgr is in the wheel group.
