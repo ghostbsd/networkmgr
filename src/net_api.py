@@ -58,6 +58,10 @@ def scanWifiBssid(bssid, wificard):
     return info
 
 
+def ifnetworkup():
+    pass
+
+
 def wlan_list():
     crd = Popen(ncard, shell=True, stdout=PIPE,close_fds=True,
                 universal_newlines=True)
@@ -78,6 +82,7 @@ def wired_list():
         if wcardn not in notnics:
             wiredlist.append(wnc)
     return wiredlist
+
 
 def ifwificardadded():
     wifis = 'sysctl -in net.wlan.devices'
@@ -134,8 +139,8 @@ def bssidsn(bssid, wificard):
 
 
 def scanSsid(ssid, wificard):
-    grepListScanv = "ifconfig -v %s list scan | grep -a %s" % (wificard, ssid) 
-    wifi = Popen(grepListScanv + ssid, shell=True, stdout=PIPE, close_fds=True,
+    grepListScanv = "ifconfig -v %s list scan | grep %s" % (wificard, ssid)
+    wifi = Popen(grepListScanv, shell=True, stdout=PIPE, close_fds=True,
                  universal_newlines=True)
     info = wifi.stdout.readlines()[0].rstrip().split(' ')
     info = list(filter(None, info))
@@ -178,60 +183,57 @@ def ifWlan():
     else:
         return False
 
+def defaultcard():
+    cmd = "netstat -r | grep default" 
+    nics = Popen(cmd, shell=True, stdout=PIPE, close_fds=True,
+                 universal_newlines=True)
+    device = nics.stdout.readlines()
+    if len(device) == 0:
+        return None
+    else:
+        return list(filter(None, device[0].rstrip().split()))[3]
+
 
 def ifWlanDisable(wificard):
-    if ifWlan() is True:
-        cmd = "doas ifconfig %s list scan" % wificard
-        nics = Popen(cmd, shell=True, stdout=PIPE, close_fds=True,
-                universal_newlines=True)
-        if "" == nics.stdout.read():
-            return True
-        else:
-            return False
-    else:
+    cmd = "ifconfig %s list scan" % wificard
+    nics = Popen(cmd, shell=True, stdout=PIPE, close_fds=True,
+            universal_newlines=True)
+    if "" == nics.stdout.read():
         return True
+    else:
+        return False
 
 
 def ifStatue(wificard):
-    if ifWlan() is True:
-        cmd = "doas ifconfig %s" % wificard
-        wl = Popen(cmd, shell=True, stdout=PIPE, close_fds=True,
-                universal_newlines=True)
-        wlout = wl.stdout.read()
-        if "associated" in wlout:
-            return True
-        else:
-            return False
+    cmd = "ifconfig %s" % wificard
+    wl = Popen(cmd, shell=True, stdout=PIPE, close_fds=True,
+            universal_newlines=True)
+    wlout = wl.stdout.read()
+    if "associated" in wlout:
+        return True
     else:
         return False
 
 
 def get_ssid(wificard):
-    wlan = Popen('doas ifconfig %s | grep ssid' % wificard,
+    wlan = Popen('ifconfig %s | grep ssid' % wificard,
                  shell=True, stdout=PIPE, close_fds=True,
                  universal_newlines=True)
     return wlan.stdout.readlines()[0].rstrip().split()[1]
 
 
-def netstate():
-    wlist = wlan_list()
-    if wiredonlineinfo() is True:
-        state = 200
-    elif ifWlan() is False and wiredonlineinfo() is False:
-        state = None
-    elif len(wlist) == 0 and wiredonlineinfo() is False:
-        state = None
-    elif ifStatue(wlist[0]) is False and wiredonlineinfo() is False:
-        state = None
-    else:
-        ssid = get_ssid(wlist[0])
-        scn = scanSsid(ssid)
+def netstate(defaultdev):
+    if defaultdev is None:
+        return None
+    elif 'wlan' in defaultdev:
+        ssid = get_ssid(defaultdev)
+        scn = scanSsid(ssid, defaultdev)
         sn = scn[4]
         sig = int(sn.partition(':')[0])
         noise = int(sn.partition(':')[2])
-        state = (sig - noise) * 4
-    return state
-
+        return (sig - noise) * 4
+    else:
+        return 200
 
 def wifiListe(wificard):
     scanv = "ifconfig -v %s list scan | grep -va BSSID" % wificard
@@ -241,17 +243,18 @@ def wifiListe(wificard):
     wlist = []
     for line in wifi.stdout:
         if line[0] == " ":
+            leftover = [line[83:].strip()]
             ssid = ["Unknown"]
-            newline = line[33:]
+            newline = line[:83]
         else:
+            leftover = [line[83:].strip()]
             ssid = [line[:33].strip()]
-            newline = line[33:]
-        info = newline.split(' ')
+            newline = line[:83].strip()
+        info = newline[33:].split(' ')
         info = list(filter(None, info))
-        newinfo = ssid + info
+        newinfo = ssid + info + leftover
         wlist.append(newinfo)
     return wlist
-
 
 def barpercent(sn):
     sig = int(sn.partition(':')[0])

@@ -45,7 +45,7 @@ from net_api import startnetworkcard, wifiDisconnection, ifWlan, ifStatue
 from net_api import stopallnetwork, startallnetwork, connectToSsid
 from net_api import ifWlanInRc, disableWifi, enableWifi, bssidsn, wired_list
 from authentication import Authentication, Open_Wpa_Supplicant
-from net_api import wifiListe, conectionStatus, ifcardisonline
+from net_api import wifiListe, conectionStatus, ifcardisonline, defaultcard
 from net_api import ifcardconnected, restartnetworkcard, wlan_list 
 encoding = locale.getpreferredencoding()
 
@@ -82,7 +82,6 @@ class trayIcon(object):
         self.nmMenu.popup(None, None, Gtk.StatusIcon.position_menu, status_icon, button, time)
 
 
-
     def nm_menu(self):
         self.menu = Gtk.Menu()
         e_title = Gtk.MenuItem()
@@ -90,13 +89,11 @@ class trayIcon(object):
         e_title.set_sensitive(False)
         self.menu.append(e_title)
         self.menu.append(Gtk.SeparatorMenuItem())
-        if ifWlan() is False and wiredonlineinfo() is False:
-            open_item = Gtk.MenuItem("Enable Networking")
-            open_item.connect("activate", self.openNetwork)
-            self.menu.append(open_item)
-        else:
+        wiredlist = wired_list()
+        wlanlist = wlan_list()
+        if len(wiredlist) != 0:
             cardnum = 1
-            for netcard in wired_list():
+            for netcard in wiredlist:
                 if ifcardisonline(netcard) is True:
                     wired_item = Gtk.MenuItem("Wired %s Connected" % cardnum)
                     wired_item.connect("activate", self.restartcardconnection, netcard)
@@ -117,67 +114,72 @@ class trayIcon(object):
                     self.menu.append(disconnected)
                 cardnum += 1
                 self.menu.append(Gtk.SeparatorMenuItem())
-            if ifWlanInRc() is False:
-                pass
-            else:
-                w_title = Gtk.MenuItem()
-                w_title.set_label("WiFi Network")
-                w_title.set_sensitive(False)
-                self.menu.append(w_title)
+        if len(wlanlist) != 0:  
+            w_title = Gtk.MenuItem()
+            w_title.set_label("WiFi Network")
+            w_title.set_sensitive(False)
+            self.menu.append(w_title)
+            self.menu.append(Gtk.SeparatorMenuItem())
+            wifinum = 1
+            for wificard in wlan_list(): 
+                if ifWlanDisable(wificard) is True:
+                    wd_title = Gtk.MenuItem()
+                    wd_title.set_label("WiFi %s Disabled" % wifinum)
+                    wd_title.set_sensitive(False)
+                    self.menu.append(wd_title)
+                    enawifi = Gtk.MenuItem("Enable Wifi %s" % wifinum)
+                    enawifi.connect("activate", self.enable_Wifi, wificard)
+                    self.menu.append(enawifi)
+                elif ifStatue(wificard) is False:
+                    d_title = Gtk.MenuItem()
+                    d_title.set_label("WiFi %s Disconnected" % wifinum)
+                    d_title.set_sensitive(False)
+                    self.menu.append(d_title)
+                    self.wifiListMenu(wificard, None, False)
+                    diswifi = Gtk.MenuItem("Disable Wifi %s" % wifinum)
+                    diswifi.connect("activate", self.disable_Wifi, wificard)
+                    self.menu.append(diswifi)
+                else:
+                    ssid = get_ssid(wificard)
+                    wc_title = Gtk.MenuItem("WiFi %s Connected" % wifinum)
+                    wc_title.set_sensitive(False)
+                    self.menu.append(wc_title)
+                    bar = bssidsn(ssid, wificard)
+                    connection_item = Gtk.ImageMenuItem(ssid)
+                    connection_item.set_image(self.openwifi(bar))
+                    connection_item.show()
+                    disconnect_item = Gtk.MenuItem("Disconnect from %s" % ssid)
+                    disconnect_item.connect("activate", self.disconnectfromwifi,
+                                            wificard)
+                    self.menu.append(connection_item)
+                    self.menu.append(disconnect_item)
+                    self.wifiListMenu(wificard, ssid, True)
+                    diswifi = Gtk.MenuItem("Disable Wifi %s" % wifinum)
+                    diswifi.connect("activate", self.disable_Wifi, wificard)
+                    self.menu.append(diswifi)
                 self.menu.append(Gtk.SeparatorMenuItem())
-                wifinum = 1
-                for wificard in wlan_list(): 
-                    if ifWlanDisable(wificard) is True and ifWlanInRc() is True:
-                        wd_title = Gtk.MenuItem()
-                        wd_title.set_label("WiFi %s Disabled" % wifinum)
-                        wd_title.set_sensitive(False)
-                        self.menu.append(wd_title)
-                    elif ifStatue(wificard) is False:
-                        d_title = Gtk.MenuItem()
-                        d_title.set_label("WiFi %s Disconnected" % wifinum)
-                        d_title.set_sensitive(False)
-                        self.menu.append(d_title)
-                        self.wifiListMenu(wificard)
-                    else:
-                        wc_title = Gtk.MenuItem("WiFi %s Connected" % wifinum)
-                        wc_title.set_sensitive(False)
-                        self.menu.append(wc_title)
-                        bar = bssidsn(get_ssid(wificard), wificard)
-                        connection_item = Gtk.ImageMenuItem(get_ssid(wificard))
-                        connection_item.set_image(self.openwifi(bar))
-                        connection_item.show()
-                        disconnect_item = Gtk.MenuItem("Disconnect from %s" % get_ssid(wificard))
-                        disconnect_item.connect("activate",
-                                                self.disconnectfromwifi, wificard)
-                        self.menu.append(connection_item)
-                        self.menu.append(disconnect_item)
-                        self.wifiListMenu(wificard)
-                    if ifWlanDisable(wificard) is True:
-                        enawifi = Gtk.MenuItem("Enable Wifi %s" % wifinum)
-                        enawifi.connect("activate", self.enable_Wifi, wificard)
-                        self.menu.append(enawifi)
-                    elif ifWlanDisable(wificard) is False:
-                        diswifi = Gtk.MenuItem("Disable Wifi %s" % wifinum)
-                        diswifi.connect("activate", self.disable_Wifi, wificard)
-                        self.menu.append(diswifi)
-                    self.menu.append(Gtk.SeparatorMenuItem())
-                    wifinum += 1
+                wifinum += 1
+        if ifWlan() is False and wiredonlineinfo() is False:
+            open_item = Gtk.MenuItem("Enable Networking")
+            open_item.connect("activate", self.openNetwork)
+            self.menu.append(open_item)
+        else:
             close_item = Gtk.MenuItem("Disable Networking")
             close_item.connect("activate", self.closeNetwork)
             self.menu.append(close_item)
-            close_manager = Gtk.MenuItem("Close Network Manager")
-            close_manager.connect("activate", self.stop_manager)
-            self.menu.append(close_manager)
+        close_manager = Gtk.MenuItem("Close Network Manager")
+        close_manager.connect("activate", self.stop_manager)
+        self.menu.append(close_manager)
         self.menu.show_all()
         return self.menu
 
-    def wifiListMenu(self, wificard):
+    def wifiListMenu(self, wificard, ssid, passes):
         wiconncmenu = Gtk.Menu()
         avconnmenu = Gtk.MenuItem("Available Connections")
         avconnmenu.set_submenu(wiconncmenu)
         for wifiData in wifiListe(wificard):
-            if ifStatue(wificard) is True:
-                if get_ssid(wificard) == wifiData[0]:
+            if passes is True:
+                if ssid == wifiData[0]:
                     pass
                 else:
                     menu_item = Gtk.ImageMenuItem(wifiData[0])
@@ -290,13 +292,14 @@ class trayIcon(object):
         img.show()
         return img
 
-    def update_everything(self):
-        self.check()
+    def update_everything(self, defaultdev):
+        self.check(defaultdev)
 
     def checkloop(self):
         while True:
+            defaultdev = defaultcard()
             self.nmMenu = self.nm_menu()
-            GLib.idle_add(self.update_everything)
+            GLib.idle_add(self.update_everything, defaultdev)
             #self.trayStatus()
             sleep(20)
             self.checkfornewcard()
@@ -306,8 +309,8 @@ class trayIcon(object):
             if isanewnetworkcardinstall() is True:
                 call("doas netcardmgr", shell=True)
 
-    def check(self):
-        state = netstate()
+    def check(self, defaultdev):
+        state = netstate(defaultdev)
         if state == 200:
             self.statusIcon.set_from_icon_name('nm-adhoc')
         elif state is None:
