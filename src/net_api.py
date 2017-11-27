@@ -36,7 +36,7 @@ import re
 path.append("/usr/local/share/networkmgr")
 ncard = 'ifconfig -l'
 notnics = ["lo", "fwe", "fwip", "tap", "plip", "pfsync", "pflog",
-           "tun", "sl", "faith", "ppp", "wlan", "brige", "ixautomation"]
+           "tun", "sl", "faith", "ppp", "brige", "ixautomation"]
 
 
 if os.path.exists("/sbin/openrc") is True:
@@ -222,18 +222,76 @@ def get_ssid(wificard):
     return wlan.stdout.readlines()[0].rstrip().split()[1]
 
 
-def netstate(defaultdev):
-    if defaultdev is None:
-        return None
-    elif 'wlan' in defaultdev:
-        ssid = get_ssid(defaultdev)
-        scn = scanSsid(ssid, defaultdev)
-        sn = scn[4]
-        sig = int(sn.partition(':')[0])
-        noise = int(sn.partition(':')[2])
-        return (sig - noise) * 4
+def networklist():
+    crd = Popen(ncard, shell=True, stdout=PIPE,close_fds=True,
+                universal_newlines=True)
+    devicelist = []
+    for deviced in crd.stdout.readlines()[0].rstrip().split(' '):
+        ndev = deviced
+        card = re.sub(r'\d+', '', deviced)
+        if card not in notnics:
+            devicelist.append(ndev)
+    return devicelist
+
+
+def ifcardconnected(netcard):
+    wifi = Popen('doas ifconfig ' + netcard,
+                 shell=True, stdin=PIPE, stdout=PIPE,
+                 stderr=STDOUT, close_fds=True, universal_newlines=True)
+    if 'status: active' in wifi.stdout.read():
+        return True
     else:
-        return 200
+        return False
+
+
+def barpercent(sn):
+    sig = int(sn.partition(':')[0])
+    noise = int(sn.partition(':')[2])
+    return int((sig - noise) * 4)
+
+def networkdictionary():
+    nlist = networklist()
+    maindictionary = {}
+    for card in nlist:
+        if 'wlan' in card:
+            scanv = "ifconfig -v %s list scan | grep -va BSSID" % card
+            wifi = Popen(scanv, shell=True, stdin=PIPE,
+                         stdout=PIPE, stderr=STDOUT, close_fds=True,
+                         universal_newlines=True)
+            conectioninfo = {}
+            for line in wifi.stdout:
+                if line[0] == " ":
+                    ssid = "Unknown"
+                    newline = line[:83]
+                else:
+                    ssid = line[:33].strip()
+                    newline = line[:83].strip()
+                info = newline[33:].split(' ')                
+                info = list(filter(None, info))
+                sn = info[3]
+                info[3] = barpercent(sn)
+                conectioninfo[ssid] = info
+            if ifWlanDisable(card) is True:
+                conectionstat = {"conection": "Disabled", "ssid" : None}
+            elif ifStatue(card) is False:
+                conectionstat = {"conection": "Disconnected", "ssid" : None} 
+            else:
+                ssid = get_ssid(card)
+                conectionstat = {"conection": "Connected", "ssid" : ssid}
+            seconddictionary = [conectionstat, conectioninfo]
+        else:
+            if ifcardisonline(card) is True:
+                conectionstat = {"conection": "Connected"}                   
+            elif ifcardconnected(card) is True:
+                conectionstat = {"conection": "Disconnected"} 
+            else:
+                conectionstat = {"conection": "Unplug"}
+            seconddictionary = [conectionstat, None]
+        maindictionary[card] = seconddictionary
+    return maindictionary
+
+print(networkdictionary()["wlan0"][1]["EricBSD"][5])
+
 
 def wifiListe(wificard):
     scanv = "ifconfig -v %s list scan | grep -va BSSID" % wificard
@@ -256,12 +314,6 @@ def wifiListe(wificard):
         wlist.append(newinfo)
     return wlist
 
-def barpercent(sn):
-    sig = int(sn.partition(':')[0])
-    noise = int(sn.partition(':')[2])
-    bar = (sig - noise) * 4
-    return bar
-
 
 def lockinfo(ssid, wificard):
     wifi = Popen('doas ifconfig %s list scan' % wificard, shell=True, 
@@ -275,15 +327,6 @@ def lockinfo(ssid, wificard):
             linfo = line
     return linfo
 
-
-def ifcardconnected(netcard):
-    wifi = Popen('doas ifconfig ' + netcard,
-                 shell=True, stdin=PIPE, stdout=PIPE,
-                 stderr=STDOUT, close_fds=True, universal_newlines=True)
-    if 'status: active' in wifi.stdout.read():
-        return True
-    else:
-        return False
 
 def stopallnetwork():
     call(stop_network, shell=True)
