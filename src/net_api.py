@@ -290,8 +290,6 @@ def networkdictionary():
         maindictionary[card] = seconddictionary
     return maindictionary
 
-print(networkdictionary()["wlan0"][1]["EricBSD"][5])
-
 
 def wifiListe(wificard):
     scanv = "ifconfig -v %s list scan | grep -va BSSID" % wificard

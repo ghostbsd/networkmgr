@@ -239,6 +239,7 @@ class trayIcon(object):
 
     def openNetwork(self, widget):
         startallnetwork()
+       
 
     def openwifi(self, bar):
         img = Gtk.Image()
@@ -270,15 +271,15 @@ class trayIcon(object):
         img.show()
         return img
 
-    def update_everything(self, defaultdev):
-        self.check(defaultdev)
+    def updatetray(self, defaultdev):
+        self.updatetrayicon(defaultdev)
 
     def checkloop(self):
         while True:
             self.cardinfo = networkdictionary()
             defaultdev = defaultcard()
             #self.nmMenu = self.nm_menu()
-            GLib.idle_add(self.update_everything, defaultdev)
+            GLib.idle_add(self.updatetray, defaultdev)
             #self.trayStatus()
             sleep(20)
             self.checkfornewcard()
@@ -287,8 +288,8 @@ class trayIcon(object):
         if defaultdev is None:
             return None
         elif 'wlan' in defaultdev:
-            ssid = self.cardandconection[defaultdev][0]["ssid"]
-            return self.cardandconection[defaultdev][1][ssid][3]
+            ssid = self.cardinfo[defaultdev][0]["ssid"]
+            return self.cardinfo[defaultdev][1][ssid][3]
         else:
             return 200
 
@@ -297,7 +298,7 @@ class trayIcon(object):
             if isanewnetworkcardinstall() is True:
                 call("doas netcardmgr", shell=True)
 
-    def check(self, defaultdev):
+    def updatetrayicon(self, defaultdev):
         state = self.netstate(defaultdev)
         if state == 200:
             self.statusIcon.set_from_icon_name('nm-adhoc')
