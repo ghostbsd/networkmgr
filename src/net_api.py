@@ -50,7 +50,7 @@ else:
 
 
 def scanWifiBssid(bssid, wificard):
-    grepListScanv = "ifconfig -v %s list scan | grep -a %s" % (wificard, bssid) 
+    grepListScanv = "ifconfig -v %s list scan | grep -a %s" % (wificard, bssid)
     wifi = Popen(grepListScanv, shell=True, stdout=PIPE, close_fds=True,
                  universal_newlines=True)
     info = wifi.stdout.readlines()[0].rstrip().split(' ')
@@ -125,7 +125,7 @@ def isanewnetworkcardinstall():
 
 
 def bssidsn(bssid, wificard):
-    grepListScanv = "ifconfig -v %s list scan | grep -a %s" % (wificard, bssid)  
+    grepListScanv = "ifconfig -v %s list scan | grep -a %s" % (wificard, bssid)
     wifi = Popen(grepListScanv, shell=True, stdout=PIPE,close_fds=True,
                  universal_newlines=True)
     info = wifi.stdout.readlines()
@@ -148,7 +148,7 @@ def scanSsid(ssid, wificard):
 
 
 def wiredonlineinfo():
-    for netcard in wired_list(): 
+    for netcard in wired_list():
         lan = Popen('doas ifconfig ' + netcard, shell=True,
                     stdout=PIPE, close_fds=True, universal_newlines=True)
         if 'inet' in lan.stdout.read():
@@ -184,7 +184,7 @@ def ifWlan():
         return False
 
 def defaultcard():
-    cmd = "netstat -r | grep default" 
+    cmd = "netstat -r | grep default"
     nics = Popen(cmd, shell=True, stdout=PIPE, close_fds=True,
                  universal_newlines=True)
     device = nics.stdout.readlines()
@@ -266,7 +266,7 @@ def networkdictionary():
                 else:
                     ssid = line[:33].strip()
                     newline = line[:83].strip()
-                info = newline[33:].split(' ')                
+                info = newline[33:].split(' ')
                 info = list(filter(None, info))
                 sn = info[3]
                 info[3] = barpercent(sn)
@@ -274,16 +274,16 @@ def networkdictionary():
             if ifWlanDisable(card) is True:
                 conectionstat = {"conection": "Disabled", "ssid" : None}
             elif ifStatue(card) is False:
-                conectionstat = {"conection": "Disconnected", "ssid" : None} 
+                conectionstat = {"conection": "Disconnected", "ssid" : None}
             else:
                 ssid = get_ssid(card)
                 conectionstat = {"conection": "Connected", "ssid" : ssid}
             seconddictionary = [conectionstat, conectioninfo]
         else:
             if ifcardisonline(card) is True:
-                conectionstat = {"conection": "Connected"}                   
+                conectionstat = {"conection": "Connected"}
             elif ifcardconnected(card) is True:
-                conectionstat = {"conection": "Disconnected"} 
+                conectionstat = {"conection": "Disconnected"}
             else:
                 conectionstat = {"conection": "Unplug"}
             seconddictionary = [conectionstat, None]
@@ -314,7 +314,7 @@ def wifiListe(wificard):
 
 
 def lockinfo(ssid, wificard):
-    wifi = Popen('doas ifconfig %s list scan' % wificard, shell=True, 
+    wifi = Popen('doas ifconfig %s list scan' % wificard, shell=True,
                  stdin=PIPE, stdout=PIPE, stderr=STDOUT, close_fds=True,
                  universal_newlines=True)
     linfo = []
