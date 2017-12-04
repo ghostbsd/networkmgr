@@ -53,8 +53,7 @@ def scanWifiBssid(bssid, wificard):
     grepListScanv = "ifconfig -v %s list scan | grep -a %s" % (wificard, bssid)
     wifi = Popen(grepListScanv, shell=True, stdout=PIPE, close_fds=True,
                  universal_newlines=True)
-    info = wifi.stdout.readlines()[0].rstrip().split(' ')
-    info = list(filter(None, info))
+    info = wifi.stdout.readlines()[0].rstrip()
     return info
 
 
