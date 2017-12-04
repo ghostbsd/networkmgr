@@ -88,6 +88,7 @@ def ifwificardadded():
     wifinics = Popen(wifis, shell=True, stdout=PIPE, close_fds=True,
                      universal_newlines=True)
     wifiscards = wifinics.stdout.readlines()
+    answer = False
     if len(wifiscards) != 0:
         ifwifi = wifiscards[0].rstrip()
         rc_conf = open('/etc/rc.conf', 'r').read()
@@ -96,25 +97,18 @@ def ifwificardadded():
             if 'wlans_%s=' % wfcard not in rc_conf:
                 answer = True
                 break
-            else:
-                answer = False
-    else:
-        answer = False
     return answer
 
 
 def ifwiredcardadded():
-    rc_conf = open('/etc/rc.conf', 'r').read()
     cardlist = wired_list()
+    answer = False
     if len(cardlist) != 0:
+        rc_conf = open('/etc/rc.conf', 'r').read()
         for card in cardlist:
             if 'ifconfig_%s=' % card not in rc_conf:
                 answer = True
                 break
-            else:
-                answer = False
-    else:
-        answer = False
     return answer
 
 
