@@ -8,7 +8,7 @@ from net_api import scanWifiBssid, connectToSsid
 wpa_supplican = "/etc/wpa_supplicant.conf"
 
 
-class Authentication:
+class Authentication():
     def button(self):
         cancel = Gtk.Button(stock=Gtk.STOCK_CANCEL)
         cancel.connect("clicked", self.close)
@@ -25,7 +25,7 @@ class Authentication:
 
     def add_to_wpa_supplicant(self, widget):
         pwd = self.password.get_text()
-        Look_Wpa_Supplicant(self.ssid, self.bssid, pwd)
+        Lock_Wpa_Supplicant(self.ssid, self.bssid, pwd, self.wificard)
         self.window.hide()
 
     def on_check(self, widget):
@@ -75,8 +75,8 @@ class Authentication:
         self.window.show_all()
 
 
-class Open_Wpa_Supplicant:
-    def __init__(self, ssid, bssid):
+class Open_Wpa_Supplicant():
+    def __init__(self, ssid, bssid, wificard):
         ws = '\nnetwork={'
         ws += '\n ssid="%s"' % ssid
         ws += '\n bssid=%s' % bssid
@@ -87,9 +87,9 @@ class Open_Wpa_Supplicant:
         connectToSsid(ssid, self.wificard)
 
 
-class Look_Wpa_Supplicant:
-    def __init__(self, ssid, bssid, pwd):
-        if 'RSN' in scanWifiBssid(bssid, self.wificard):
+class Lock_Wpa_Supplicant():
+    def __init__(self, ssid, bssid, pwd, wificard):
+        if 'RSN' in scanWifiBssid(bssid, wificard):
             # /etc/wpa_supplicant.conf written by networkmgr
             ws = '\nnetwork={'
             ws += '\n ssid="%s"' % ssid
@@ -97,7 +97,7 @@ class Look_Wpa_Supplicant:
             ws += '\n key_mgmt=WPA-PSK'
             ws += '\n proto=RSN'
             ws += '\n psk="%s"\n}\n' % pwd
-        elif 'WPA' in scanWifiBssid(bssid, self.wificard):
+        elif 'WPA' in scanWifiBssid(bssid, wificard):
             ws = '\nnetwork={'
             ws += '\n ssid="%s"' % ssid
             ws += '\n bssid=%s' % bssid
@@ -114,4 +114,4 @@ class Look_Wpa_Supplicant:
         wsf = open(wpa_supplican, 'a')
         wsf.writelines(ws)
         wsf.close()
-        connectToSsid(ssid, self.wificard)
+        connectToSsid(ssid, wificard)
