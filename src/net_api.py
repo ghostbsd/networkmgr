@@ -150,7 +150,7 @@ def scanSsid(ssid, wificard):
 
 def wiredonlineinfo():
     for netcard in wired_list():
-        lan = Popen('doas ifconfig ' + netcard, shell=True,
+        lan = Popen('ifconfig ' + netcard, shell=True,
                     stdout=PIPE, close_fds=True, universal_newlines=True)
         if 'inet' in lan.stdout.read():
             isonlin = True
@@ -161,7 +161,7 @@ def wiredonlineinfo():
 
 
 def ifcardisonline(netcard):
-    lan = Popen('doas ifconfig ' + netcard, shell=True,
+    lan = Popen('ifconfig ' + netcard, shell=True,
                 stdout=PIPE, close_fds=True, universal_newlines=True)
     if 'inet' in lan.stdout.read():
         return True
@@ -238,7 +238,7 @@ def networklist():
 
 
 def ifcardconnected(netcard):
-    wifi = Popen('doas ifconfig ' + netcard,
+    wifi = Popen('ifconfig ' + netcard,
                  shell=True, stdin=PIPE, stdout=PIPE,
                  stderr=STDOUT, close_fds=True, universal_newlines=True)
     if 'status: active' in wifi.stdout.read():
@@ -293,41 +293,6 @@ def networkdictionary():
             seconddictionary = [conectionstat, None]
         maindictionary[card] = seconddictionary
     return maindictionary
-
-
-def wifiListe(wificard):
-    scanv = "ifconfig -v %s list scan | grep -va BSSID" % wificard
-    wifi = Popen(scanv, shell=True, stdin=PIPE,
-                 stdout=PIPE, stderr=STDOUT, close_fds=True,
-                 universal_newlines=True)
-    wlist = []
-    for line in wifi.stdout:
-        if line[0] == " ":
-            leftover = [line[83:].strip()]
-            ssid = ["Unknown"]
-            newline = line[:83]
-        else:
-            leftover = [line[83:].strip()]
-            ssid = [line[:33].strip()]
-            newline = line[:83].strip()
-        info = newline[33:].split(' ')
-        info = list(filter(None, info))
-        newinfo = ssid + info + leftover
-        wlist.append(newinfo)
-    return wlist
-
-
-def lockinfo(ssid, wificard):
-    wifi = Popen('doas ifconfig %s list scan' % wificard, shell=True,
-                 stdin=PIPE, stdout=PIPE, stderr=STDOUT, close_fds=True,
-                 universal_newlines=True)
-    linfo = []
-    for line in wifi.stdout:
-        if line[0] == " ":
-            line = "Unknown" + line
-        if ssid in line:
-            linfo = line
-    return linfo
 
 
 def stopallnetwork():
