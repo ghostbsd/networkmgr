@@ -62,7 +62,7 @@ def ifnetworkup():
 
 
 def wlan_list():
-    crd = Popen(ncard, shell=True, stdout=PIPE,close_fds=True,
+    crd = Popen(ncard, shell=True, stdout=PIPE, close_fds=True,
                 universal_newlines=True)
     wlanlist = []
     for wlan in crd.stdout.readlines()[0].rstrip().split(' '):
@@ -72,7 +72,7 @@ def wlan_list():
 
 
 def wired_list():
-    crd = Popen(ncard, shell=True, stdout=PIPE,close_fds=True,
+    crd = Popen(ncard, shell=True, stdout=PIPE, close_fds=True,
                 universal_newlines=True)
     wiredlist = []
     for wiredcn in crd.stdout.readlines()[0].rstrip().split(' '):
@@ -85,11 +85,12 @@ def wired_list():
 
 def ifwificardadded():
     wifis = 'sysctl -in net.wlan.devices'
-    wifinics = Popen(wifis, shell=True, stdout=PIPE, close_fds=True, universal_newlines=True)
+    wifinics = Popen(wifis, shell=True, stdout=PIPE, close_fds=True,
+                     universal_newlines=True)
     wifiscards = wifinics.stdout.readlines()
-    ifwifi = wifiscards[0].rstrip()
-    rc_conf = open('/etc/rc.conf', 'r').read()
-    if ifwifi != '':
+    if len(wifiscards) != 0:
+        ifwifi = wifiscards[0].rstrip()
+        rc_conf = open('/etc/rc.conf', 'r').read()
         wificardlist = ifwifi.split()
         for wfcard in wificardlist:
             if 'wlans_%s=' % wfcard not in rc_conf:
@@ -100,6 +101,7 @@ def ifwificardadded():
     else:
         answer = False
     return answer
+
 
 def ifwiredcardadded():
     rc_conf = open('/etc/rc.conf', 'r').read()
@@ -125,7 +127,7 @@ def isanewnetworkcardinstall():
 
 def bssidsn(bssid, wificard):
     grepListScanv = "ifconfig -v %s list scan | grep -a %s" % (wificard, bssid)
-    wifi = Popen(grepListScanv, shell=True, stdout=PIPE,close_fds=True,
+    wifi = Popen(grepListScanv, shell=True, stdout=PIPE, close_fds=True,
                  universal_newlines=True)
     info = wifi.stdout.readlines()
     if len(info) == 0:
@@ -157,6 +159,7 @@ def wiredonlineinfo():
             isonlin = False
     return isonlin
 
+
 def ifcardisonline(netcard):
     lan = Popen('doas ifconfig ' + netcard, shell=True,
                 stdout=PIPE, close_fds=True, universal_newlines=True)
@@ -176,11 +179,12 @@ def ifWlanInRc():
 
 def ifWlan():
     nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True,
-            universal_newlines=True)
+                 universal_newlines=True)
     if "wlan" in nics.stdout.read():
         return True
     else:
         return False
+
 
 def defaultcard():
     cmd = "netstat -r | grep default"
@@ -196,7 +200,7 @@ def defaultcard():
 def ifWlanDisable(wificard):
     cmd = "ifconfig %s list scan" % wificard
     nics = Popen(cmd, shell=True, stdout=PIPE, close_fds=True,
-            universal_newlines=True)
+                 universal_newlines=True)
     if "" == nics.stdout.read():
         return True
     else:
@@ -206,7 +210,7 @@ def ifWlanDisable(wificard):
 def ifStatue(wificard):
     cmd = "ifconfig %s" % wificard
     wl = Popen(cmd, shell=True, stdout=PIPE, close_fds=True,
-            universal_newlines=True)
+               universal_newlines=True)
     wlout = wl.stdout.read()
     if "associated" in wlout:
         return True
@@ -222,7 +226,7 @@ def get_ssid(wificard):
 
 
 def networklist():
-    crd = Popen(ncard, shell=True, stdout=PIPE,close_fds=True,
+    crd = Popen(ncard, shell=True, stdout=PIPE, close_fds=True,
                 universal_newlines=True)
     devicelist = []
     for deviced in crd.stdout.readlines()[0].rstrip().split(' '):
@@ -248,6 +252,7 @@ def barpercent(sn):
     noise = int(sn.partition(':')[2])
     return int((sig - noise) * 4)
 
+
 def networkdictionary():
     nlist = networklist()
     maindictionary = {}
@@ -271,12 +276,12 @@ def networkdictionary():
                 info[3] = barpercent(sn)
                 conectioninfo[ssid] = info
             if ifWlanDisable(card) is True:
-                conectionstat = {"conection": "Disabled", "ssid" : None}
+                conectionstat = {"conection": "Disabled", "ssid": None}
             elif ifStatue(card) is False:
-                conectionstat = {"conection": "Disconnected", "ssid" : None}
+                conectionstat = {"conection": "Disconnected", "ssid": None}
             else:
                 ssid = get_ssid(card)
-                conectionstat = {"conection": "Connected", "ssid" : ssid}
+                conectionstat = {"conection": "Connected", "ssid": ssid}
             seconddictionary = [conectionstat, conectioninfo]
         else:
             if ifcardisonline(card) is True:
@@ -371,7 +376,6 @@ def enableWifi(wificard):
         call('doas service network.%s restart ' % wificard, shell=True)
     else:
         call('doas service netif restart %s' % wificard, shell=True)
-    #call('doas wpa_supplicant -B -i %s -c /etc/wpa_supplicant.conf' % wificard, shell=True)
 
 
 def connectToSsid(name, wificard):
@@ -381,7 +385,6 @@ def connectToSsid(name, wificard):
         call('doas service network.%s restart ' % wificard, shell=True)
     else:
         call('doas service netif restart %s' % wificard, shell=True)
-    # call('doas wpa_supplicant -B -i %s -c /etc/wpa_supplicant.conf' % wificard, shell=True)
 
 
 def conectionStatus():
@@ -389,7 +392,7 @@ def conectionStatus():
         if ifWlanDisable() is False:
             cmd = "ifconfig wlan0 | grep ssid"
             out = Popen(cmd, shell=True, stdout=PIPE, close_fds=True,
-                    universal_newlines=True)
+                        universal_newlines=True)
             netstate = out.stdout.read().strip()
         else:
             netstate = "Network Manager"
