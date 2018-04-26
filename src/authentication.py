@@ -96,21 +96,21 @@ class Lock_Wpa_Supplicant():
             ws += '\n bssid=%s' % bssid
             ws += '\n key_mgmt=WPA-PSK'
             ws += '\n proto=RSN'
-            ws += '\n psk="%s"\n}\n' % pwd
+            ws += '\n psk="%s"\n}' % pwd
         elif 'WPA' in scanWifiBssid(bssid, wificard):
             ws = '\nnetwork={'
             ws += '\n ssid="%s"' % ssid
             ws += '\n bssid=%s' % bssid
             ws += '\n key_mgmt=WPA-PSK'
             ws += '\n proto=WPA'
-            ws += '\n psk="%s"\n}\n' % pwd
+            ws += '\n psk="%s"\n}' % pwd
         else:
             ws = '\nnetwork={'
             ws += '\n ssid="%s"' % ssid
             ws += '\n bssid=%s' % bssid
             ws += '\n key_mgmt=NONE'
             ws += '\n wep_tx_keyidx=0'
-            ws += '\n wep_key0=%s\n}\n' % pwd
+            ws += '\n wep_key0=%s\n}' % pwd
         wsf = open(wpa_supplican, 'a')
         wsf.writelines(ws)
         wsf.close()
