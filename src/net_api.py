@@ -344,10 +344,10 @@ def disableWifi(wificard):
 def enableWifi(wificard):
     call('doas ifconfig %s up scan' % wificard, shell=True, close_fds=True)
     call('doas ifconfig %s up scan' % wificard, shell=True, close_fds=True)
-    # if openrc is True:
-    #     call('doas service network.%s restart ' % wificard, shell=True)
-    # else:
-    #     call('doas service netif restart %s' % wificard, shell=True)
+    if openrc is True:
+        call('doas service wpa_supplicant.%s restart ' % wificard, shell=True)
+    else:
+        call('doas service wpa_supplicant restart %s' % wificard, shell=True)
 
 
 def connectToSsid(name, wificard):
