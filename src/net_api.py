@@ -41,12 +41,8 @@ notnics = ["lo", "fwe", "fwip", "tap", "plip", "pfsync", "pflog",
 
 if os.path.exists("/sbin/openrc") is True:
     openrc = True
-    start_network = 'doas service network start'
-    stop_network = 'doas service network stop'
 else:
     openrc = False
-    start_network = 'doas service netif start'
-    stop_network = 'doas service netif stop'
 
 
 def scanWifiBssid(bssid, wificard):
@@ -146,7 +142,7 @@ def wiredonlineinfo():
     for netcard in wired_list():
         lan = Popen('ifconfig ' + netcard, shell=True,
                     stdout=PIPE, close_fds=True, universal_newlines=True)
-        if 'inet' in lan.stdout.read():
+        if 'inet ' in lan.stdout.read():
             isonlin = True
             break
         else:
@@ -157,7 +153,7 @@ def wiredonlineinfo():
 def ifcardisonline(netcard):
     lan = Popen('ifconfig ' + netcard, shell=True,
                 stdout=PIPE, close_fds=True, universal_newlines=True)
-    if 'inet' in lan.stdout.read():
+    if 'inet ' in lan.stdout.read():
         return True
     else:
         return False
@@ -219,6 +215,13 @@ def get_ssid(wificard):
     return wlan.stdout.readlines()[0].rstrip().split()[1]
 
 
+def get_bssid(wificard):
+     wlan = Popen('ifconfig -v %s | grep bssid' % wificard,
+                 shell=True, stdout=PIPE, close_fds=True,
+                 universal_newlines=True)
+     return wlan.stdout.readlines()[0].rstrip().split()[-1]
+
+
 def networklist():
     crd = Popen(ncard, shell=True, stdout=PIPE, close_fds=True,
                 universal_newlines=True)
@@ -267,16 +270,21 @@ def networkdictionary():
                 info = newline[33:].split(' ')
                 info = list(filter(None, info))
                 sn = info[3]
+                bssid = info[0]
                 info[3] = barpercent(sn)
-                conectioninfo[ssid] = info
+                info.insert(0, ssid)
+                conectioninfo[bssid] = info
             if ifWlanDisable(card) is True:
-                conectionstat = {"conection": "Disabled", "ssid": None}
+                conectionstat = {"conection": "Disabled", "ssid": None, "bssid": None}
             elif ifStatue(card) is False:
-                conectionstat = {"conection": "Disconnected", "ssid": None}
+                conectionstat = {"conection": "Disconnected", "ssid": None, "bssid": None}
             else:
                 ssid = get_ssid(card)
-                conectionstat = {"conection": "Connected", "ssid": ssid}
-            seconddictionary = [conectionstat, conectioninfo]
+                bssid = get_bssid(card)
+                conectionstat = {"conection": "Connected",
+                                 "ssid": ssid,
+                                 "bssid": bssid}
+            seconddictionary = {'state': conectionstat, 'info': conectioninfo}
         else:
             if ifcardisonline(card) is True:
                 conectionstat = {"conection": "Connected"}
@@ -284,18 +292,23 @@ def networkdictionary():
                 conectionstat = {"conection": "Disconnected"}
             else:
                 conectionstat = {"conection": "Unplug"}
-            seconddictionary = [conectionstat, None]
+            seconddictionary = {'state': conectionstat, 'info': None}
         maindictionary[card] = seconddictionary
     return maindictionary
 
 
 def stopallnetwork():
-    call(stop_network, shell=True)
+    if openrc is True:
+        call('doas service network stop', shell=True)
+    else:
+        call('doas service netif stop', shell=True)
 
 
 def startallnetwork():
-    call(start_network, shell=True)
-
+    if openrc is True:
+        call('doas service network start', shell=True)
+    else:
+        call('doas service netif start', shell=True)
 
 def restartnetworkcard(netcard):
     if openrc is True:
@@ -320,7 +333,7 @@ def startnetworkcard(netcard):
 
 def wifiDisconnection(wificard):
     call('doas ifconfig %s down' % wificard, shell=True, close_fds=True)
-    call('doas ifconfig %s up scan' % wificard, shell=True, close_fds=True)
+    call('doas ifconfig %s up scan'  % wificard, shell=True, close_fds=True)
     call('doas ifconfig %s up scan' % wificard, shell=True, close_fds=True)
 
 
@@ -331,10 +344,10 @@ def disableWifi(wificard):
 def enableWifi(wificard):
     call('doas ifconfig %s up scan' % wificard, shell=True, close_fds=True)
     call('doas ifconfig %s up scan' % wificard, shell=True, close_fds=True)
-    if openrc is True:
-        call('doas service network.%s restart ' % wificard, shell=True)
-    else:
-        call('doas service netif restart %s' % wificard, shell=True)
+    # if openrc is True:
+    #     call('doas service network.%s restart ' % wificard, shell=True)
+    # else:
+    #     call('doas service netif restart %s' % wificard, shell=True)
 
 
 def connectToSsid(name, wificard):

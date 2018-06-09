@@ -84,7 +84,7 @@ class Open_Wpa_Supplicant():
         wsf = open(wpa_supplican, 'a')
         wsf.writelines(ws)
         wsf.close()
-        connectToSsid(ssid, self.wificard)
+        connectToSsid(ssid, wificard)
 
 
 class Lock_Wpa_Supplicant():
