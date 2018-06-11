@@ -1,4 +1,4 @@
-#!/usr/local/bin/python
+#!/usr/bin/evn python
 """
 Copyright (c) 2014-2016, GhostBSD. All rights reserved.
 
@@ -351,7 +351,7 @@ def enableWifi(wificard):
 
 
 def connectToSsid(name, wificard):
-    # call('doas service netif restart wlan0', shell=True)
+    # call('doas service netif restart wlan0', shell=True
     call("doas ifconfig %s ssid '%s'" % (wificard, name), shell=True)
     if openrc is True:
         call('doas service network.%s restart ' % wificard, shell=True)
@@ -371,3 +371,6 @@ def conectionStatus():
     else:
         netstate = "Network Manager"
     return netstate
+
+
+### adding a fuction to see if wlan did crash after resuming suspend.

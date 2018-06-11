@@ -1,4 +1,4 @@
-#!/usr/local/bin/python
+#!/usr/bin/env python
 """
 Copyright (c) 2014-2016, GhostBSD. All rights reserved.
 
@@ -307,6 +307,7 @@ class trayIcon(object):
         self.updatetrayicon(defaultdev)
 
     def updatetrayloop(self):
+        ## Add check if wlan crashed after resumming suspend
         while True:
             self.checkfornewcard()
             self.updateinfo()
