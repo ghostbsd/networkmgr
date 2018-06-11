@@ -23,6 +23,7 @@ import sys
 # from glob import glob
 
 from setuptools import setup
+from subprocess import run
 
 # import DistUtilsExtra.command.build_extra
 # import DistUtilsExtra.command.build_i18n
@@ -56,7 +57,6 @@ data_files = [
         ['src/authentication.py']),
     ('{prefix}/share/networkmgr'.format(prefix=sys.prefix),
         ['src/net_api.py']),
-    # ('{prefix}/bin'.format(prefix=sys.prefix), ['src/netcardmgr']),
     ('{prefix}/share/networkmgr'.format(prefix=sys.prefix),
         ['src/trayicon.py']),
 ]
@@ -81,4 +81,5 @@ setup(
     install_requires=['setuptools'],
     scripts=['networkmgr', 'src/netcardmgr']
 )
-# cmdclass = cmdclass,
+
+run('sudo gtk-update-icon-cache -f /usr/local/share/icons/hicolor', shell=True)
