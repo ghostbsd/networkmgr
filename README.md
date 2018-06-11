@@ -34,8 +34,5 @@ permit nopass keepenv :wheel cmd ifconfig
 permit nopass keepenv :wheel cmd service
 
 ```
-Update Hicolor icons cahes.
-
-`sudo gtk-update-icon-cache -f /usr/local/share/icons/hicolor`
 
 When rebooting NetworkMgr should automatically start if the desktop supports xdg.  Make sure that the user using NetworkMgr is in the wheel group.
