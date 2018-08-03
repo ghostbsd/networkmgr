@@ -33,10 +33,12 @@ from subprocess import Popen, PIPE, call
 import os
 import re
 ncard = 'ifconfig -l'
-nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True, universal_newlines=True)
+nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True,
+             universal_newlines=True)
 netcard = nics.stdout.readlines()
 wifis = 'sysctl -in net.wlan.devices'
-wifinics = Popen(wifis, shell=True, stdout=PIPE, close_fds=True, universal_newlines=True)
+wifinics = Popen(wifis, shell=True, stdout=PIPE, close_fds=True,
+                 universal_newlines=True)
 wifiscards = wifinics.stdout.readlines()
 rcconf = open('/etc/rc.conf', 'r').read()
 
@@ -46,9 +48,11 @@ notnics = ["lo", "fwe", "fwip", "tap", "plip", "pfsync", "pflog",
 if os.path.exists("/usr/local/etc/pkg/repos/trueos.conf") is True:
     start_network = 'doas service network start'
     stop_network = 'doas service network stop'
+    restart_network = 'doas service network restart'
 else:
     start_network = 'doas service netif start'
     stop_network = 'doas service netif stop'
+    restart_network = 'doas service netif restart'
 
 
 class autoConfigure():
@@ -94,12 +98,18 @@ class autoConfigure():
                     rc.writelines('wlans_%s="wlan%s"\n' % (card, wlanNum))
                     rc.writelines('ifconfig_wlan%s="WPA DHCP"\n' % wlanNum)
                     rc.close()
-                    call(stop_network, shell=True)
-                    call(start_network, shell=True)
                     open('/etc/wpa_supplicant.conf', 'a').close()
                     call('chown root:wheel /etc/wpa_supplicant.conf',
                          shell=True)
                     call('chmod 765 /etc/wpa_supplicant.conf', shell=True)
+                    call(stop_network, shell=True)
+                    call(start_network, shell=True)
+                    nicslist = 'ifconfig -l'
+                    ifconfig = Popen(nicslist, shell=True, stdout=PIPE,
+                                     close_fds=True, universal_newlines=True)
+                    cardlist = ifconfig.stdout.read()
+                    if 'wlan%s' not in cardlist:
+                        call(restart_network, shell=True)
                     call('ifconfig wlan%s up' % wlanNum, shell=True)
                 wlanNum += 1
 
