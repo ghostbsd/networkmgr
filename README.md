@@ -19,7 +19,7 @@ To install NetworkMgr:
 
 `cd networkmgr`
 
-If installed by package deinstall networkmrg first
+If NetworkMgr installed by package deinstall networkmrg first before installing with setup.py
 
 `pkg delete networkmgr`
 
