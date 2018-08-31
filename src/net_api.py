@@ -32,6 +32,7 @@ from subprocess import Popen, PIPE, STDOUT, call
 from sys import path
 import os.path
 import re
+from time import sleep
 
 path.append("/usr/local/share/networkmgr")
 ncard = 'ifconfig -l'
@@ -77,7 +78,6 @@ def wired_list():
         if wcardn not in notnics:
             wiredlist.append(wnc)
     return wiredlist
-
 
 def ifwificardadded():
     wifis = 'sysctl -in net.wlan.devices'
@@ -259,7 +259,7 @@ def networkdictionary():
             wifi = Popen(scanv, shell=True, stdin=PIPE,
                          stdout=PIPE, stderr=STDOUT, close_fds=True,
                          universal_newlines=True)
-            conectioninfo = {}
+            connectioninfo = {}
             for line in wifi.stdout:
                 if line[0] == " ":
                     ssid = "Unknown"
@@ -273,32 +273,45 @@ def networkdictionary():
                 bssid = info[0]
                 info[3] = barpercent(sn)
                 info.insert(0, ssid)
-                conectioninfo[bssid] = info
+                connectioninfo[bssid] = info
             if ifWlanDisable(card) is True:
-                conectionstat = {"conection": "Disabled", "ssid": None, "bssid": None}
+                connectionstat = {"connection": "Disabled", "ssid": None, "bssid": None}
             elif ifStatue(card) is False:
-                conectionstat = {"conection": "Disconnected", "ssid": None, "bssid": None}
+                connectionstat = {"connection": "Disconnected", "ssid": None, "bssid": None}
             else:
                 ssid = get_ssid(card)
                 bssid = get_bssid(card)
-                conectionstat = {"conection": "Connected",
+                connectionstat = {"connection": "Connected",
                                  "ssid": ssid,
                                  "bssid": bssid}
-            seconddictionary = {'state': conectionstat, 'info': conectioninfo}
+            seconddictionary = {'state': connectionstat, 'info': connectioninfo}
         else:
             if ifcardisonline(card) is True:
-                conectionstat = {"conection": "Connected"}
+                connectionstat = {"connection": "Connected"}
             elif ifcardconnected(card) is True:
-                conectionstat = {"conection": "Disconnected"}
+                connectionstat = {"connection": "Disconnected"}
             else:
-                conectionstat = {"conection": "Unplug"}
-            seconddictionary = {'state': conectionstat, 'info': None}
+                connectionstat = {"connection": "Unplug"}
+            seconddictionary = {'state': connectionstat, 'info': None}
         maindictionary[card] = seconddictionary
     return maindictionary
 
 
+def card_service():
+    service_list = []
+    for card in wired_list():
+        crd = Popen("rc-status | grep " + card, shell=True, stdout=PIPE, close_fds=True,
+                    universal_newlines=True)
+        for service in crd.stdout.readlines():
+            service_list.append(service.split()[0])
+    return service_list
+
+
 def stopallnetwork():
     if openrc is True:
+        for service in card_service():
+            call('doas service %s stop' % service, shell=True)
+            sleep(1)
         call('doas service network stop', shell=True)
     else:
         call('doas service netif stop', shell=True)
@@ -312,32 +325,39 @@ def startallnetwork():
 
 def restartnetworkcard(netcard):
     if openrc is True:
-        call('doas service network.%s restart ' % netcard, shell=True)
+        call('doas service dhcpcd.%s restart' % netcard, shell=True)
     else:
         call('doas service netif restart %s' % netcard, shell=True)
 
 
 def stopnetworkcard(netcard):
     if openrc is True:
-        call('doas service network.%s stop' % netcard, shell=True)
+        call('doas service dhcpcd.%s stop' % netcard, shell=True)
     else:
         call('doas service netif stop %s' % netcard, shell=True)
 
 
 def startnetworkcard(netcard):
     if openrc is True:
-        call('doas service network.%s start ' % netcard, shell=True)
+        call('doas service dhcpcd.%s start' % netcard, shell=True)
     else:
         call('doas service netif start %s' % netcard, shell=True)
 
 
 def wifiDisconnection(wificard):
+    if openrc is True:
+        call('doas service wpa_supplicant.%s stop' % wificard, shell=True)
     call('doas ifconfig %s down' % wificard, shell=True, close_fds=True)
+    if openrc is True:
+        call('doas service wpa_supplicant.%s stop' % wificard, shell=True)
     call('doas ifconfig %s up scan'  % wificard, shell=True, close_fds=True)
     call('doas ifconfig %s up scan' % wificard, shell=True, close_fds=True)
 
 
 def disableWifi(wificard):
+    if openrc is True:
+        call('doas service dhcpcd.%s stop ' % wificard, shell=True)
+        call('doas service wpa_supplicant.%s stop' % wificard, shell=True)
     call('doas ifconfig %s down' % wificard, shell=True, close_fds=True)
 
 
@@ -345,21 +365,26 @@ def enableWifi(wificard):
     call('doas ifconfig %s up scan' % wificard, shell=True, close_fds=True)
     call('doas ifconfig %s up scan' % wificard, shell=True, close_fds=True)
     if openrc is True:
-        call('doas service wpa_supplicant.%s restart ' % wificard, shell=True)
+        call('doas service dhcpcd.%s start ' % wificard, shell=True)
+        sleep(1)
+        call('doas service wpa_supplicant.%s start ' % wificard, shell=True)
     else:
-        call('doas service wpa_supplicant restart %s' % wificard, shell=True)
+        call('doas service wpa_supplicant start %s' % wificard, shell=True)
 
 
 def connectToSsid(name, wificard):
     # call('doas service netif restart wlan0', shell=True
     call("doas ifconfig %s ssid '%s'" % (wificard, name), shell=True)
     if openrc is True:
-        call('doas service network.%s restart ' % wificard, shell=True)
+        call('doas service dhcpcd.%s restart ' % wificard, shell=True)
+        sleep(1)
+        call('doas service wpa_supplicant.%s restart ' % wificard, shell=True)
     else:
         call('doas service netif restart %s' % wificard, shell=True)
+    sleep(1)
 
 
-def conectionStatus():
+def connectionStatus():
     if ifWlan() is True:
         if ifWlanDisable() is False:
             cmd = "ifconfig wlan0 | grep ssid"

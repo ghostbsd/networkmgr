@@ -32,6 +32,8 @@
 from subprocess import Popen, PIPE, call
 import os
 import re
+from time import sleep
+
 ncard = 'ifconfig -l'
 nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True,
              universal_newlines=True)
@@ -45,7 +47,7 @@ rcconf = open('/etc/rc.conf', 'r').read()
 notnics = ["lo", "fwe", "fwip", "tap", "plip", "pfsync", "pflog",
            "tun", "sl", "faith", "ppp", "wlan", "brige", "ixautomation"]
 
-if os.path.exists("/usr/local/etc/pkg/repos/trueos.conf") is True:
+if os.path.exists("/sbin/openrc") is True:
     start_network = 'doas service network start'
     stop_network = 'doas service network stop'
     restart_network = 'doas service network restart'
@@ -82,7 +84,7 @@ class autoConfigure():
             for card in wifiscards[0].rstrip().split():
                 if 'wlans_%s=' % card in rcconf:
                     print("Your wifi network card is already configured.")
-                    if os.path.exists('/etc/wpa_supplicant.conf') is False:
+                    if not os.path.exists('/etc/wpa_supplicant.conf'):
                         open('/etc/wpa_supplicant.conf', 'a').close()
                         call('chown root:wheel /etc/wpa_supplicant.conf',
                              shell=True)
@@ -98,19 +100,24 @@ class autoConfigure():
                     rc.writelines('wlans_%s="wlan%s"\n' % (card, wlanNum))
                     rc.writelines('ifconfig_wlan%s="WPA DHCP"\n' % wlanNum)
                     rc.close()
-                    open('/etc/wpa_supplicant.conf', 'a').close()
-                    call('chown root:wheel /etc/wpa_supplicant.conf',
-                         shell=True)
-                    call('chmod 765 /etc/wpa_supplicant.conf', shell=True)
+                    if not os.path.exists('/etc/wpa_supplicant.conf'):
+                        open('/etc/wpa_supplicant.conf', 'a').close()
+                        call('chown root:wheel /etc/wpa_supplicant.conf',
+                             shell=True)
+                        call('chmod 765 /etc/wpa_supplicant.conf', shell=True)
+                    sleep(1)
                     call(stop_network, shell=True)
                     call(start_network, shell=True)
+                    sleep(1)
                     nicslist = 'ifconfig -l'
                     ifconfig = Popen(nicslist, shell=True, stdout=PIPE,
                                      close_fds=True, universal_newlines=True)
                     cardlist = ifconfig.stdout.read()
-                    if 'wlan%s' not in cardlist:
-                        call(restart_network, shell=True)
-                    call('ifconfig wlan%s up' % wlanNum, shell=True)
+                    if 'wlan%s' in cardlist:
+                        call('ifconfig wlan%s up' % wlanNum, shell=True)
+                    else:
+                        call(stop_network, shell=True)
+                        call(start_network, shell=True)
                 wlanNum += 1
 
 autoConfigure()
