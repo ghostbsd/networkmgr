@@ -19,6 +19,10 @@ To install NetworkMgr:
 
 `cd networkmgr`
 
+If installed by package deinstall networkmrg first
+
+`pkg delete networkmgr`
+
 `python3.6 setup.py install`
 
 Make sure that /usr/local/etc/doas.conf exists.  If not, create it.
