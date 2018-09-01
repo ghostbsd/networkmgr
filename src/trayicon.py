@@ -297,17 +297,16 @@ class trayIcon(object):
     def updateinfo(self):
         if self.ifruning is False:
             self.ifruning = True
-            self.cardinfo = networkdictionary()
             defaultdev = defaultcard()
-            # self.nmMenu = self.nm_menu()
+            self.cardinfo = networkdictionary()
+            sleep(1)
             GLib.idle_add(self.updatetray, defaultdev)
-            # self.trayStatus()
 
     def updatetray(self, defaultdev):
         self.updatetrayicon(defaultdev)
+        self.trayStatus(defaultdev)
 
     def updatetrayloop(self):
-        ## Add check if wlan crashed after resumming suspend
         while True:
             self.checkfornewcard()
             self.updateinfo()
@@ -349,8 +348,8 @@ class trayIcon(object):
             self.statusIcon.set_from_icon_name('nm-signal-00')
         return True
 
-    def trayStatus(self):
-        self.statusIcon.set_tooltip_text("%s" % connectionStatus())
+    def trayStatus(self, defaultdev):
+        self.statusIcon.set_tooltip_text("%s" % connectionStatus(defaultdev))
 
     def tray(self):
         self.ifruning = False

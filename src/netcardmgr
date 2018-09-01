@@ -107,17 +107,21 @@ class autoConfigure():
                         call('chmod 765 /etc/wpa_supplicant.conf', shell=True)
                     sleep(1)
                     call(stop_network, shell=True)
+                    sleep(1)
                     call(start_network, shell=True)
                     sleep(1)
                     nicslist = 'ifconfig -l'
                     ifconfig = Popen(nicslist, shell=True, stdout=PIPE,
                                      close_fds=True, universal_newlines=True)
                     cardlist = ifconfig.stdout.read()
-                    if 'wlan%s' in cardlist:
-                        call('ifconfig wlan%s up' % wlanNum, shell=True)
-                    else:
+                    if 'wlan%s' % wlanNum not in cardlist:
                         call(stop_network, shell=True)
+                        sleep(1)
                         call(start_network, shell=True)
+                        sleep(1)
+                    call('ifconfig wlan%s up scan' % wlanNum, shell=True)
+                    call('ifconfig wlan%s up scan' % wlanNum, shell=True)
+                    sleep(1)
                 wlanNum += 1
 
 autoConfigure()
