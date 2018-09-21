@@ -72,8 +72,14 @@ class autoConfigure():
                         rc = open('/etc/rc.conf', 'a')
                         rc.writelines('ifconfig_%s="DHCP"\n' % card)
                         rc.close()
+                        sleep(1)
                         call(stop_network, shell=True)
+                        sleep(1)
                         call(start_network, shell=True)
+                        sleep(1)
+                        if os.path.exists("/sbin/openrc") is True:
+                            cmd = "doas service dhcpcd.%s restart" % card
+                            call(cmd, shell=True)
                         print("Your wired network card is configured.")
 
         ifwifi = wifiscards[0].rstrip()
