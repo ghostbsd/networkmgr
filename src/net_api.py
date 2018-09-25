@@ -1,4 +1,4 @@
-#!/usr/bin/evn python
+#!/usr/bin/env python3.6
 """
 Copyright (c) 2014-2016, GhostBSD. All rights reserved.
 
@@ -28,7 +28,7 @@ ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 """
 
-from subprocess import Popen, PIPE, STDOUT, call
+from subprocess import Popen, PIPE, call
 from sys import path
 import os.path
 import re
@@ -48,7 +48,8 @@ else:
 
 def scanWifiBssid(bssid, wificard):
     grepListScanv = "ifconfig -v %s list scan | grep -a %s" % (wificard, bssid)
-    wifi = Popen(grepListScanv, shell=True, stdout=PIPE, universal_newlines=True)
+    wifi = Popen(grepListScanv, shell=True, stdout=PIPE,
+                 universal_newlines=True)
     info = wifi.stdout.readlines()[0].rstrip()
     return info
 
@@ -75,6 +76,7 @@ def wired_list():
         if wcardn not in notnics:
             wiredlist.append(wnc)
     return wiredlist
+
 
 def ifwificardadded():
     wifis = 'sysctl -in net.wlan.devices'

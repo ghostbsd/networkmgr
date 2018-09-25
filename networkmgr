@@ -1,8 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3.6
 
-from subprocess import call
 from sys import path
-import os
 import signal
 path.append("/usr/local/share/networkmgr")
 from trayicon import trayIcon

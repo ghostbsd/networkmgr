@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3.6
 """
 Copyright (c) 2014-2016, GhostBSD. All rights reserved.
 
@@ -77,13 +77,13 @@ class trayIcon(object):
     def icon_clicked(self, status_icon, button, time):
         if not self.thr.is_alive():
             self.thr.start()
+
         def position(menu, icon):
             return (Gtk.StatusIcon.position_menu(menu, icon))
         self.nm_menu().popup(None, None, Gtk.StatusIcon.position_menu,
                              status_icon, button, time)
         # self.nmMenu.popup(None, None, Gtk.StatusIcon.position_menu,
         #                   status_icon, button, time)
-
 
     def nm_menu(self):
         self.menu = Gtk.Menu()

@@ -1,26 +1,8 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3.6
 # -*- coding: utf-8 -*-
-
-# Copyright (C) 2015 by Mike Gabriel <mike.gabriel@das-netzwerkteam.de>
-#
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the
-# Free Software Foundation, Inc.,
-# 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
 
 import os
 import sys
-# from glob import glob
 
 from setuptools import setup
 from subprocess import run
@@ -33,7 +15,7 @@ from subprocess import run
 # ,,python setup.py build_i18n -m''
 
 # silence pyflakes, __VERSION__ is properly assigned below...
-__VERSION__ = '2.8'
+__VERSION__ = '3.0'
 # for line in file('networkmgr').readlines():
 #    if (line.startswith('__VERSION__')):
 #        exec(line.strip())
@@ -49,6 +31,7 @@ def datafilelist(installbase, sourcebase):
         datafileList.append((root.replace(sourcebase, installbase), fileList))
     return datafileList
 
+
 # '{prefix}/share/man/man1'.format(prefix=sys.prefix), glob('data/*.1')),
 data_files = [
     ('{prefix}/etc/xdg/autostart'.format(prefix=sys.prefix),
@@ -60,8 +43,9 @@ data_files = [
     ('{prefix}/share/networkmgr'.format(prefix=sys.prefix),
         ['src/trayicon.py']),
 ]
+
 data_files.extend(datafilelist('{prefix}/share/icons/hicolor'.format(prefix=sys.prefix),
-    'src/icons'))
+                  'src/icons'))
 
 # cmdclass ={
 #             "build" : DistUtilsExtra.command.build_extra.build_extra,
