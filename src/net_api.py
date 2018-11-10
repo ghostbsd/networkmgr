@@ -115,7 +115,8 @@ def isanewnetworkcardinstall():
 
 def bssidsn(bssid, wificard):
     grepListScanv = "ifconfig -v %s list scan | grep -a %s" % (wificard, bssid)
-    wifi = Popen(grepListScanv, shell=True, stdout=PIPE, universal_newlines=True)
+    wifi = Popen(grepListScanv, shell=True, stdout=PIPE,
+                 universal_newlines=True)
     info = wifi.stdout.readlines()
     if len(info) == 0:
         return 0
@@ -128,7 +129,8 @@ def bssidsn(bssid, wificard):
 
 def scanSsid(ssid, wificard):
     grepListScanv = "ifconfig -v %s list scan | grep %s" % (wificard, ssid)
-    wifi = Popen(grepListScanv, shell=True, stdout=PIPE, universal_newlines=True)
+    wifi = Popen(grepListScanv, shell=True, stdout=PIPE,
+                 universal_newlines=True)
     info = wifi.stdout.readlines()[0].rstrip().split(' ')
     info = list(filter(None, info))
     return info
@@ -207,9 +209,9 @@ def get_ssid(wificard):
 
 
 def get_bssid(wificard):
-     wlan = Popen('ifconfig -v %s | grep bssid' % wificard,
+    wlan = Popen('ifconfig -v %s | grep bssid' % wificard,
                  shell=True, stdout=PIPE, universal_newlines=True)
-     return wlan.stdout.readlines()[0].rstrip().split()[-1]
+    return wlan.stdout.readlines()[0].rstrip().split()[-1]
 
 
 def networklist():
@@ -262,16 +264,27 @@ def networkdictionary():
                 info.insert(0, ssid)
                 connectioninfo[bssid] = info
             if ifWlanDisable(card) is True:
-                connectionstat = {"connection": "Disabled", "ssid": None, "bssid": None}
+                connectionstat = {
+                    "connection": "Disabled",
+                    "ssid": None, "bssid": None
+                }
             elif ifStatue(card) is False:
-                connectionstat = {"connection": "Disconnected", "ssid": None, "bssid": None}
+                connectionstat = {
+                    "connection": "Disconnected",
+                    "ssid": None, "bssid": None
+                }
             else:
                 ssid = get_ssid(card)
                 bssid = get_bssid(card)
-                connectionstat = {"connection": "Connected",
-                                 "ssid": ssid,
-                                 "bssid": bssid}
-            seconddictionary = {'state': connectionstat, 'info': connectioninfo}
+                connectionstat = {
+                    "connection": "Connected",
+                    "ssid": ssid,
+                    "bssid": bssid
+                }
+            seconddictionary = {
+                'state': connectionstat,
+                'info': connectioninfo
+            }
         else:
             if ifcardisonline(card) is True:
                 connectionstat = {"connection": "Connected"}
@@ -304,12 +317,15 @@ def stopallnetwork():
         call('doas service netif stop', shell=True)
     sleep(1)
 
+
 def startallnetwork():
     if openrc is True:
         call('doas service network start', shell=True)
     else:
         call('doas service netif start', shell=True)
     sleep(1)
+
+
 def restartnetworkcard(netcard):
     if openrc is True:
         call('doas service dhcpcd.%s restart' % netcard, shell=True)
@@ -342,7 +358,7 @@ def wifiDisconnection(wificard):
     if openrc is True:
         call('doas service wpa_supplicant.%s stop' % wificard, shell=True)
         sleep(1)
-    call('doas ifconfig %s up scan'  % wificard, shell=True)
+    call('doas ifconfig %s up scan' % wificard, shell=True)
     call('doas ifconfig %s up scan' % wificard, shell=True)
     sleep(1)
 
@@ -405,6 +421,3 @@ def connectionStatus(card):
         line = out.stdout.read().strip()
         netstate = line
     return netstate
-
-
-### adding a fuction to see if wlan did crash after resuming suspend.
