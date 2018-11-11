@@ -400,7 +400,7 @@ def connectToSsid(name, wificard):
 
 def connectionStatus(card):
     if card is None:
-        netstate = "All network cards disalble"
+        netstate = "All network cards disable"
     elif 'wlan' in card:
         if ifWlanDisable(card) is False and ifStatue(card) is True:
             cmd1 = "ifconfig %s | grep ssid" % card
