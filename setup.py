@@ -15,7 +15,7 @@ from subprocess import run
 # ,,python setup.py build_i18n -m''
 
 # silence pyflakes, __VERSION__ is properly assigned below...
-__VERSION__ = '3.0'
+__VERSION__ = '3.1'
 # for line in file('networkmgr').readlines():
 #    if (line.startswith('__VERSION__')):
 #        exec(line.strip())

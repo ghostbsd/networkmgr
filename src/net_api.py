@@ -174,7 +174,7 @@ def ifWlan():
 
 
 def defaultcard():
-    cmd = "netstat -r | grep default"
+    cmd = "netstat -rn | grep default"
     nics = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
     device = nics.stdout.readlines()
     if len(device) == 0:
