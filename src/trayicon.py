@@ -137,10 +137,12 @@ class trayIcon(object):
                     wc_title.set_sensitive(False)
                     self.menu.append(wc_title)
                     bar = bssidsn(ssid, netcard)
-                    connection_item = Gtk.ImageMenuItem(ssid)
+                    # Remove single quotes previously added to make grep work before adding ssid to tray menu
+                    connection_item = Gtk.ImageMenuItem(ssid.replace("'",""))
                     connection_item.set_image(self.openwifi(bar))
                     connection_item.show()
-                    disconnect_item = Gtk.MenuItem("Disconnect from %s" % ssid)
+                    # Remove single quotes previously added to make grep work before adding ssid to tray menu
+                    disconnect_item = Gtk.MenuItem("Disconnect from %s" % ssid.replace("'",""))
                     disconnect_item.connect("activate", self.disconnectwifi,
                                             netcard)
                     self.menu.append(connection_item)

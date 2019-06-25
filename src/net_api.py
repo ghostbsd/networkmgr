@@ -205,7 +205,15 @@ def ifStatue(wificard):
 def get_ssid(wificard):
     wlan = Popen('ifconfig %s | grep ssid' % wificard,
                  shell=True, stdout=PIPE, universal_newlines=True)
-    return wlan.stdout.readlines()[0].rstrip().split()[1]
+
+    # If there are quotation marks in the string, use that as a separator, otherwise use the default whitespace
+    # This is to handle ssid strings with spaces in them. These ssid strings will be double quoted by ifconfig
+    temp = wlan.stdout.readlines()[0].rstrip()
+    if '"' in temp:
+        out = temp.split('"')[1]
+    else:
+        out = temp.split()[1]
+    return out
 
 
 def get_bssid(wificard):
@@ -274,7 +282,9 @@ def networkdictionary():
                     "ssid": None, "bssid": None
                 }
             else:
-                ssid = get_ssid(card)
+                # Concatenate single quotes around the ssid in case it contains spaces so that it can be passed to grep
+                # These will be removed later in the method that adds the ssid to the tray menu
+                ssid = "'" + get_ssid(card) + "'"
                 bssid = get_bssid(card)
                 connectionstat = {
                     "connection": "Connected",
