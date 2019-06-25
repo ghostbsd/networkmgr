@@ -114,7 +114,7 @@ def isanewnetworkcardinstall():
 
 
 def bssidsn(bssid, wificard):
-    grepListScanv = "ifconfig -v %s list scan | grep -a %s" % (wificard, bssid)
+    grepListScanv = "ifconfig -v %s list scan | grep -a '%s'" % (wificard, bssid)
     wifi = Popen(grepListScanv, shell=True, stdout=PIPE,
                  universal_newlines=True)
     info = wifi.stdout.readlines()
@@ -128,7 +128,7 @@ def bssidsn(bssid, wificard):
 
 
 def scanSsid(ssid, wificard):
-    grepListScanv = "ifconfig -v %s list scan | grep %s" % (wificard, ssid)
+    grepListScanv = "ifconfig -v %s list scan | grep '%s'" % (wificard, ssid)
     wifi = Popen(grepListScanv, shell=True, stdout=PIPE,
                  universal_newlines=True)
     info = wifi.stdout.readlines()[0].rstrip().split(' ')
@@ -282,9 +282,7 @@ def networkdictionary():
                     "ssid": None, "bssid": None
                 }
             else:
-                # Concatenate single quotes around the ssid in case it contains spaces so that it can be passed to grep
-                # These will be removed later in the method that adds the ssid to the tray menu
-                ssid = "'" + get_ssid(card) + "'"
+                ssid = get_ssid(card)
                 bssid = get_bssid(card)
                 connectionstat = {
                     "connection": "Connected",
@@ -404,7 +402,9 @@ def connectToSsid(name, wificard):
         sleep(1)
         call('doas service wpa_supplicant.%s restart' % wificard, shell=True)
     else:
-        call('doas service netif restart %s' % wificard, shell=True)
+        # Restarting netif with no carrier disables wifi. Use ifconfig instead
+        # This is to handle ssid with landing page login
+        call('doas ifconfig %s up scan' % wificard, shell=True)
     sleep(1)
 
 
