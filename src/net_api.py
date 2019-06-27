@@ -402,9 +402,7 @@ def connectToSsid(name, wificard):
         sleep(1)
         call('doas service wpa_supplicant.%s restart' % wificard, shell=True)
     else:
-        # Restarting netif with no carrier disables wifi. Use ifconfig instead
-        # This is to handle ssid with landing page login
-        call('doas ifconfig %s up scan' % wificard, shell=True)
+        call('doas service netif restart', shell=True)
     sleep(1)
 
 
