@@ -1,38 +1,9 @@
 #!/usr/bin/env python3.6
-"""
-Copyright (c) 2014-2016, GhostBSD. All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions
-are met:
-
-1. Redistribution's of source code must retain the above copyright
-   notice, this list of conditions and the following disclaimer.
-
-2. Redistribution's in binary form must reproduce the above
-   copyright notice,this list of conditions and the following
-   disclaimer in the documentation and/or other materials provided
-   with the distribution.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
-FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
-COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES(INCLUDING,
-BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
-ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-POSSIBILITY OF SUCH DAMAGE.
-"""
 
 import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GObject, GLib
 from time import sleep
-from subprocess import call
 import threading
 from sys import path
 import locale
@@ -41,7 +12,7 @@ path.append("/usr/local/share/networkmgr")
 from net_api import wiredonlineinfo, stopnetworkcard, isanewnetworkcardinstall
 from net_api import startnetworkcard, wifiDisconnection, ifWlan
 from net_api import stopallnetwork, startallnetwork, connectToSsid
-from net_api import disableWifi, enableWifi, bssidsn
+from net_api import disableWifi, enableWifi
 from authentication import Authentication, Open_Wpa_Supplicant
 from net_api import connectionStatus, defaultcard
 from net_api import restartnetworkcard, networkdictionary
@@ -133,10 +104,10 @@ class trayIcon(object):
                 else:
                     ssid = self.cardinfo[netcard]['state']["ssid"]
                     bssid = self.cardinfo[netcard]['state']["bssid"]
+                    bar = self.cardinfo[netcard]['info'][bssid][4]
                     wc_title = Gtk.MenuItem("WiFi %s Connected" % wifinum)
                     wc_title.set_sensitive(False)
                     self.menu.append(wc_title)
-                    bar = bssidsn(ssid, netcard)
                     connection_item = Gtk.ImageMenuItem(ssid)
                     connection_item.set_image(self.openwifi(bar))
                     connection_item.show()
@@ -291,12 +262,13 @@ class trayIcon(object):
         if self.ifruning is False:
             self.ifruning = True
             defaultdev = defaultcard()
+            default_type = self.network_type(defaultdev)
             self.cardinfo = networkdictionary()
             sleep(1)
-            GLib.idle_add(self.updatetray, defaultdev)
+            GLib.idle_add(self.updatetray, defaultdev, default_type)
 
-    def updatetray(self, defaultdev):
-        self.updatetrayicon(defaultdev)
+    def updatetray(self, defaultdev, default_type):
+        self.updatetrayicon(defaultdev, default_type)
         self.trayStatus(defaultdev)
 
     def updatetrayloop(self):
@@ -306,40 +278,45 @@ class trayIcon(object):
             self.ifruning = False
             sleep(20)
 
-    def netstate(self, defaultdev):
+    def network_type(self, defaultdev):
         if defaultdev is None:
             return None
         elif 'wlan' in defaultdev:
-            if self.cardinfo[defaultdev]['state']["connection"] == "Connected":
-                bssid = self.cardinfo[defaultdev]['state']["bssid"]
-                return self.cardinfo[defaultdev]['info'][bssid][4]
-            else:
-                return None
+            return 'wifi'
         else:
-            return 200
+            return 'wire'
+
+    def default_wifi_state(self, defaultdev):
+        if self.cardinfo[defaultdev]['state']["connection"] == "Connected":
+            bssid = self.cardinfo[defaultdev]['state']["bssid"]
+            return self.cardinfo[defaultdev]['info'][bssid][4]
+        else:
+            return None
 
     def checkfornewcard(self):
         if os.path.exists("/usr/local/bin/netcardmgr"):
             if isanewnetworkcardinstall() is True:
                 call("doas netcardmgr", shell=True)
 
-    def updatetrayicon(self, defaultdev):
-        state = self.netstate(defaultdev)
-        if state == 200:
-            self.statusIcon.set_from_icon_name('nm-adhoc')
-        elif state is None:
+    def updatetrayicon(self, defaultdev, card_type):
+        if card_type is None:
             self.statusIcon.set_from_icon_name('nm-no-connection')
-        elif state > 75:
-            self.statusIcon.set_from_icon_name('nm-signal-100')
-        elif state > 50:
-            self.statusIcon.set_from_icon_name('nm-signal-75')
-        elif state > 25:
-            self.statusIcon.set_from_icon_name('nm-signal-50')
-        elif state > 5:
-            self.statusIcon.set_from_icon_name('nm-signal-25')
+        elif card_type == 'wire':
+            self.statusIcon.set_from_icon_name('nm-adhoc')
         else:
-            self.statusIcon.set_from_icon_name('nm-signal-00')
-        return True
+            wifi_state = self.default_wifi_state(defaultdev)
+            if wifi_state is None:
+                self.statusIcon.set_from_icon_name('nm-no-connection')
+            elif wifi_state > 80:
+                self.statusIcon.set_from_icon_name('nm-signal-100')
+            elif wifi_state > 60:
+                self.statusIcon.set_from_icon_name('nm-signal-75')
+            elif wifi_state > 40:
+                self.statusIcon.set_from_icon_name('nm-signal-50')
+            elif wifi_state > 20:
+                self.statusIcon.set_from_icon_name('nm-signal-25')
+            else:
+                self.statusIcon.set_from_icon_name('nm-signal-00')
 
     def trayStatus(self, defaultdev):
         self.statusIcon.set_tooltip_text("%s" % connectionStatus(defaultdev))
