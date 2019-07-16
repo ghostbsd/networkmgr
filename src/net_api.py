@@ -114,7 +114,7 @@ def isanewnetworkcardinstall():
 
 
 def scanSsid(ssid, wificard):
-    grepListScanv = "ifconfig -v %s list scan | grep %s" % (wificard, ssid)
+    grepListScanv = "ifconfig -v %s list scan | grep '%s'" % (wificard, ssid)
     wifi = Popen(grepListScanv, shell=True, stdout=PIPE,
                  universal_newlines=True)
     info = wifi.stdout.readlines()[0].rstrip().split(' ')
@@ -191,7 +191,15 @@ def ifStatue(wificard):
 def get_ssid(wificard):
     wlan = Popen('ifconfig %s | grep ssid' % wificard,
                  shell=True, stdout=PIPE, universal_newlines=True)
-    return wlan.stdout.readlines()[0].rstrip().split()[1]
+
+    # If there are quotation marks in the string, use that as a separator, otherwise use the default whitespace
+    # This is to handle ssid strings with spaces in them. These ssid strings will be double quoted by ifconfig
+    temp = wlan.stdout.readlines()[0].rstrip()
+    if '"' in temp:
+        out = temp.split('"')[1]
+    else:
+        out = temp.split()[1]
+    return out
 
 
 def get_bssid(wificard):
@@ -381,7 +389,7 @@ def connectToSsid(name, wificard):
         sleep(1)
         call('doas service wpa_supplicant.%s restart' % wificard, shell=True)
     else:
-        call('doas service netif restart %s' % wificard, shell=True)
+        call('doas service netif restart', shell=True)
     sleep(1)
 
 
