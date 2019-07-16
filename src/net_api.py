@@ -113,20 +113,6 @@ def isanewnetworkcardinstall():
         return False
 
 
-def bssidsn(bssid, wificard):
-    grepListScanv = "ifconfig -v %s list scan | grep -a '%s'" % (wificard, bssid)
-    wifi = Popen(grepListScanv, shell=True, stdout=PIPE,
-                 universal_newlines=True)
-    info = wifi.stdout.readlines()
-    if len(info) == 0:
-        return 0
-    else:
-        newline = info[0][33:]
-        bssidlist = newline.split(' ')
-        bssidlist = list(filter(None, bssidlist))
-        return barpercent(bssidlist[3])
-
-
 def scanSsid(ssid, wificard):
     grepListScanv = "ifconfig -v %s list scan | grep '%s'" % (wificard, ssid)
     wifi = Popen(grepListScanv, shell=True, stdout=PIPE,
@@ -274,7 +260,8 @@ def networkdictionary():
             if ifWlanDisable(card) is True:
                 connectionstat = {
                     "connection": "Disabled",
-                    "ssid": None, "bssid": None
+                    "ssid": None,
+                    "bssid": None
                 }
             elif ifStatue(card) is False:
                 connectionstat = {
