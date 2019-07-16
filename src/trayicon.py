@@ -9,8 +9,8 @@ from sys import path
 import locale
 import os
 path.append("/usr/local/share/networkmgr")
-from net_api import wiredonlineinfo, stopnetworkcard, isanewnetworkcardinstall
-from net_api import startnetworkcard, wifiDisconnection, ifWlan
+from net_api import stopnetworkcard, isanewnetworkcardinstall
+from net_api import startnetworkcard, wifiDisconnection
 from net_api import stopallnetwork, startallnetwork, connectToSsid
 from net_api import disableWifi, enableWifi
 from authentication import Authentication, Open_Wpa_Supplicant
@@ -123,7 +123,7 @@ class trayIcon(object):
                 self.menu.append(Gtk.SeparatorMenuItem())
                 wifinum += 1
 
-        if ifWlan() is False and wiredonlineinfo() is False:
+        if self.defaultdev is None:
             open_item = Gtk.MenuItem("Enable Networking")
             open_item.connect("activate", self.openNetwork)
             self.menu.append(open_item)
@@ -261,11 +261,11 @@ class trayIcon(object):
     def updateinfo(self):
         if self.ifruning is False:
             self.ifruning = True
-            defaultdev = defaultcard()
-            default_type = self.network_type(defaultdev)
+            self.defaultdev = defaultcard()
+            default_type = self.network_type(self.defaultdev)
             self.cardinfo = networkdictionary()
             sleep(1)
-            GLib.idle_add(self.updatetray, defaultdev, default_type)
+            GLib.idle_add(self.updatetray, self.defaultdev, default_type)
 
     def updatetray(self, defaultdev, default_type):
         self.updatetrayicon(defaultdev, default_type)

@@ -54,10 +54,6 @@ def scanWifiBssid(bssid, wificard):
     return info
 
 
-def ifnetworkup():
-    pass
-
-
 def wlan_list():
     crd = Popen(ncard, shell=True, stdout=PIPE, universal_newlines=True)
     wlanlist = []
