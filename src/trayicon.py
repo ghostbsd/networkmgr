@@ -13,14 +13,13 @@ from net_api import stopnetworkcard, isanewnetworkcardinstall
 from net_api import startnetworkcard, wifiDisconnection
 from net_api import stopallnetwork, startallnetwork, connectToSsid
 from net_api import disableWifi, enableWifi
-from authentication import Authentication, Open_Wpa_Supplicant
 from net_api import connectionStatus, defaultcard
 from net_api import restartnetworkcard, networkdictionary
-encoding = locale.getpreferredencoding()
+from authentication import Authentication, Open_Wpa_Supplicant
 
+encoding = locale.getpreferredencoding()
 threadBreak = False
 GObject.threads_init()
-
 wpa_supplican = "/etc/wpa_supplicant.conf"
 
 

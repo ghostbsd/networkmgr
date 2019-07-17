@@ -54,15 +54,6 @@ def scanWifiBssid(bssid, wificard):
     return info
 
 
-def wlan_list():
-    crd = Popen(ncard, shell=True, stdout=PIPE, universal_newlines=True)
-    wlanlist = []
-    for wlan in crd.stdout.readlines()[0].rstrip().split(' '):
-        if "wlan" in wlan:
-            wlanlist.append(wlan)
-    return wlanlist
-
-
 def wired_list():
     crd = Popen(ncard, shell=True, stdout=PIPE, universal_newlines=True)
     wiredlist = []
@@ -109,15 +100,6 @@ def isanewnetworkcardinstall():
         return False
 
 
-def scanSsid(ssid, wificard):
-    grepListScanv = "ifconfig -v %s list scan | grep '%s'" % (wificard, ssid)
-    wifi = Popen(grepListScanv, shell=True, stdout=PIPE,
-                 universal_newlines=True)
-    info = wifi.stdout.readlines()[0].rstrip().split(' ')
-    info = list(filter(None, info))
-    return info
-
-
 def wiredonlineinfo():
     for netcard in wired_list():
         lan = Popen('ifconfig ' + netcard, shell=True, stdout=PIPE,
@@ -134,14 +116,6 @@ def ifcardisonline(netcard):
     lan = Popen('ifconfig ' + netcard, shell=True, stdout=PIPE,
                 universal_newlines=True)
     if 'inet ' in lan.stdout.read():
-        return True
-    else:
-        return False
-
-
-def ifWlanInRc():
-    rc_conf = open('/etc/rc.conf', 'r').read()
-    if 'wlan' in rc_conf:
         return True
     else:
         return False
