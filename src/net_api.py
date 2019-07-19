@@ -161,9 +161,9 @@ def ifStatue(wificard):
 def get_ssid(wificard):
     wlan = Popen('ifconfig %s | grep ssid' % wificard,
                  shell=True, stdout=PIPE, universal_newlines=True)
-
-    # If there are quotation marks in the string, use that as a separator, otherwise use the default whitespace
-    # This is to handle ssid strings with spaces in them. These ssid strings will be double quoted by ifconfig
+    # If there are quotation marks in the string, use that as a separator,
+    # otherwise use the default whitespace. This is to handle ssid strings
+    # with spaces in them. These ssid strings will be double quoted by ifconfig
     temp = wlan.stdout.readlines()[0].rstrip()
     if '"' in temp:
         out = temp.split('"')[1]
@@ -260,6 +260,31 @@ def networkdictionary():
             seconddictionary = {'state': connectionstat, 'info': None}
         maindictionary[card] = seconddictionary
     return maindictionary
+
+
+def connectionStatus(card):
+    if card is None:
+        netstate = "No network card enable"
+    elif 'wlan' in card:
+        if ifWlanDisable(card) is False and ifStatue(card) is True:
+            cmd1 = "ifconfig %s | grep ssid" % card
+            cmd2 = "ifconfig %s | grep 'inet '" % card
+            out1 = Popen(cmd1, shell=True, stdout=PIPE,
+                         universal_newlines=True)
+            out2 = Popen(cmd2, shell=True, stdout=PIPE,
+                         universal_newlines=True)
+            line1 = out1.stdout.read().strip()
+            line2 = out2.stdout.read().strip()
+            netstate = line1 + '\n' + line2
+        else:
+            netstate = "WiFi %s not conected" % card
+    else:
+        cmd = "ifconfig %s | grep 'inet '" % card
+        out = Popen(cmd, shell=True, stdout=PIPE,
+                    universal_newlines=True)
+        line = out.stdout.read().strip()
+        netstate = line
+    return netstate
 
 
 def card_service():
@@ -361,28 +386,3 @@ def connectToSsid(name, wificard):
     else:
         call('doas service netif restart', shell=True)
     sleep(1)
-
-
-def connectionStatus(card):
-    if card is None:
-        netstate = "All network cards disable"
-    elif 'wlan' in card:
-        if ifWlanDisable(card) is False and ifStatue(card) is True:
-            cmd1 = "ifconfig %s | grep ssid" % card
-            cmd2 = "ifconfig %s | grep 'inet '" % card
-            out1 = Popen(cmd1, shell=True, stdout=PIPE,
-                         universal_newlines=True)
-            out2 = Popen(cmd2, shell=True, stdout=PIPE,
-                         universal_newlines=True)
-            line1 = out1.stdout.read().strip()
-            line2 = out2.stdout.read().strip()
-            netstate = line1 + '\n' + line2
-        else:
-            netstate = "WiFi %s not conected" % card
-    else:
-        cmd = "ifconfig %s | grep 'inet '" % card
-        out = Popen(cmd, shell=True, stdout=PIPE,
-                    universal_newlines=True)
-        line = out.stdout.read().strip()
-        netstate = line
-    return netstate
