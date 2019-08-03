@@ -309,7 +309,7 @@ def stopnetworkcard(netcard):
 
 
 def startnetworkcard(netcard):
-    os.system(f'doas ifconfig {netcard} down')
+    os.system(f'doas ifconfig {netcard} up')
     sleep(1)
 
 
