@@ -29,7 +29,7 @@
 #
 # $Id: netcardmgr.py v 0.1 Saturday, February 08 2014 Eric Turgeon $
 
-from subprocess import Popen, PIPE, call
+from subprocess import Popen, PIPE
 import os
 import re
 from time import sleep
@@ -37,97 +37,88 @@ from time import sleep
 ncard = 'ifconfig -l'
 nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True,
              universal_newlines=True)
-netcard = nics.stdout.readlines()
+netcard = nics.stdout.readlines()[0].rstrip()
 wifis = 'sysctl -in net.wlan.devices'
 wifinics = Popen(wifis, shell=True, stdout=PIPE, close_fds=True,
                  universal_newlines=True)
-wifiscards = wifinics.stdout.readlines()
+wifiscard = wifinics.stdout.readlines()[0].rstrip()
 rcconf = open('/etc/rc.conf', 'r').read()
 
 notnics = ["lo", "fwe", "fwip", "tap", "plip", "pfsync", "pflog",
            "tun", "sl", "faith", "ppp", "wlan", "brige", "ixautomation"]
 
-if os.path.exists("/sbin/openrc") is True:
-    start_network = 'doas service network start'
-    stop_network = 'doas service network stop'
-    restart_network = 'doas service network restart'
+cmd = "kenv | grep rc_system"
+rc_system = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
+if 'openrc' in rc_system.read():
+    openrc = True
+    rc = 'rc-'
+    network = 'network'
 else:
-    start_network = 'doas service netif start'
-    stop_network = 'doas service netif stop'
-    restart_network = 'doas service netif restart'
+    openrc = False
+    rc = ''
+    network = 'netif'
+
+restart_network = f'doas {rc}service {network} restart'
 
 
 class autoConfigure():
 
     def __init__(self):
-        ifncard = netcard[0].rstrip()
-        if ifncard != '':
-            for line in netcard[0].split():
-                card = line.rstrip()
-                nc = re.sub(r'\d+', '', line.rstrip())
-                if nc not in notnics:
-                    if 'ifconfig_%s=' % card in rcconf:
-                        print("Your wired network card is already configured.")
-                    else:
-                        rc = open('/etc/rc.conf', 'a')
-                        rc.writelines('ifconfig_%s="DHCP"\n' % card)
-                        rc.close()
-                        sleep(1)
-                        call(stop_network, shell=True)
-                        sleep(1)
-                        call(start_network, shell=True)
-                        sleep(1)
-                        if os.path.exists("/sbin/openrc") is True:
-                            cmd = "doas service dhcpcd.%s restart" % card
-                            call(cmd, shell=True)
-                        print("Your wired network card is configured.")
-
-        ifwifi = wifiscards[0].rstrip()
-        if ifwifi != '':
-            for wlanNum in range(0, 9):
-                if 'wlan%s' % wlanNum not in rcconf:
-                    break
-            for card in wifiscards[0].rstrip().split():
-                if 'wlans_%s=' % card in rcconf:
-                    print("Your wifi network card is already configured.")
-                    if not os.path.exists('/etc/wpa_supplicant.conf'):
-                        open('/etc/wpa_supplicant.conf', 'a').close()
-                        call('chown root:wheel /etc/wpa_supplicant.conf',
-                             shell=True)
-                        call('chmod 765 /etc/wpa_supplicant.conf',
-                             shell=True)
-                    else:
-                        call('chown root:wheel /etc/wpa_supplicant.conf',
-                             shell=True)
-                        call('chmod 765 /etc/wpa_supplicant.conf',
-                             shell=True)
+        for line in netcard[0].split():
+            card = line.rstrip()
+            nc = re.sub(r'\d+', '', line.rstrip())
+            if nc not in notnics:
+                if f'ifconfig_{card}=' in rcconf:
+                    print("Your wired network card is already configured.")
                 else:
                     rc = open('/etc/rc.conf', 'a')
-                    rc.writelines('wlans_%s="wlan%s"\n' % (card, wlanNum))
-                    rc.writelines('ifconfig_wlan%s="WPA DHCP"\n' % wlanNum)
+                    rc.writelines(f'ifconfig_{card}="DHCP"\n')
                     rc.close()
-                    if not os.path.exists('/etc/wpa_supplicant.conf'):
-                        open('/etc/wpa_supplicant.conf', 'a').close()
-                        call('chown root:wheel /etc/wpa_supplicant.conf',
-                             shell=True)
-                        call('chmod 765 /etc/wpa_supplicant.conf', shell=True)
                     sleep(1)
-                    call(stop_network, shell=True)
+                    os.system(restart_network)
                     sleep(1)
-                    call(start_network, shell=True)
+                    if os.path.exists("/sbin/openrc") is True:
+                        cmd = f"doas rc-service dhcpcd.{card} restart"
+                        os.system(cmd)
+                    print("Your wired network card is configured.")
+
+        for card in wifiscard.split():
+            for wlanNum in range(0, 9):
+                if f'wlan{wlanNum}' not in rcconf:
+                    break
+            if f'wlans_{card}=' in rcconf:
+                print("Your wifi network card is already configured.")
+                if not os.path.exists('/etc/wpa_supplicant.conf'):
+                    open('/etc/wpa_supplicant.conf', 'a').close()
+                    os.system('chown root:wheel /etc/wpa_supplicant.conf')
+                    os.system('chmod 765 /etc/wpa_supplicant.conf')
+                else:
+                    os.system('chown root:wheel /etc/wpa_supplicant.conf')
+                    os.system('chmod 765 /etc/wpa_supplicant.conf')
+            else:
+                rc = open('/etc/rc.conf', 'a')
+                rc.writelines(f'wlans_{card}="wlan{wlanNum}"\n')
+                rc.writelines(f'ifconfig_wlan{wlanNum}="WPA DHCP"\n')
+                rc.close()
+                if not os.path.exists('/etc/wpa_supplicant.conf'):
+                    open('/etc/wpa_supplicant.conf', 'a').close()
+                    os.system('chown root:wheel /etc/wpa_supplicant.conf')
+                    os.system('chmod 765 /etc/wpa_supplicant.conf')
+                sleep(1)
+                os.system(restart_network)
+                sleep(1)
+                nicslist = 'ifconfig -l'
+                ifconfig = Popen(nicslist, shell=True, stdout=PIPE,
+                                 close_fds=True, universal_newlines=True)
+                cardlist = ifconfig.stdout.read()
+                if f'wlan{wlanNum}' not in cardlist:
                     sleep(1)
-                    nicslist = 'ifconfig -l'
-                    ifconfig = Popen(nicslist, shell=True, stdout=PIPE,
-                                     close_fds=True, universal_newlines=True)
-                    cardlist = ifconfig.stdout.read()
-                    if 'wlan%s' % wlanNum not in cardlist:
-                        call(stop_network, shell=True)
-                        sleep(1)
-                        call(start_network, shell=True)
-                        sleep(1)
-                    call('ifconfig wlan%s up scan' % wlanNum, shell=True)
-                    call('ifconfig wlan%s up scan' % wlanNum, shell=True)
+                    os.system(restart_network)
                     sleep(1)
-                wlanNum += 1
+                os.system(f'ifconfig wlan{wlanNum} up scan')
+                os.system(f'ifconfig wlan{wlanNum} up scan')
+                sleep(1)
+            wlanNum += 1
+
 
 autoConfigure()
