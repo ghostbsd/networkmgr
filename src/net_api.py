@@ -230,6 +230,7 @@ def networkdictionary():
     nlist = networklist()
     maindictionary = {
         'service': network_service_state(),
+        'default': defaultcard()
     }
     cards = {}
     for card in nlist:

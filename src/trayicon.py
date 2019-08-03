@@ -13,7 +13,7 @@ from net_api import stopnetworkcard, isanewnetworkcardinstall
 from net_api import startnetworkcard, wifiDisconnection
 from net_api import stopallnetwork, startallnetwork, connectToSsid
 from net_api import disableWifi, enableWifi
-from net_api import connectionStatus, defaultcard, networkdictionary
+from net_api import connectionStatus, networkdictionary
 from authentication import Authentication, Open_Wpa_Supplicant
 
 encoding = locale.getpreferredencoding()
@@ -254,11 +254,11 @@ class trayIcon(object):
     def updateinfo(self):
         if self.ifruning is False:
             self.ifruning = True
-            self.defaultdev = defaultcard()
-            default_type = self.network_type(self.defaultdev)
             self.cardinfo = networkdictionary()
+            defaultcard = self.cardinfo['default']
+            default_type = self.network_type(defaultcard)
             sleep(1)
-            GLib.idle_add(self.updatetray, self.defaultdev, default_type)
+            GLib.idle_add(self.updatetray, defaultcard, default_type)
 
     def updatetray(self, defaultdev, default_type):
         self.updatetrayicon(defaultdev, default_type)
