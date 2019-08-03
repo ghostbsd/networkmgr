@@ -13,8 +13,7 @@ from net_api import stopnetworkcard, isanewnetworkcardinstall
 from net_api import startnetworkcard, wifiDisconnection
 from net_api import stopallnetwork, startallnetwork, connectToSsid
 from net_api import disableWifi, enableWifi
-from net_api import connectionStatus, defaultcard
-from net_api import restartnetworkcard, networkdictionary
+from net_api import connectionStatus, defaultcard, networkdictionary
 from authentication import Authentication, Open_Wpa_Supplicant
 
 encoding = locale.getpreferredencoding()
@@ -62,8 +61,7 @@ class trayIcon(object):
             if "wlan" not in netcard:
                 if connection_state == "Connected":
                     wired_item = Gtk.MenuItem("Wired %s Connected" % cardnum)
-                    wired_item.connect("activate", self.restartcardconnection,
-                                       netcard)
+                    wired_item.set_sensitive(False)
                     self.menu.append(wired_item)
                     disconnect_item = Gtk.ImageMenuItem("Disable")
                     disconnect_item.connect("activate", self.disconnectcard,
@@ -209,11 +207,6 @@ class trayIcon(object):
 
     def disconnectcard(self, widget, netcard):
         stopnetworkcard(netcard)
-        self.updateinfo()
-        self.ifruning = False
-
-    def restartcardconnection(self, widget, netcard):
-        restartnetworkcard(netcard)
         self.updateinfo()
         self.ifruning = False
 
