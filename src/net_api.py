@@ -42,7 +42,7 @@ notnics = ["lo", "fwe", "fwip", "tap", "plip", "pfsync", "pflog",
 cmd = "kenv | grep rc_system"
 rc_system = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
 
-if 'openrc' in rc_system.read():
+if 'openrc' in rc_system.stdout.read():
     openrc = True
     rc = 'rc-'
     network = 'network'
