@@ -106,30 +106,10 @@ def isanewnetworkcardinstall():
         return False
 
 
-def wiredonlineinfo():
-    for netcard in wired_list():
-        lan = Popen('ifconfig ' + netcard, shell=True, stdout=PIPE,
-                    universal_newlines=True)
-        if 'inet ' in lan.stdout.read():
-            isonlin = True
-            break
-        else:
-            isonlin = False
-    return isonlin
-
-
 def ifcardisonline(netcard):
     lan = Popen('ifconfig ' + netcard, shell=True, stdout=PIPE,
                 universal_newlines=True)
     if 'inet ' in lan.stdout.read():
-        return True
-    else:
-        return False
-
-
-def ifWlan():
-    nics = Popen(ncard, shell=True, stdout=PIPE, universal_newlines=True)
-    if "wlan" in nics.stdout.read():
         return True
     else:
         return False
