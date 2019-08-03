@@ -210,9 +210,28 @@ def barpercent(sn):
     return int((sig - noise) * 4)
 
 
+def network_service_state():
+    if openrc is True:
+        status = Popen(
+            f'{rc}service {network} status',
+            shell=True,
+            stdout=PIPE,
+            universal_newlines=True
+        )
+        if 'status: started' in status.stdout.read():
+            return True
+        else:
+            return False
+    else:
+        return False
+
+
 def networkdictionary():
     nlist = networklist()
-    maindictionary = {}
+    maindictionary = {
+        'service': network_service_state(),
+    }
+    cards = {}
     for card in nlist:
         if 'wlan' in card:
             scanv = "ifconfig -v %s list scan | grep -va BSSID" % card
@@ -264,7 +283,8 @@ def networkdictionary():
             else:
                 connectionstat = {"connection": "Unplug"}
             seconddictionary = {'state': connectionstat, 'info': None}
-        maindictionary[card] = seconddictionary
+        cards[card] = seconddictionary
+    maindictionary['cards'] = cards
     return maindictionary
 
 
