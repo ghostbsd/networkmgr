@@ -28,9 +28,9 @@ ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 """
 
-from subprocess import Popen, PIPE, call
+from subprocess import Popen, PIPE
 from sys import path
-import os.path
+import os
 import re
 from time import sleep
 
@@ -39,11 +39,17 @@ ncard = 'ifconfig -l'
 notnics = ["lo", "fwe", "fwip", "tap", "plip", "pfsync", "pflog",
            "tun", "sl", "faith", "ppp", "brige", "ixautomation"]
 
+cmd = "kenv | grep rc_system"
+rc_system = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
 
-if os.path.exists("/sbin/openrc") is True:
+if 'openrc' in rc_system.read():
     openrc = True
+    rc = 'rc-'
+    network = 'network'
 else:
     openrc = False
+    rc = ''
+    network = 'netif'
 
 
 def scanWifiBssid(bssid, wificard):
@@ -298,91 +304,77 @@ def card_service():
 
 
 def stopallnetwork():
-    if openrc is True:
-        for service in card_service():
-            call('doas service %s stop' % service, shell=True)
-            sleep(1)
-        call('doas service network stop', shell=True)
-    else:
-        call('doas service netif stop', shell=True)
+    os.system(f'doas {rc}service {network} stop')
     sleep(1)
 
 
 def startallnetwork():
-    if openrc is True:
-        call('doas service network start', shell=True)
-    else:
-        call('doas service netif start', shell=True)
+    os.system(f'doas {rc}service {network} start')
     sleep(1)
 
 
 def restartnetworkcard(netcard):
     if openrc is True:
-        call('doas service dhcpcd.%s restart' % netcard, shell=True)
+        os.system(f'doas rc-service dhcpcd.{netcard} restart')
     else:
-        call('doas service netif restart %s' % netcard, shell=True)
+        os.system(f'doas service netif restart {netcard}')
     sleep(1)
 
 
 def stopnetworkcard(netcard):
     if openrc is True:
-        call('doas service dhcpcd.%s stop' % netcard, shell=True)
+        os.system(f'doas rc-service dhcpcd.{netcard} stop')
     else:
-        call('doas service netif stop %s' % netcard, shell=True)
+        os.system(f'doas service netif stop {netcard}')
     sleep(1)
 
 
 def startnetworkcard(netcard):
     if openrc is True:
-        call('doas service dhcpcd.%s start' % netcard, shell=True)
+        os.system(f'doas rc-service dhcpcd.{netcard} start')
     else:
-        call('doas service netif start %s' % netcard, shell=True)
+        os.system(f'doas service netif start {netcard}')
         sleep(1)
 
 
 def wifiDisconnection(wificard):
     if openrc is True:
-        call('doas service wpa_supplicant.%s stop' % wificard, shell=True)
+        os.system(f'doas rc-service wpa_supplicant.{wificard} stop')
         sleep(1)
-    call('doas ifconfig %s down' % wificard, shell=True)
-    if openrc is True:
-        call('doas service wpa_supplicant.%s stop' % wificard, shell=True)
+    else:
+        os.system(f'doas service wpa_supplicant stop {wificard}')
         sleep(1)
-    call('doas ifconfig %s up scan' % wificard, shell=True)
-    call('doas ifconfig %s up scan' % wificard, shell=True)
+    os.system(f'doas ifconfig {wificard} down')
+    os.system(f'doas ifconfig {wificard} up scan')
+    os.system(f'doas ifconfig {wificard} up scan')
     sleep(1)
 
 
 def disableWifi(wificard):
     if openrc is True:
-        call('doas service dhcpcd.%s stop' % wificard, shell=True)
-        sleep(1)
-        call('doas service wpa_supplicant.%s stop' % wificard, shell=True)
-        sleep(1)
-    call('doas ifconfig %s down' % wificard, shell=True)
+        os.system(f'doas rc-service dhcpcd.{wificard} stop')
+        os.system(f'doas rc-service wpa_supplicant.{wificard} stop')
+    os.system(f'doas ifconfig {wificard} down')
     sleep(1)
 
 
 def enableWifi(wificard):
     if openrc is True:
-        call('doas service dhcpcd.%s restart' % wificard, shell=True)
-        sleep(1)
-        call('doas service wpa_supplicant.%s restart' % wificard, shell=True)
+        os.system(f'doas rc-service wpa_supplicant.{wificard} restart')
     else:
-        call('doas service wpa_supplicant restart %s' % wificard, shell=True)
+        os.system(f'doas service wpa_supplicant restart {wificard}')
     sleep(1)
-    call('doas ifconfig %s up scan' % wificard, shell=True)
-    call('doas ifconfig %s up scan' % wificard, shell=True)
+    os.system(f'doas ifconfig {wificard} up scan')
+    os.system(f'doas ifconfig {wificard} up scan')
     sleep(1)
 
 
 def connectToSsid(name, wificard):
-    # call('doas service netif restart wlan0', shell=True
-    call("doas ifconfig %s ssid '%s'" % (wificard, name), shell=True)
+    # os.system('doas service netif restart wlan0', shell=True
+    os.system(f"doas ifconfig {wificard} ssid '{name}'")
     if openrc is True:
-        call('doas service dhcpcd.%s restart' % wificard, shell=True)
-        sleep(1)
-        call('doas service wpa_supplicant.%s restart' % wificard, shell=True)
+        os.system(f'doas rc-service dhcpcd.{wificard} restart')
+        os.system(f'doas rc-service wpa_supplicant.{wificard} restart')
     else:
-        call('doas service netif restart', shell=True)
+        os.system(f'doas service netif restart {wificard}')
     sleep(1)
