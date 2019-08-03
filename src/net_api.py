@@ -304,12 +304,12 @@ def startallnetwork():
 
 
 def stopnetworkcard(netcard):
-    os.system(f'doas ifconfig {network} down')
+    os.system(f'doas ifconfig {netcard} down')
     sleep(1)
 
 
 def startnetworkcard(netcard):
-    os.system(f'doas ifconfig {network} down')
+    os.system(f'doas ifconfig {netcard} down')
     sleep(1)
 
 
