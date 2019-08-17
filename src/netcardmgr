@@ -64,7 +64,7 @@ restart_network = f'doas {rc}service {network} restart'
 class autoConfigure():
 
     def __init__(self):
-        for line in netcard[0].split():
+        for line in netcard.split():
             card = line.rstrip()
             nc = re.sub(r'\d+', '', line.rstrip())
             if nc not in notnics:
