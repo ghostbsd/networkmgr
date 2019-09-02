@@ -3,7 +3,7 @@
 import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk
-from net_api import scanWifiBssid, connectToSsid
+from net_api import scanWifiBssid, first_ssid_connection
 
 wpa_supplican = "/etc/wpa_supplicant.conf"
 
@@ -84,7 +84,7 @@ class Open_Wpa_Supplicant():
         wsf = open(wpa_supplican, 'a')
         wsf.writelines(ws)
         wsf.close()
-        connectToSsid(ssid, wificard)
+        first_ssid_connection(ssid, wificard)
 
 
 class Lock_Wpa_Supplicant():
@@ -114,4 +114,4 @@ class Lock_Wpa_Supplicant():
         wsf = open(wpa_supplican, 'a')
         wsf.writelines(ws)
         wsf.close()
-        connectToSsid(ssid, wificard)
+        first_ssid_connection(ssid, wificard)
