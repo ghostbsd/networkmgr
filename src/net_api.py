@@ -333,15 +333,7 @@ def enableWifi(wificard):
 
 
 def connectToSsid(name, wificard):
-    os.system(f'doas ifconfig {wificard} down')
+    os.system(f'doas killall wpa_supplicant')
     os.system(f"doas ifconfig {wificard} ssid '{name}'")
-    os.system(f'doas ifconfig {wificard} up')
+    os.system(f'doas wpa_supplicant -B -i {wificard} -c /etc/wpa_supplicant.conf')
     sleep(1)
-
-
-def first_ssid_connection(name, wificard):
-    os.system(f'doas ifconfig {wificard} down')
-    os.system(f"doas ifconfig {wificard} ssid '{name}'")
-    os.system(f'doas ifconfig {wificard} up')
-    os.system(f'doas {rc}service {network} stop')
-    os.system(f'doas {rc}service {network} start')
