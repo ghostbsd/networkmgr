@@ -336,4 +336,5 @@ def connectToSsid(name, wificard):
     os.system(f'doas killall wpa_supplicant')
     os.system(f"doas ifconfig {wificard} ssid '{name}'")
     os.system(f'doas wpa_supplicant -B -i {wificard} -c /etc/wpa_supplicant.conf')
+    os.system(f'doas dhclient {wificard}')
     sleep(1)
