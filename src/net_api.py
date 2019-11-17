@@ -333,7 +333,9 @@ def enableWifi(wificard):
 
 # work around of iwm on FreeBSD 12.0
 def start_wifi():
-   for nic in ncard.split():
+   crd = Popen(ncard, shell=True, stdout=PIPE, universal_newlines=True)
+   for nic in crd.stdout.readlines()[0].rstrip().split():
+       print(nic)
        if 'wlan' in nic:
            os.system(f'doas wpa_supplicant -B -i {nic} -c /etc/wpa_supplicant.conf')
            sleep(0.5)
@@ -342,9 +344,7 @@ def start_wifi():
            os.system(f'doas ifconfig {nic} scan')
            sleep(2)
            os.system(f'doas dhclient {nic}')
-           
    
-
 
 def connectToSsid(name, wificard):
     os.system(f'doas killall wpa_supplicant')
