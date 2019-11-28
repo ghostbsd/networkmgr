@@ -317,7 +317,6 @@ class trayIcon(object):
 
     def tray(self):
         self.ifruning = False
-        start_wifi()
         self.thr = threading.Thread(target=self.updatetrayloop)
         self.thr.setDaemon(True)
         self.thr.start()
