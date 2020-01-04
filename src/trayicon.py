@@ -13,7 +13,7 @@ from net_api import stopnetworkcard, isanewnetworkcardinstall
 from net_api import startnetworkcard, wifiDisconnection
 from net_api import stopallnetwork, startallnetwork, connectToSsid
 from net_api import disableWifi, enableWifi, start_wifi
-from net_api import connectionStatus, networkdictionary
+from net_api import connectionStatus, networkdictionary, openrc
 from authentication import Authentication, Open_Wpa_Supplicant
 
 encoding = locale.getpreferredencoding()
@@ -121,14 +121,17 @@ class trayIcon(object):
                 self.menu.append(Gtk.SeparatorMenuItem())
                 wifinum += 1
 
-        if self.cardinfo['service'] is False:
-            open_item = Gtk.MenuItem("Enable Networking")
-            open_item.connect("activate", self.openNetwork)
-            self.menu.append(open_item)
+        if openrc is True:
+            if self.cardinfo['service'] is False:
+                open_item = Gtk.MenuItem("Enable Networking")
+                open_item.connect("activate", self.openNetwork)
+                self.menu.append(open_item)
+            else:
+                close_item = Gtk.MenuItem("Disable Networking")
+                close_item.connect("activate", self.closeNetwork)
+                self.menu.append(close_item)
         else:
-            close_item = Gtk.MenuItem("Disable Networking")
-            close_item.connect("activate", self.closeNetwork)
-            self.menu.append(close_item)
+            print('service netif status not supported')
         close_manager = Gtk.MenuItem("Close Network Manager")
         close_manager.connect("activate", self.stop_manager)
         self.menu.append(close_manager)

@@ -356,6 +356,7 @@ def connectToSsid(name, wificard):
     os.system(f'doas ifconfig {wificard} up')
     sleep(0.5)
     os.system(f'doas ifconfig {wificard} scan')
-    sleep(2)
-    os.system(f'doas dhclient {wificard}')
+    if openrc is False:
+        sleep(2)
+        os.system(f'doas dhclient {wificard}')
     sleep(0.5)
