@@ -293,7 +293,7 @@ class trayIcon(object):
     def checkfornewcard(self):
         if os.path.exists("/usr/local/bin/netcardmgr"):
             if isanewnetworkcardinstall() is True:
-                os.system("doas netcardmgr")
+                os.system("netcardmgr")
 
     def updatetrayicon(self, defaultdev, card_type):
         if card_type is None:
