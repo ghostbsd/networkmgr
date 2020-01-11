@@ -1,8 +1,9 @@
-#!/usr/bin/env python3.6
+#!/usr/bin/env python3.7
 
 from sys import path
 import signal
-path.append("/usr/local/share/networkmgr")
+# path.append("/usr/local/share/networkmgr") Added this comment so I could run test code without calling prod code
+path.append("/usr/home/bcrouch/Projects/networkmgr/src")
 from trayicon import trayIcon
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
