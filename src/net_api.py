@@ -282,7 +282,7 @@ def connectionStatus(card):
                          universal_newlines=True)
             line1 = out1.stdout.read().strip()
             line2 = out2.stdout.read().strip()
-            netstate = line1 + '\n' + line2
+            netstate = line1 + '\n' + subnetHexToDec(line2)
         else:
             netstate = "WiFi %s not conected" % card
     else:
@@ -290,7 +290,7 @@ def connectionStatus(card):
         out = Popen(cmd, shell=True, stdout=PIPE,
                     universal_newlines=True)
         line = out.stdout.read().strip()
-        netstate = line
+        netstate = subnetHexToDec(line)
     return netstate
 
 
@@ -360,3 +360,11 @@ def connectToSsid(name, wificard):
         sleep(2)
         os.system(f'doas dhclient {wificard}')
     sleep(0.5)
+
+def subnetHexToDec( ifconfigstring ):
+    snethex = re.search('0x.{8}', ifconfigstring).group(0)[2:]
+    snethexlist = re.findall('..', snethex)
+    snetdeclist = [int(li, 16) for li in snethexlist]
+    snetdec = ".".join(str(li) for li in snetdeclist)
+    outputline = ifconfigstring.replace(re.search('0x.{8}',ifconfigstring).group(0),snetdec)
+    return outputline
