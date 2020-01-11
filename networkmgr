@@ -2,8 +2,7 @@
 
 from sys import path
 import signal
-# path.append("/usr/local/share/networkmgr") Added this comment so I could run test code without calling prod code
-path.append("/usr/home/bcrouch/Projects/networkmgr/src")
+path.append("/usr/local/share/networkmgr")
 from trayicon import trayIcon
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
