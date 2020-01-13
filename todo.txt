@@ -1,0 +1,22 @@
+XXX1) Add configure button for every detected interface
+
+XXX2) When you click configure, it needs to open a window
+
+3) Window should have radio button for DHCP or static.
+3b) If DHCP is enabled, make it so you can't add static IP information into the form.
+
+4) Need to have an OK button for the window
+
+5) Neet to have a cancle button for the window.
+
+6) When the person clicks cancle, it should refresh the window with the unchanged settings
+
+7) When somebody clicks the OK button, input validation and system configuration checking need to happen.
+
+8) If everything checks out, then apply changes to system.
+
+9) Confirm that expected changes to the system were correct and successful.
+
+10) Once settings have been set successfully, add confirmation to the window.
+
+11) Make the user close the window using system window buttons. Such as yellow, green, red buttons in Mate.

@@ -64,10 +64,13 @@ class trayIcon(object):
                     wired_item = Gtk.MenuItem("Wired %s Connected" % cardnum)
                     wired_item.set_sensitive(False)
                     self.menu.append(wired_item)
-                    disconnect_item = Gtk.ImageMenuItem("Disable")
+                    disconnect_item = Gtk.ImageMenuItem(f"Disable {netcard}")
                     disconnect_item.connect("activate", self.disconnectcard,
                                             netcard)
                     self.menu.append(disconnect_item)
+                    configure_item = Gtk.ImageMenuItem(f"Configure {netcard}")
+                    configure_item.connect("activate", self.configuration_window, netcard)
+                    self.menu.append(configure_item)
                 elif connection_state == "Disconnected":
                     notonline = Gtk.MenuItem("Wired %s Disconnected" % cardnum)
                     notonline.set_sensitive(False)
@@ -118,6 +121,9 @@ class trayIcon(object):
                     diswifi = Gtk.MenuItem("Disable Wifi %s" % wifinum)
                     diswifi.connect("activate", self.disable_Wifi, netcard)
                     self.menu.append(diswifi)
+                    configure_item = Gtk.ImageMenuItem(f"Configure {netcard}")
+                    configure_item.connect("activate", self.configuration_window, netcard)
+                    self.menu.append(configure_item)
                 self.menu.append(Gtk.SeparatorMenuItem())
                 wifinum += 1
 
@@ -172,6 +178,12 @@ class trayIcon(object):
                 menu_item.show()
                 wiconncmenu.append(menu_item)
         self.menu.append(avconnmenu)
+
+    def configuration_window(self, widget, interface):
+        iConfWindow = Gtk.Window()
+        iConfWindow.set_title(f"Configuration Menu for Interface {interface}")
+        iConfWindow.set_default_size(600,400)
+        iConfWindow.show()
 
     def menu_click_open(self, widget, ssid, bssid, wificard):
         if bssid in open(wpa_supplican).read():
