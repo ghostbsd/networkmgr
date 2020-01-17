@@ -29,9 +29,13 @@
 #
 # $Id: netcardmgr.py v 0.1 Saturday, February 08 2014 Eric Turgeon $
 
+import gi
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk, GObject, GLib
 from subprocess import Popen, PIPE
 import os
 import re
+import sys
 from time import sleep
 
 ncard = 'ifconfig -l'
@@ -120,5 +124,54 @@ class autoConfigure():
                 sleep(1)
             wlanNum += 1
 
+class netCardConfigWindow(Gtk.Window):
 
-autoConfigure()
+    def __init__(self):
+        # Build Default Window
+        Gtk.Window.__init__(self, title="Network Interface Configuration")
+        self.set_default_size(600,400)
+
+        # Build Tab 1 Content
+        testbutton = Gtk.Button(label="IPv4 Stuff")
+        testbutton.connect("clicked", self.on_button_clicked)
+
+        # Build Tab 2 Content
+        testbutton2 = Gtk.Button(label="IPv6 Stuff")
+        testbutton2.connect("clicked", self.on_button_clicked)
+
+        # Build Tab 3 Content
+        testbutton3 = Gtk.Button(label="VPN Stuff")
+        testbutton3.connect("clicked", self.on_button_clicked)
+
+        # Build Notebook
+        nb = Gtk.Notebook()
+        nb.set_tab_pos(2)
+        self.add(nb)
+
+        # Apply Tab 1 content and formatting
+        nb.append_page(testbutton)
+        nb.set_tab_label_text(testbutton, "IPv4 Settings")
+
+        # Apply Tab 2 content and formatting
+        nb.append_page(testbutton2)
+        nb.set_tab_label_text(testbutton2, "IPv6 Settings")
+
+        # Apply Tab 3 content and formatting
+        nb.append_page(testbutton3)
+        nb.set_tab_label_text(testbutton3, "VPN")
+
+    def on_button_clicked(self, widget):
+        print(f"Hello World")
+
+def openNetCardConfigwindow():
+    win = netCardConfigWindow()
+    win.connect("destroy", Gtk.main_quit)
+    win.show_all()
+    Gtk.main()
+
+if "-auto" in sys.argv:
+    autoConfigure()
+elif "-configure" in sys.argv:
+    openNetCardConfigwindow()
+else:
+    print(f"No acceptable flags were passed to the function.")
