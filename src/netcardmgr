@@ -132,8 +132,29 @@ class netCardConfigWindow(Gtk.Window):
         self.set_default_size(600,400)
 
         # Build Tab 1 Content
+
         testbutton = Gtk.Button(label="IPv4 Stuff")
         testbutton.connect("clicked", self.on_button_clicked)
+
+        labelOne = Gtk.Label("Interface:")
+        labelTwo = Gtk.Label("Interface:2")
+        labelThree = Gtk.Label("Interface:3")
+
+        interfaceBox = Gtk.Box(0, 10)
+        interfaceBox.pack_start(labelOne, False, False, 0)
+        interfaceBox.pack_end(testbutton, True, True, 0)
+
+        boxTwo = Gtk.Box(0, 10)
+        boxTwo.pack_start(labelTwo, True, True, 0)
+        boxTwo.pack_end(labelThree, True, True, 0)
+
+        gridOne = Gtk.Grid()
+        gridOne.set_column_homogeneous(True)
+        gridOne.set_row_homogeneous(False)
+        gridOne.set_column_spacing(5)
+        gridOne.set_row_spacing(10)
+        gridOne.attach(interfaceBox, 0, 0, 4, 1)
+        gridOne.attach(boxTwo, 0, 1, 4, 1)
 
         # Build Tab 2 Content
         testbutton2 = Gtk.Button(label="IPv6 Stuff")
@@ -149,8 +170,8 @@ class netCardConfigWindow(Gtk.Window):
         self.add(nb)
 
         # Apply Tab 1 content and formatting
-        nb.append_page(testbutton)
-        nb.set_tab_label_text(testbutton, "IPv4 Settings")
+        nb.append_page(gridOne)
+        nb.set_tab_label_text(gridOne, "IPv4 Settings")
 
         # Apply Tab 2 content and formatting
         nb.append_page(testbutton2)
