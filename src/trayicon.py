@@ -180,7 +180,7 @@ class trayIcon(object):
         self.menu.append(avconnmenu)
 
     def configuration_window_open(self, widget, interface):
-        os.system( "doas netcardmgr -configure" )
+        os.system( f"doas netcardmgr -configure {interface}" )
 
     def menu_click_open(self, widget, ssid, bssid, wificard):
         if bssid in open(wpa_supplican).read():

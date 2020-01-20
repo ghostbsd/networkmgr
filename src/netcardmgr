@@ -49,7 +49,7 @@ wifiscard = wifinics.stdout.readlines()[0].rstrip()
 rcconf = open('/etc/rc.conf', 'r').read()
 
 notnics = ["lo", "fwe", "fwip", "tap", "plip", "pfsync", "pflog",
-           "tun", "sl", "faith", "ppp", "wlan", "brige", "ixautomation"]
+           "tun", "sl", "faith", "ppp", "wlan", "bridge", "ixautomation"]
 
 cmd = "kenv | grep rc_system"
 rc_system = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
@@ -126,7 +126,7 @@ class autoConfigure():
 
 class netCardConfigWindow(Gtk.Window):
 
-    def __init__(self):
+    def __init__(self, defaultactiveint):
         # Build Default Window
         Gtk.Window.__init__(self, title="Network Interface Configuration")
         self.set_default_size(475,450)
@@ -134,56 +134,50 @@ class netCardConfigWindow(Gtk.Window):
         # Build Tab 1 Content
 
         # Interface Drop Down Combo Box
-
-        store = Gtk.ListStore(str)
         cell = Gtk.CellRendererText()
 
         interfaceComboBox = Gtk.ComboBox()
-        interfaceComboBox.pack_start(cell, True)
+        interfaceComboBox.pack_start(cell, expand=True)
         interfaceComboBox.add_attribute(cell, 'text', 0)
-        store.append (["Item1"])
-        store.append (["Item2"])
-        store.append (["Item3"])
-        store.append (["Item4"])
-        store.append (["Item5"])
-        store.append (["Item6"])
-        store.append (["Item7"])
 
+        # Add interfaces to a ListStore
+        store = Gtk.ListStore(str)
+        validinterfaces = self.enumerate_nics()
+        for validinterface in validinterfaces:
+            store.append ([validinterface])
+
+        # Build the UI aspects of the ComboBox, passing the interface clicked in the trayicon
+        # as the interface that needs to be the active one when the combo box is drawn
+        activeComboBoxObjectIndex = validinterfaces.index(f"{defaultactiveint}")
         interfaceComboBox.set_model(store)
         interfaceComboBox.set_margin_top(15)
         interfaceComboBox.set_margin_end(30)
-        interfaceComboBox.set_active(0)
-        interfaceComboBox.connect("changed", self.on_button_clicked)
+        interfaceComboBox.set_active(activeComboBoxObjectIndex)
+        interfaceComboBox.connect("changed", self.cbox_config_refresh)
 
-
-
+        # Build Label to sit in front of the ComboBox
         labelOne = Gtk.Label(label="Interface:")
         labelOne.set_margin_top(15)
         labelOne.set_margin_start(30)
-        labelTwo = Gtk.Label(label="Interface:2")
-        labelThree = Gtk.Label(label="Interface:3")
 
+        # Add both objects to a single box, which will then be added to the grid
         interfaceBox = Gtk.Box(orientation=0, spacing=100)
         interfaceBox.pack_start(labelOne, False, False, 0)
         interfaceBox.pack_end(interfaceComboBox, True, True, 0)
 
-        boxTwo = Gtk.Box(orientation=0, spacing=10)
-        boxTwo.pack_start(labelTwo, True, True, 0)
-        boxTwo.pack_end(labelThree, True, True, 0)
-
+        # Build the grid, which will handle the physical layout of the UI elements.
         gridOne = Gtk.Grid()
         gridOne.set_column_homogeneous(True)
         gridOne.set_row_homogeneous(False)
         gridOne.set_column_spacing(5)
         gridOne.set_row_spacing(10)
         gridOne.attach(interfaceBox, 0, 0, 4, 1)
-        gridOne.attach(boxTwo, 0, 1, 4, 1)
 
-        # Build Tab 2 Content
+        # Placeholder for Tab 1 Content
         testbutton2 = Gtk.Button(label="IPv6 Stuff")
         testbutton2.connect("clicked", self.on_button_clicked)
 
-        # Build Tab 3 Content
+        # Placeholder for Tab 2 Content
         testbutton3 = Gtk.Button(label="VPN Stuff")
         testbutton3.connect("clicked", self.on_button_clicked)
 
@@ -192,23 +186,55 @@ class netCardConfigWindow(Gtk.Window):
         nb.set_tab_pos(2)
         self.add(nb)
 
-        # Apply Tab 1 content and formatting
+        # Apply Tab 1 content and formatting to the notebook
         nb.append_page(gridOne)
         nb.set_tab_label_text(gridOne, "IPv4 Settings")
 
-        # Apply Tab 2 content and formatting
+        # Apply Tab 2 content and formatting to the notebook
         nb.append_page(testbutton2)
         nb.set_tab_label_text(testbutton2, "IPv6 Settings")
 
-        # Apply Tab 3 content and formatting
+        # Apply Tab 3 content and formatting to the notebook
         nb.append_page(testbutton3)
         nb.set_tab_label_text(testbutton3, "VPN")
 
+    # Need to delete this function before shippint. Placeholder for tab 2/3 functionality.
     def on_button_clicked(self, widget):
+        print(f"{widget}")
+        print(f"{self}")
         print(f"Hello World")
 
-def openNetCardConfigwindow():
-    win = netCardConfigWindow()
+    # Returns a list of valid configureable interfaces.
+    def enumerate_nics(self):
+        validnics = list()
+        confnotnics = ["lo", "fwe", "fwip", "tap", "plip", "pfsync", "pflog",
+        "tun", "sl", "faith", "ppp", "bridge", "ixautomation"]
+        confncard = 'ifconfig -l'
+        confnics = Popen(confncard, shell=True, stdout=PIPE, close_fds=True, universal_newlines=True)
+        confnetcard = confnics.stdout.readlines()[0].rstrip()
+        confnetcardarray = confnetcard.split(" ")
+        for confnic in confnetcardarray:
+            nicgeneralized = re.findall( "[a-zA-Z]+", confnic)
+            stringnicgeneralized = str(nicgeneralized).replace("'", "")
+            stringnicgeneralized = stringnicgeneralized.replace("[", "")
+            stringnicgeneralized = stringnicgeneralized.replace("]", "")
+            if stringnicgeneralized in confnotnics:
+                print(f"{confnic} was generalized to {nicgeneralized} and was found in the notnics list! "
+                "It will not be added to the valid configurable nic list in the netCardConfigWindow.enumerate_nics method.")
+            else:
+                validnics.append(confnic)
+        return(validnics)   
+    # Used with the combo box to refresh the UI of tab 1 with active settings for the newly selected active interface.
+    def cbox_config_refresh(self, widget):
+        refreshedInterface = widget.get_active()
+        refreshedInterfaceName = self.enumerate_nics()[refreshedInterface]
+        # actions here need to refresh the values on the first tab.
+        print(f"Refreshing settings to match current settings on {refreshedInterface}. "
+        f"Interface name is {refreshedInterfaceName}")   
+
+
+def openNetCardConfigwindow(default_int):
+    win = netCardConfigWindow(default_int)
     win.connect("destroy", Gtk.main_quit)
     win.show_all()
     Gtk.main()
@@ -216,6 +242,9 @@ def openNetCardConfigwindow():
 if "-auto" in sys.argv:
     autoConfigure()
 elif "-configure" in sys.argv:
-    openNetCardConfigwindow()
+    confloc = sys.argv.index('-configure')
+    intloc = confloc + 1
+    passedint = sys.argv[intloc]
+    openNetCardConfigwindow(passedint)
 else:
     print(f"No acceptable flags were passed to the function.")
