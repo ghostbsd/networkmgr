@@ -165,6 +165,50 @@ class netCardConfigWindow(Gtk.Window):
         interfaceBox.pack_start(labelOne, False, False, 0)
         interfaceBox.pack_end(interfaceComboBox, True, True, 0)
 
+        # Add radio button to toggle DHCP or not
+        radioButton1 = Gtk.RadioButton.new_with_label(None, "DHCP")
+        radioButton1.set_margin_top(15)
+        radioButton2 = Gtk.RadioButton.new_with_label_from_widget(radioButton1, "Manual")
+        radioButton2.set_margin_top(15)
+        radioButton2.join_group(radioButton1)
+
+        radioButtonLabel = Gtk.Label(label="IPv4 Method:")
+        radioButtonLabel.set_margin_top(15)
+        radioButtonLabel.set_margin_start(30)
+
+        radioBox = Gtk.Box(orientation=0, spacing=50)
+        radioBox.set_homogeneous(False)
+        radioBox.pack_start(radioButtonLabel, False, False, 0)
+        radioBox.pack_start(radioButton1, True, False, 0)
+        radioBox.pack_end(radioButton2, True, True, 0)
+
+        # Add Manual Address Field
+        ipInputAddressLabel = Gtk.Label(label="Address")
+        ipInputAddressLabel.set_margin_top(15)
+
+        ipInputMaskLabel = Gtk.Label(label="Subnet Mask")
+        ipInputMaskLabel.set_margin_top(15)
+
+        ipInputGatewayLabel = Gtk.Label(label="Gateway")
+        ipInputGatewayLabel.set_margin_top(15)
+        
+        ipInputAddressEntry = Gtk.Entry()
+        ipInputAddressEntry.set_margin_start(15)
+        ipInputMaskEntry = Gtk.Entry()
+        ipInputGatewayEntry = Gtk.Entry()
+        ipInputGatewayEntry.set_margin_end(15)
+
+        ipInputBox = Gtk.Box(orientation=0, spacing=0)
+        ipInputBox.set_homogeneous(True)
+        ipInputBox.pack_start(ipInputAddressLabel, False, False, 0)
+        ipInputBox.pack_start(ipInputMaskLabel, False, False, 0)
+        ipInputBox.pack_start(ipInputGatewayLabel, False, False, 0)
+
+        ipEntryBox = Gtk.Box(orientation=0, spacing=30)
+        ipEntryBox.pack_start(ipInputAddressEntry, False, False, 0)
+        ipEntryBox.pack_start(ipInputMaskEntry, False, False, 0)
+        ipEntryBox.pack_start(ipInputGatewayEntry, False, False, 0)
+
         # Build the grid, which will handle the physical layout of the UI elements.
         gridOne = Gtk.Grid()
         gridOne.set_column_homogeneous(True)
@@ -172,6 +216,9 @@ class netCardConfigWindow(Gtk.Window):
         gridOne.set_column_spacing(5)
         gridOne.set_row_spacing(10)
         gridOne.attach(interfaceBox, 0, 0, 4, 1)
+        gridOne.attach(radioBox, 0, 1, 4, 1)
+        gridOne.attach(ipInputBox, 0, 2, 4, 1)
+        gridOne.attach(ipEntryBox, 0, 3, 4, 1)
 
         # Placeholder for Tab 1 Content
         testbutton2 = Gtk.Button(label="IPv6 Stuff")
