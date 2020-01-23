@@ -209,6 +209,33 @@ class netCardConfigWindow(Gtk.Window):
         ipEntryBox.pack_start(ipInputMaskEntry, False, False, 0)
         ipEntryBox.pack_start(ipInputGatewayEntry, False, False, 0)
 
+        # Add DNS Server Settings
+        dnsLabel = Gtk.Label(label="DNS Servers: ")
+        dnsLabel.set_margin_top(15)
+        dnsLabel.set_margin_end(58)
+        dnsLabel.set_margin_start(30)
+
+        dnsEntry = Gtk.Entry()
+        dnsEntry.set_margin_end(30)
+
+        dnsEntryBox = Gtk.Box(orientation=0, spacing=0)
+        dnsEntryBox.pack_start(dnsLabel, False, False, 0)
+        dnsEntryBox.pack_end(dnsEntry, True, True, 0)
+
+        # Add Search Domain Settings
+
+        searchLabel = Gtk.Label(label="Search domains: ")
+        searchLabel.set_margin_top(15)
+        searchLabel.set_margin_end(30)
+        searchLabel.set_margin_start(30)
+
+        searchEntry = Gtk.Entry()
+        searchEntry.set_margin_end(30)
+
+        searchBox = Gtk.Box(orientation=0, spacing=0)
+        searchBox.pack_start(searchLabel, False, False, 0)
+        searchBox.pack_end(searchEntry, True, True, 0)
+
         # Build the grid, which will handle the physical layout of the UI elements.
         gridOne = Gtk.Grid()
         gridOne.set_column_homogeneous(True)
@@ -219,6 +246,8 @@ class netCardConfigWindow(Gtk.Window):
         gridOne.attach(radioBox, 0, 1, 4, 1)
         gridOne.attach(ipInputBox, 0, 2, 4, 1)
         gridOne.attach(ipEntryBox, 0, 3, 4, 1)
+        gridOne.attach(dnsEntryBox, 0, 4, 4, 1)
+        gridOne.attach(searchBox, 0, 5, 4, 1)
 
         # Placeholder for Tab 1 Content
         testbutton2 = Gtk.Button(label="IPv6 Stuff")
