@@ -127,9 +127,9 @@ class autoConfigure():
 class netCardConfigWindow(Gtk.Window):
 
     def __init__(self, defaultactiveint):
-        # Build Default Window
+        ### Build Default Window
         Gtk.Window.__init__(self, title="Network Interface Configuration")
-        self.set_default_size(475,450)
+        self.set_default_size(475,400)
 
         # Build Tab 1 Content
 
@@ -230,7 +230,9 @@ class netCardConfigWindow(Gtk.Window):
         searchLabel.set_margin_start(30)
 
         searchEntry = Gtk.Entry()
+        searchEntry.set_margin_top(21)
         searchEntry.set_margin_end(30)
+        searchEntry.set_margin_bottom(30)
 
         searchBox = Gtk.Box(orientation=0, spacing=0)
         searchBox.pack_start(searchLabel, False, False, 0)
@@ -249,36 +251,162 @@ class netCardConfigWindow(Gtk.Window):
         gridOne.attach(dnsEntryBox, 0, 4, 4, 1)
         gridOne.attach(searchBox, 0, 5, 4, 1)
 
-        # Placeholder for Tab 1 Content
-        testbutton2 = Gtk.Button(label="IPv6 Stuff")
-        testbutton2.connect("clicked", self.on_button_clicked)
+        ## Build Tab 2 Content
 
-        # Placeholder for Tab 2 Content
-        testbutton3 = Gtk.Button(label="VPN Stuff")
-        testbutton3.connect("clicked", self.on_button_clicked)
+        ## Interface Drop Down Combo Box
+        cell6 = Gtk.CellRendererText()
 
-        # Build Notebook
+        interfaceComboBox6 = Gtk.ComboBox()
+        interfaceComboBox6.pack_start(cell6, expand=True)
+        interfaceComboBox6.add_attribute(cell6, 'text', 0)
+
+        ## Add interfaces to a ListStore
+        store6 = Gtk.ListStore(str)
+        validinterfaces6 = self.enumerate_nics()
+        for validinterface6 in validinterfaces6:
+            store6.append ([validinterface6])
+
+        ## Build the UI aspects of the ComboBox, passing the interface clicked in the trayicon
+        ## as the interface that needs to be the active one when the combo box is drawn
+        activeComboBoxObjectIndex6 = validinterfaces6.index(f"{defaultactiveint}")
+        interfaceComboBox6.set_model(store)
+        interfaceComboBox6.set_margin_top(15)
+        interfaceComboBox6.set_margin_end(30)
+        interfaceComboBox6.set_active(activeComboBoxObjectIndex6)
+        interfaceComboBox6.connect("changed", self.cbox_config_refresh)
+
+        ## Build Label to sit in front of the ComboBox
+        labelOne6 = Gtk.Label(label="Interface:")
+        labelOne6.set_margin_top(15)
+        labelOne6.set_margin_start(30)
+
+        ## Add both objects to a single box, which will then be added to the grid
+        interfaceBox6 = Gtk.Box(orientation=0, spacing=100)
+        interfaceBox6.pack_start(labelOne6, False, False, 0)
+        interfaceBox6.pack_end(interfaceComboBox6, True, True, 0)
+
+        ## Add radio button to toggle DHCP or not
+        radioButton1V6 = Gtk.RadioButton.new_with_label(None, "SLAAC")
+        radioButton1V6.set_margin_top(15)
+        radioButton2V6 = Gtk.RadioButton.new_with_label_from_widget(radioButton1V6, "Manual")
+        radioButton2V6.set_margin_top(15)
+        radioButton2V6.join_group(radioButton1V6)
+
+        radioButtonLabel6 = Gtk.Label(label="IPv4 Method:")
+        radioButtonLabel6.set_margin_top(15)
+        radioButtonLabel6.set_margin_start(30)
+
+        radioBox6 = Gtk.Box(orientation=0, spacing=50)
+        radioBox6.set_homogeneous(False)
+        radioBox6.pack_start(radioButtonLabel6, False, False, 0)
+        radioBox6.pack_start(radioButton1V6, True, False, 0)
+        radioBox6.pack_end(radioButton2V6, True, True, 0)
+
+        ## Add Manual Address Field
+        ipInputAddressLabel6 = Gtk.Label(label="Address")
+        ipInputAddressLabel6.set_margin_top(15)
+
+        ipInputMaskLabel6 = Gtk.Label(label="Subnet Mask")
+        ipInputMaskLabel6.set_margin_top(15)
+
+        ipInputGatewayLabel6 = Gtk.Label(label="Gateway")
+        ipInputGatewayLabel6.set_margin_top(15)
+        
+        ipInputAddressEntry6 = Gtk.Entry()
+        ipInputAddressEntry6.set_margin_start(15)
+        ipInputMaskEntry6 = Gtk.Entry()
+        ipInputGatewayEntry6 = Gtk.Entry()
+        ipInputGatewayEntry6.set_margin_end(15)
+
+        ipInputBox6 = Gtk.Box(orientation=0, spacing=0)
+        ipInputBox6.set_homogeneous(True)
+        ipInputBox6.pack_start(ipInputAddressLabel6, False, False, 0)
+        ipInputBox6.pack_start(ipInputMaskLabel6, False, False, 0)
+        ipInputBox6.pack_start(ipInputGatewayLabel6, False, False, 0)
+
+        ipEntryBox6 = Gtk.Box(orientation=0, spacing=30)
+        ipEntryBox6.pack_start(ipInputAddressEntry6, False, False, 0)
+        ipEntryBox6.pack_start(ipInputMaskEntry6, False, False, 0)
+        ipEntryBox6.pack_start(ipInputGatewayEntry6, False, False, 0)
+
+        ## Add DNS Server Settings
+        dnsLabel6 = Gtk.Label(label="DNS Servers: ")
+        dnsLabel6.set_margin_top(15)
+        dnsLabel6.set_margin_end(58)
+        dnsLabel6.set_margin_start(30)
+
+        dnsEntry6 = Gtk.Entry()
+        dnsEntry6.set_margin_end(30)
+
+        dnsEntryBox6 = Gtk.Box(orientation=0, spacing=0)
+        dnsEntryBox6.pack_start(dnsLabel6, False, False, 0)
+        dnsEntryBox6.pack_end(dnsEntry6, True, True, 0)
+
+        ## Add Search Domain Settings
+
+        searchLabel6 = Gtk.Label(label="Search domains: ")
+        searchLabel6.set_margin_top(15)
+        searchLabel6.set_margin_end(30)
+        searchLabel6.set_margin_start(30)
+
+        searchEntry6 = Gtk.Entry()
+        searchEntry6.set_margin_top(21)
+        searchEntry6.set_margin_end(30)
+        searchEntry6.set_margin_bottom(30)
+
+        searchBox6 = Gtk.Box(orientation=0, spacing=0)
+        searchBox6.pack_start(searchLabel6, False, False, 0)
+        searchBox6.pack_end(searchEntry6, True, True, 0)
+
+        ## Build the grid, which will handle the physical layout of the UI elements.
+        gridOne6 = Gtk.Grid()
+        gridOne6.set_column_homogeneous(True)
+        gridOne6.set_row_homogeneous(False)
+        gridOne6.set_column_spacing(5)
+        gridOne6.set_row_spacing(10)
+        gridOne6.attach(interfaceBox6, 0, 0, 4, 1)
+        gridOne6.attach(radioBox6, 0, 1, 4, 1)
+        gridOne6.attach(ipInputBox6, 0, 2, 4, 1)
+        gridOne6.attach(ipEntryBox6, 0, 3, 4, 1)
+        gridOne6.attach(dnsEntryBox6, 0, 4, 4, 1)
+        gridOne6.attach(searchBox6, 0, 5, 4, 1)
+
+        ### Build Notebook
+
         nb = Gtk.Notebook()
+        nb.set_margin_start(10)
+        nb.set_margin_end(10)
+        nb.set_margin_top(10)
+        nb.set_margin_bottom(10)
         nb.set_tab_pos(2)
-        self.add(nb)
+
+        ### Build Save & Cancel Buttons
+
+        saveButton = Gtk.Button(label="Save...")
+        saveButton.set_margin_bottom(10)
+        saveButton.set_margin_start(10)
+        saveButton.connect("clicked",self.commit_pending_changes)
+        cancelButton = Gtk.Button(label="Cancel...")
+        cancelButton.set_margin_bottom(10)
+        cancelButton.connect("clicked", self.discard_pending_changes)
+        buttonsWindow = Gtk.Box(orientation=0, spacing=10)
+        buttonsWindow.pack_start(saveButton, False, False, 0)
+        buttonsWindow.pack_start(cancelButton, False, False, 0)
 
         # Apply Tab 1 content and formatting to the notebook
         nb.append_page(gridOne)
         nb.set_tab_label_text(gridOne, "IPv4 Settings")
 
-        # Apply Tab 2 content and formatting to the notebook
-        nb.append_page(testbutton2)
-        nb.set_tab_label_text(testbutton2, "IPv6 Settings")
+        ## Apply Tab 2 content and formatting to the notebook
+        nb.append_page(gridOne6)
+        nb.set_tab_label_text(gridOne6, "IPv6 Settings")
 
-        # Apply Tab 3 content and formatting to the notebook
-        nb.append_page(testbutton3)
-        nb.set_tab_label_text(testbutton3, "VPN")
+        ### Put all the widgets together into one window
+        mainBox = Gtk.Box(orientation=1, spacing=0)
+        mainBox.pack_start(nb, False, False, 0)
+        mainBox.pack_start(buttonsWindow, False, False, 0)
+        self.add(mainBox)
 
-    # Need to delete this function before shippint. Placeholder for tab 2/3 functionality.
-    def on_button_clicked(self, widget):
-        print(f"{widget}")
-        print(f"{self}")
-        print(f"Hello World")
 
     # Returns a list of valid configureable interfaces.
     def enumerate_nics(self):
@@ -304,9 +432,15 @@ class netCardConfigWindow(Gtk.Window):
     def cbox_config_refresh(self, widget):
         refreshedInterface = widget.get_active()
         refreshedInterfaceName = self.enumerate_nics()[refreshedInterface]
-        # actions here need to refresh the values on the first tab.
+        # actions here need to refresh the values on the first two tabs.
         print(f"Refreshing settings to match current settings on {refreshedInterface}. "
-        f"Interface name is {refreshedInterfaceName}")   
+        f"Interface name is {refreshedInterfaceName}") 
+
+    def commit_pending_changes(self, widget):
+        print(f"commit_pending_changes_goes_here")
+
+    def discard_pending_changes(self, widget):
+        print(f"discard_pending_changes_goes_here")
 
 
 def openNetCardConfigwindow(default_int):
