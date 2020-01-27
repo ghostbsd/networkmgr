@@ -36,6 +36,7 @@ from subprocess import Popen, PIPE
 import os
 import re
 import sys
+import subprocess
 from time import sleep
 
 ncard = 'ifconfig -l'
@@ -407,6 +408,9 @@ class netCardConfigWindow(Gtk.Window):
         mainBox.pack_start(buttonsWindow, False, False, 0)
         self.add(mainBox)
 
+        #### Run any functions that need to execute once at window creation
+        self.cbox_config_refresh(interfaceComboBox)
+
 
     # Returns a list of valid configureable interfaces.
     def enumerate_nics(self):
@@ -435,6 +439,61 @@ class netCardConfigWindow(Gtk.Window):
         # actions here need to refresh the values on the first two tabs.
         print(f"Refreshing settings to match current settings on {refreshedInterface}. "
         f"Interface name is {refreshedInterfaceName}") 
+        self.get_current_interface_settings(refreshedInterfaceName)
+
+    def get_current_interface_settings(self, active_int):
+        # Need to accurately determine if a wlanN interface is using DHCP
+        aInt = str(active_int)
+
+        DHCPStatus = os.path.exists(f"/var/db/dhclient.leases.{aInt}")
+        if DHCPStatus is True:
+            DHCPStatusOutput = "DHCP"
+        else:
+            DHCPStatusOutput = "Manual"
+
+        ifconfigaInt = f"ifconfig -f inet:dotted {aInt}"
+        ifconfigaIntOutput = subprocess.check_output(ifconfigaInt.split(" "))
+        aIntIP = re.findall('inet [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+',str(ifconfigaIntOutput))
+        aIntIPStrip = str(aIntIP).replace("inet ", "")
+        aIntIPStrip = str(aIntIPStrip).replace("'", "")
+        aIntIPStrip = str(aIntIPStrip).replace("[", "")
+        aIntIPStrip = str(aIntIPStrip).replace("]", "")
+        aIntMask = re.findall('netmask [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+',str(ifconfigaIntOutput))
+        aIntMaskStrip = str(aIntMask).replace("netmask ", "")
+        aIntMaskStrip = str(aIntMaskStrip).replace("'", "")
+        aIntMaskStrip = str(aIntMaskStrip).replace("[", "")
+        aIntMaskStrip = str(aIntMaskStrip).replace("]", "")
+        aIntGateway = re.findall('broadcast [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+',str(ifconfigaIntOutput))
+        aIntGatewayStrip = str(aIntGateway).replace("broadcast ", "")
+        aIntGatewayStrip = str(aIntGatewayStrip).replace("'", "")
+        aIntGatewayStrip = str(aIntGatewayStrip).replace("[", "")
+        aIntGatewayStrip = str(aIntGatewayStrip).replace("]", "")
+
+        aIntDHCP = f"resolvconf -l {aInt}.dhcp"  
+        aIntDHCPResults = subprocess.check_output(aIntDHCP.split(" "))  
+        DNSMatch = re.findall('nameserver [0-9]\.[0-9]\.[0-9]\.[0-9]' ,str(aIntDHCPResults))
+        
+        SearchDomainMatch = re.findall('search [a-zA-Z.]*', str(aIntDHCPResults))
+        SearchDomainMatchStrip = str(SearchDomainMatch).replace("search ","")
+        SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("'", "")
+        SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("[", "")
+        SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("]", "")
+        
+        currentSettings = {}
+        currentSettings["Active Interface"] = active_int
+        currentSettings["Address Assignment Method"] = DHCPStatusOutput
+        currentSettings["Interface IP"] = aIntIPStrip
+        currentSettings["Interface Subnet Mask"] = aIntMaskStrip
+        currentSettings["Default Gateway"] = aIntGatewayStrip
+        #[currentSettings.append(str(DNSServer).replace("nameserver ", "")) for DNSServer in DNSMatch]
+        currentSettings["Search Domain"] = SearchDomainMatchStrip
+        i = 1
+        while i <= len(DNSMatch):
+            currentSettings[f"DNS Server {i}"] = str(DNSMatch[(i-1)]).replace("nameserver ", "")
+            i = i + 1
+
+        print(f"Current settings are below:")
+        print(f"{currentSettings}")
 
     def commit_pending_changes(self, widget):
         print(f"commit_pending_changes_goes_here")
