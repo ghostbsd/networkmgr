@@ -581,7 +581,7 @@ class netCardConfigWindow(Gtk.Window):
 
     def discard_pending_changes(self, widget):
         print(f"discard_pending_changes_goes_here")
-        currentSettings["Interface IP"] = "poo"
+
 
 
 
