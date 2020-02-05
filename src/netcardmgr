@@ -125,6 +125,7 @@ class autoConfigure():
                 sleep(1)
             wlanNum += 1
 
+currentSettings = {}
 class netCardConfigWindow(Gtk.Window):
 
     def __init__(self, defaultactiveint):
@@ -141,6 +142,7 @@ class netCardConfigWindow(Gtk.Window):
         interfaceComboBox.pack_start(cell, expand=True)
         interfaceComboBox.add_attribute(cell, 'text', 0)
 
+
         # Add interfaces to a ListStore
         store = Gtk.ListStore(str)
         validinterfaces = self.enumerate_nics()
@@ -154,6 +156,7 @@ class netCardConfigWindow(Gtk.Window):
         interfaceComboBox.set_margin_top(15)
         interfaceComboBox.set_margin_end(30)
         interfaceComboBox.set_active(activeComboBoxObjectIndex)
+        self.cbox_config_refresh(interfaceComboBox)
         interfaceComboBox.connect("changed", self.cbox_config_refresh)
 
         # Build Label to sit in front of the ComboBox
@@ -171,6 +174,10 @@ class netCardConfigWindow(Gtk.Window):
         radioButton1.set_margin_top(15)
         radioButton2 = Gtk.RadioButton.new_with_label_from_widget(radioButton1, "Manual")
         radioButton2.set_margin_top(15)
+        if currentSettings["Address Assignment Method"] == "DHCP":
+            radioButton1.set_active(True)
+        else:
+            radioButton2.set_active(True)
         radioButton2.join_group(radioButton1)
 
         radioButtonLabel = Gtk.Label(label="IPv4 Method:")
@@ -195,9 +202,14 @@ class netCardConfigWindow(Gtk.Window):
         
         ipInputAddressEntry = Gtk.Entry()
         ipInputAddressEntry.set_margin_start(15)
+        ipInputAddressEntry.set_text(currentSettings["Interface IP"])
+
         ipInputMaskEntry = Gtk.Entry()
+        ipInputMaskEntry.set_text(currentSettings["Interface Subnet Mask"])
+
         ipInputGatewayEntry = Gtk.Entry()
         ipInputGatewayEntry.set_margin_end(15)
+        ipInputGatewayEntry.set_text(currentSettings["Default Gateway"])
 
         ipInputBox = Gtk.Box(orientation=0, spacing=0)
         ipInputBox.set_homogeneous(True)
@@ -218,6 +230,15 @@ class netCardConfigWindow(Gtk.Window):
 
         dnsEntry = Gtk.Entry()
         dnsEntry.set_margin_end(30)
+        DNSList = [(key, value) for key, value in currentSettings.items() if key.startswith("DNS Server")]
+        i = 0
+        DNSString = ""
+        while i < len(DNSList):
+            DNSString = DNSString + DNSList[i][i + 1]
+            if i + 1 < len(DNSList):
+                DNSString = DNSString + ","
+            i = i + 1
+        dnsEntry.set_text(DNSString)
 
         dnsEntryBox = Gtk.Box(orientation=0, spacing=0)
         dnsEntryBox.pack_start(dnsLabel, False, False, 0)
@@ -234,6 +255,7 @@ class netCardConfigWindow(Gtk.Window):
         searchEntry.set_margin_top(21)
         searchEntry.set_margin_end(30)
         searchEntry.set_margin_bottom(30)
+        searchEntry.set_text(currentSettings["Search Domain"])
 
         searchBox = Gtk.Box(orientation=0, spacing=0)
         searchBox.pack_start(searchLabel, False, False, 0)
@@ -440,50 +462,106 @@ class netCardConfigWindow(Gtk.Window):
         print(f"Refreshing settings to match current settings on {refreshedInterface}. "
         f"Interface name is {refreshedInterfaceName}") 
         self.get_current_interface_settings(refreshedInterfaceName)
+        self.display_current_interface_settings(widget)
 
     def get_current_interface_settings(self, active_int):
         # Need to accurately determine if a wlanN interface is using DHCP
         aInt = str(active_int)
 
         DHCPStatus = os.path.exists(f"/var/db/dhclient.leases.{aInt}")
-        if DHCPStatus is True:
-            DHCPStatusOutput = "DHCP"
+        print(f"dhcpstatus return value = {DHCPStatus}")
+        if DHCPStatus is False:
+            RCConf = open("/etc/rc.conf", "r").read()
+            DHCPSearch = re.findall(f"^ifconfig_{aInt}=\".*DHCP", RCConf)
+            print(f"DHCPSearch is {DHCPSearch} and the length is {len(DHCPSearch)}")
+            if len(DHCPSearch) < 1:
+                DHCPStatusOutput = "Manual"
+            else:
+                DHCPStatusOutput = "DHCP"
         else:
-            DHCPStatusOutput = "Manual"
+            DHCPStatusOutput = "DHCP"
+
+        print(f"DHCPStatusOutput = {DHCPStatusOutput}")
 
         ifconfigaInt = f"ifconfig -f inet:dotted {aInt}"
         ifconfigaIntOutput = subprocess.check_output(ifconfigaInt.split(" "))
-        aIntIP = re.findall('inet [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+',str(ifconfigaIntOutput))
+        aIntIP = re.findall('inet [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+',str(ifconfigaIntOutput))[0]
         aIntIPStrip = str(aIntIP).replace("inet ", "")
         aIntIPStrip = str(aIntIPStrip).replace("'", "")
         aIntIPStrip = str(aIntIPStrip).replace("[", "")
         aIntIPStrip = str(aIntIPStrip).replace("]", "")
-        aIntMask = re.findall('netmask [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+',str(ifconfigaIntOutput))
+        aIntMask = re.findall('netmask [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+',str(ifconfigaIntOutput))[0]
         aIntMaskStrip = str(aIntMask).replace("netmask ", "")
         aIntMaskStrip = str(aIntMaskStrip).replace("'", "")
         aIntMaskStrip = str(aIntMaskStrip).replace("[", "")
         aIntMaskStrip = str(aIntMaskStrip).replace("]", "")
-        aIntGateway = re.findall('broadcast [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+',str(ifconfigaIntOutput))
-        aIntGatewayStrip = str(aIntGateway).replace("broadcast ", "")
-        aIntGatewayStrip = str(aIntGatewayStrip).replace("'", "")
-        aIntGatewayStrip = str(aIntGatewayStrip).replace("[", "")
-        aIntGatewayStrip = str(aIntGatewayStrip).replace("]", "")
+        aIntBroadcast = re.findall('broadcast [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+',str(ifconfigaIntOutput))[0]
+        aIntBroadcastStrip = str(aIntBroadcast).replace("broadcast ", "")
+        aIntBroadcastStrip = str(aIntBroadcastStrip).replace("'", "")
+        aIntBroadcastStrip = str(aIntBroadcastStrip).replace("[", "")
+        aIntBroadcastStrip = str(aIntBroadcastStrip).replace("]", "")
 
-        aIntDHCP = f"resolvconf -l {aInt}.dhcp"  
-        aIntDHCPResults = subprocess.check_output(aIntDHCP.split(" "))  
-        DNSMatch = re.findall('nameserver [0-9]\.[0-9]\.[0-9]\.[0-9]' ,str(aIntDHCPResults))
+        if (DHCPStatusOutput == "DHCP"):
+            print(f"{DHCPStatusOutput}")
+            DHClientFileTest = os.path.exists(f"/var/db/dhclient.leases.{aInt}")
+            if DHClientFileTest == False:
+                print(f"dhclientfiletest = {DHClientFileTest}")
+                RenewDHCP = f"dhclient {aInt}"
+                RenewDHCPOutput = subprocess.check_output(RenewDHCP.split(" "))
+                sleep(5)
+                DHClientFileTest = os.path.exists(f"/var/db/dhclient.leases.{aInt}")
+                if DHClientFileTest == False:
+                    print(f"DHCP is enabled, but we're unable to read the lease file a /var/db/dhclient.leases.{aInt}")
+                    aIntGatewayStrip = ""
+            else:
+                DHCPLeaseInfo = open(f"/var/db/dhclient.leases.{aInt}", "r").read()
+                aIntGateway = re.findall("option routers [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+;", DHCPLeaseInfo)[0]
+                aIntGatewayStrip = str(aIntGateway).replace("option routers ", "")
+                aIntGatewayStrip = str(aIntGatewayStrip).replace("'","")
+                aIntGatewayStrip = str(aIntGatewayStrip).replace("[", "")
+                aIntGatewayStrip = str(aIntGatewayStrip).replace("]","")
+                aIntGatewayStrip = str(aIntGatewayStrip).replace(";","")
+
+                aIntDHCP = f"resolvconf -l {aInt}.dhcp"  
+                aIntDHCPResults = subprocess.check_output(aIntDHCP.split(" "))  
+                DNSMatch = re.findall('nameserver [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' ,str(aIntDHCPResults))
+
+                SearchDomainMatch = re.findall('search [a-zA-Z.]*', str(aIntDHCPResults))
+                if len(SearchDomainMatch) < 1:
+                    RCConfDomainSearch = open('/etc/resolv.conf', 'r').read()
+                    SearchDomainMatch = re.findall('domain (.*)', RCConfDomainSearch)
+                SearchDomainMatchStrip = str(SearchDomainMatch).replace("domain ","")
+                SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("'", "")
+                SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("[", "")
+                SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("]", "")
+
+        else:
+            RRConfGatewaySearch = open('/etc/rc.conf', 'r').read()
+            RRConfGatewayResults = re.findall('defaultrouter="[0-9]+\.[0-9]+\.[0-9]+\.[0-9]"', RRConfGatewaySearch)
+            aIntGatewayStrip = str(RRConfGatewayResults).replace('defaultrouter="', "")
+            aIntGatewayStrip = str(aIntGatewayStrip).replace('"', "")
+            aIntGatewayStrip = str(aIntGatewayStrip).replace('[', "")
+            aIntGatewayStrip = str(aIntGatewayStrip).replace(']',"")
+            aIntGatewayStrip = str(aIntGatewayStrip).replace("'","")
+
+            DefaultDNSServers = open('/etc/resolv.conf').read()
+            DNSMatch = re.findall('nameserver [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' ,str(DefaultDNSServers))
+
+            RCConfDomainSearch = open('/etc/resolv.conf', 'r').read()
+            SearchDomainMatch = re.findall('domain (.*)', RCConfDomainSearch)
+            SearchDomainMatchStrip = str(SearchDomainMatch).replace("domain ","")
+            SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("'", "")
+            SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("[", "")
+            SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("]", "")
+
+
         
-        SearchDomainMatch = re.findall('search [a-zA-Z.]*', str(aIntDHCPResults))
-        SearchDomainMatchStrip = str(SearchDomainMatch).replace("search ","")
-        SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("'", "")
-        SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("[", "")
-        SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("]", "")
-        
-        currentSettings = {}
+        #currentSettings = {}
         currentSettings["Active Interface"] = active_int
         currentSettings["Address Assignment Method"] = DHCPStatusOutput
         currentSettings["Interface IP"] = aIntIPStrip
         currentSettings["Interface Subnet Mask"] = aIntMaskStrip
+        currentSettings["Broadcast Address"] = aIntBroadcastStrip
         currentSettings["Default Gateway"] = aIntGatewayStrip
         #[currentSettings.append(str(DNSServer).replace("nameserver ", "")) for DNSServer in DNSMatch]
         currentSettings["Search Domain"] = SearchDomainMatchStrip
@@ -495,11 +573,16 @@ class netCardConfigWindow(Gtk.Window):
         print(f"Current settings are below:")
         print(f"{currentSettings}")
 
+    def display_current_interface_settings(self, widget):
+        print(f"display_current_interface_settings_go_here")
+
     def commit_pending_changes(self, widget):
         print(f"commit_pending_changes_goes_here")
 
     def discard_pending_changes(self, widget):
         print(f"discard_pending_changes_goes_here")
+        currentSettings["Interface IP"] = "poo"
+
 
 
 def openNetCardConfigwindow(default_int):
