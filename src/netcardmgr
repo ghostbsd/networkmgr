@@ -37,6 +37,9 @@ class autoConfigure():
     def __init__(self):
         for line in netcard.split():
             card = line.rstrip()
+	    # VLAN tags in ifconfig are delimited by period
+	    # but in rc.conf delimiter is underscore
+            card = card.replace(".", "_")
             nc = re.sub(r'\d+', '', line.rstrip())
             if nc not in notnics:
                 if f'ifconfig_{card}=' in rcconf:
