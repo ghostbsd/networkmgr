@@ -36,8 +36,23 @@ from time import sleep
 
 path.append("/usr/local/share/networkmgr")
 ncard = 'ifconfig -l'
-notnics = ["lo", "fwe", "fwip", "tap", "plip", "pfsync", "pflog",
-           "tun", "sl", "faith", "ppp", "brige", "ixautomation"]
+notnics = [
+    "lo",
+    "fwe",
+    "fwip",
+    "tap",
+    "plip",
+    "pfsync",
+    "pflog",
+    "tun",
+    "sl",
+    "faith",
+    "ppp",
+    "brige",
+    "ixautomation",
+    "vm-ixautomation",
+    "wg"
+]
 
 cmd = "kenv | grep rc_system"
 rc_system = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
@@ -344,7 +359,7 @@ def start_wifi():
            os.system(f'ifconfig {nic} scan')
            sleep(2)
            os.system(f'dhclient {nic}')
-   
+
 
 def connectToSsid(name, wificard):
     os.system(f'killall wpa_supplicant')

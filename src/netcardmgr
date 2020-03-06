@@ -15,8 +15,23 @@ wifinics = Popen(wifis, shell=True, stdout=PIPE, close_fds=True,
 wifiscard = wifinics.stdout.readlines()[0].rstrip()
 rcconf = open('/etc/rc.conf', 'r').read()
 
-notnics = ["lo", "fwe", "fwip", "tap", "plip", "pfsync", "pflog",
-           "tun", "sl", "faith", "ppp", "wlan", "brige", "ixautomation"]
+notnics = [
+    "lo",
+    "fwe",
+    "fwip",
+    "tap",
+    "plip",
+    "pfsync",
+    "pflog",
+    "tun",
+    "sl",
+    "faith",
+    "ppp",
+    "brige",
+    "ixautomation",
+    "vm-ixautomation",
+    "wg"
+]
 
 cmd = "kenv | grep rc_system"
 rc_system = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
@@ -37,8 +52,8 @@ class autoConfigure():
     def __init__(self):
         for line in netcard.split():
             card = line.rstrip()
-	    # VLAN tags in ifconfig are delimited by period
-	    # but in rc.conf delimiter is underscore
+        # VLAN tags in ifconfig are delimited by period
+        # but in rc.conf delimiter is underscore
             card = card.replace(".", "_")
             nc = re.sub(r'\d+', '', line.rstrip())
             if nc not in notnics:
