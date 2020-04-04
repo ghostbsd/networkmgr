@@ -9,7 +9,7 @@ Installation
 
 Packages to be installed before NetworkMgr.
 
-`pkg install py36-setuptools py36-gobject3 doas gtk-update-icon-cache hicolor-icon-theme`
+`pkg install sudo py37-setuptools py37-gobject3 gtk-update-icon-cache hicolor-icon-theme`
 
 Download NetworkMgr or clone it:
 
