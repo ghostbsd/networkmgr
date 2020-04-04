@@ -7,3 +7,4 @@ Type=Application
 Categories=
 NoDisplay=true
 X-Mate-Autostart-Notify=true
+X-KDE-autostart-after=panel
