@@ -61,7 +61,7 @@ class autoConfigure():
                     print("Your wired network card is already configured.")
                 else:
                     rc = open('/etc/rc.conf', 'a')
-                    rc.writelines(f'ifconfig_{card}="DHCP"\n')
+                    rc.writelines(f'ifconfig_{card}="SYNCDHCP"\n')
                     rc.close()
                     sleep(1)
                     os.system(restart_network)
@@ -87,7 +87,7 @@ class autoConfigure():
             else:
                 rc = open('/etc/rc.conf', 'a')
                 rc.writelines(f'wlans_{card}="wlan{wlanNum}"\n')
-                rc.writelines(f'ifconfig_wlan{wlanNum}="WPA DHCP"\n')
+                rc.writelines(f'ifconfig_wlan{wlanNum}="WPA SYNCDHCP"\n')
                 rc.close()
                 if not os.path.exists('/etc/wpa_supplicant.conf'):
                     open('/etc/wpa_supplicant.conf', 'a').close()
