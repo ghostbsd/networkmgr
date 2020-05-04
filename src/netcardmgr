@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 
+import gi
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk, GObject, GLib
 from subprocess import Popen, PIPE
 import os
 import re
+import sys
+import subprocess
 from time import sleep
 
 ncard = 'ifconfig -l'
@@ -109,5 +114,478 @@ class autoConfigure():
                 sleep(1)
             wlanNum += 1
 
+currentSettings = {}
+class netCardConfigWindow(Gtk.Window):
 
-autoConfigure()
+    def __init__(self, defaultactiveint):
+        ### Build Default Window
+        Gtk.Window.__init__(self, title="Network Interface Configuration")
+        self.set_default_size(475,400)
+
+        # Build Tab 1 Content
+
+        # Interface Drop Down Combo Box
+        cell = Gtk.CellRendererText()
+
+        interfaceComboBox = Gtk.ComboBox()
+        interfaceComboBox.pack_start(cell, expand=True)
+        interfaceComboBox.add_attribute(cell, 'text', 0)
+
+
+        # Add interfaces to a ListStore
+        store = Gtk.ListStore(str)
+        validinterfaces = self.enumerate_nics()
+        for validinterface in validinterfaces:
+            store.append ([validinterface])
+
+        # Build the UI aspects of the ComboBox, passing the interface clicked in the trayicon
+        # as the interface that needs to be the active one when the combo box is drawn
+        activeComboBoxObjectIndex = validinterfaces.index(f"{defaultactiveint}")
+        interfaceComboBox.set_model(store)
+        interfaceComboBox.set_margin_top(15)
+        interfaceComboBox.set_margin_end(30)
+        interfaceComboBox.set_active(activeComboBoxObjectIndex)
+        self.cbox_config_refresh(interfaceComboBox)
+        interfaceComboBox.connect("changed", self.cbox_config_refresh)
+
+        # Build Label to sit in front of the ComboBox
+        labelOne = Gtk.Label(label="Interface:")
+        labelOne.set_margin_top(15)
+        labelOne.set_margin_start(30)
+
+        # Add both objects to a single box, which will then be added to the grid
+        interfaceBox = Gtk.Box(orientation=0, spacing=100)
+        interfaceBox.pack_start(labelOne, False, False, 0)
+        interfaceBox.pack_end(interfaceComboBox, True, True, 0)
+
+        # Add radio button to toggle DHCP or not
+        radioButton1 = Gtk.RadioButton.new_with_label(None, "DHCP")
+        radioButton1.set_margin_top(15)
+        radioButton2 = Gtk.RadioButton.new_with_label_from_widget(radioButton1, "Manual")
+        radioButton2.set_margin_top(15)
+        if currentSettings["Address Assignment Method"] == "DHCP":
+            radioButton1.set_active(True)
+        else:
+            radioButton2.set_active(True)
+        radioButton2.join_group(radioButton1)
+
+        radioButtonLabel = Gtk.Label(label="IPv4 Method:")
+        radioButtonLabel.set_margin_top(15)
+        radioButtonLabel.set_margin_start(30)
+
+        radioBox = Gtk.Box(orientation=0, spacing=50)
+        radioBox.set_homogeneous(False)
+        radioBox.pack_start(radioButtonLabel, False, False, 0)
+        radioBox.pack_start(radioButton1, True, False, 0)
+        radioBox.pack_end(radioButton2, True, True, 0)
+
+        # Add Manual Address Field
+        ipInputAddressLabel = Gtk.Label(label="Address")
+        ipInputAddressLabel.set_margin_top(15)
+
+        ipInputMaskLabel = Gtk.Label(label="Subnet Mask")
+        ipInputMaskLabel.set_margin_top(15)
+
+        ipInputGatewayLabel = Gtk.Label(label="Gateway")
+        ipInputGatewayLabel.set_margin_top(15)
+        
+        ipInputAddressEntry = Gtk.Entry()
+        ipInputAddressEntry.set_margin_start(15)
+        ipInputAddressEntry.set_text(currentSettings["Interface IP"])
+
+        ipInputMaskEntry = Gtk.Entry()
+        ipInputMaskEntry.set_text(currentSettings["Interface Subnet Mask"])
+
+        ipInputGatewayEntry = Gtk.Entry()
+        ipInputGatewayEntry.set_margin_end(15)
+        ipInputGatewayEntry.set_text(currentSettings["Default Gateway"])
+
+        ipInputBox = Gtk.Box(orientation=0, spacing=0)
+        ipInputBox.set_homogeneous(True)
+        ipInputBox.pack_start(ipInputAddressLabel, False, False, 0)
+        ipInputBox.pack_start(ipInputMaskLabel, False, False, 0)
+        ipInputBox.pack_start(ipInputGatewayLabel, False, False, 0)
+
+        ipEntryBox = Gtk.Box(orientation=0, spacing=30)
+        ipEntryBox.pack_start(ipInputAddressEntry, False, False, 0)
+        ipEntryBox.pack_start(ipInputMaskEntry, False, False, 0)
+        ipEntryBox.pack_start(ipInputGatewayEntry, False, False, 0)
+
+        # Add DNS Server Settings
+        dnsLabel = Gtk.Label(label="DNS Servers: ")
+        dnsLabel.set_margin_top(15)
+        dnsLabel.set_margin_end(58)
+        dnsLabel.set_margin_start(30)
+
+        dnsEntry = Gtk.Entry()
+        dnsEntry.set_margin_end(30)
+        DNSList = [(key, value) for key, value in currentSettings.items() if key.startswith("DNS Server")]
+        i = 0
+        DNSString = ""
+        while i < len(DNSList):
+            DNSString = DNSString + DNSList[i][i + 1]
+            if i + 1 < len(DNSList):
+                DNSString = DNSString + ","
+            i = i + 1
+        dnsEntry.set_text(DNSString)
+
+        dnsEntryBox = Gtk.Box(orientation=0, spacing=0)
+        dnsEntryBox.pack_start(dnsLabel, False, False, 0)
+        dnsEntryBox.pack_end(dnsEntry, True, True, 0)
+
+        # Add Search Domain Settings
+
+        searchLabel = Gtk.Label(label="Search domains: ")
+        searchLabel.set_margin_top(15)
+        searchLabel.set_margin_end(30)
+        searchLabel.set_margin_start(30)
+
+        searchEntry = Gtk.Entry()
+        searchEntry.set_margin_top(21)
+        searchEntry.set_margin_end(30)
+        searchEntry.set_margin_bottom(30)
+        searchEntry.set_text(currentSettings["Search Domain"])
+
+        searchBox = Gtk.Box(orientation=0, spacing=0)
+        searchBox.pack_start(searchLabel, False, False, 0)
+        searchBox.pack_end(searchEntry, True, True, 0)
+
+        # Build the grid, which will handle the physical layout of the UI elements.
+        gridOne = Gtk.Grid()
+        gridOne.set_column_homogeneous(True)
+        gridOne.set_row_homogeneous(False)
+        gridOne.set_column_spacing(5)
+        gridOne.set_row_spacing(10)
+        gridOne.attach(interfaceBox, 0, 0, 4, 1)
+        gridOne.attach(radioBox, 0, 1, 4, 1)
+        gridOne.attach(ipInputBox, 0, 2, 4, 1)
+        gridOne.attach(ipEntryBox, 0, 3, 4, 1)
+        gridOne.attach(dnsEntryBox, 0, 4, 4, 1)
+        gridOne.attach(searchBox, 0, 5, 4, 1)
+
+        ## Build Tab 2 Content
+
+        ## Interface Drop Down Combo Box
+        cell6 = Gtk.CellRendererText()
+
+        interfaceComboBox6 = Gtk.ComboBox()
+        interfaceComboBox6.pack_start(cell6, expand=True)
+        interfaceComboBox6.add_attribute(cell6, 'text', 0)
+
+        ## Add interfaces to a ListStore
+        store6 = Gtk.ListStore(str)
+        validinterfaces6 = self.enumerate_nics()
+        for validinterface6 in validinterfaces6:
+            store6.append ([validinterface6])
+
+        ## Build the UI aspects of the ComboBox, passing the interface clicked in the trayicon
+        ## as the interface that needs to be the active one when the combo box is drawn
+        activeComboBoxObjectIndex6 = validinterfaces6.index(f"{defaultactiveint}")
+        interfaceComboBox6.set_model(store)
+        interfaceComboBox6.set_margin_top(15)
+        interfaceComboBox6.set_margin_end(30)
+        interfaceComboBox6.set_active(activeComboBoxObjectIndex6)
+        interfaceComboBox6.connect("changed", self.cbox_config_refresh)
+
+        ## Build Label to sit in front of the ComboBox
+        labelOne6 = Gtk.Label(label="Interface:")
+        labelOne6.set_margin_top(15)
+        labelOne6.set_margin_start(30)
+
+        ## Add both objects to a single box, which will then be added to the grid
+        interfaceBox6 = Gtk.Box(orientation=0, spacing=100)
+        interfaceBox6.pack_start(labelOne6, False, False, 0)
+        interfaceBox6.pack_end(interfaceComboBox6, True, True, 0)
+
+        ## Add radio button to toggle DHCP or not
+        radioButton1V6 = Gtk.RadioButton.new_with_label(None, "SLAAC")
+        radioButton1V6.set_margin_top(15)
+        radioButton2V6 = Gtk.RadioButton.new_with_label_from_widget(radioButton1V6, "Manual")
+        radioButton2V6.set_margin_top(15)
+        radioButton2V6.join_group(radioButton1V6)
+
+        radioButtonLabel6 = Gtk.Label(label="IPv4 Method:")
+        radioButtonLabel6.set_margin_top(15)
+        radioButtonLabel6.set_margin_start(30)
+
+        radioBox6 = Gtk.Box(orientation=0, spacing=50)
+        radioBox6.set_homogeneous(False)
+        radioBox6.pack_start(radioButtonLabel6, False, False, 0)
+        radioBox6.pack_start(radioButton1V6, True, False, 0)
+        radioBox6.pack_end(radioButton2V6, True, True, 0)
+
+        ## Add Manual Address Field
+        ipInputAddressLabel6 = Gtk.Label(label="Address")
+        ipInputAddressLabel6.set_margin_top(15)
+
+        ipInputMaskLabel6 = Gtk.Label(label="Subnet Mask")
+        ipInputMaskLabel6.set_margin_top(15)
+
+        ipInputGatewayLabel6 = Gtk.Label(label="Gateway")
+        ipInputGatewayLabel6.set_margin_top(15)
+        
+        ipInputAddressEntry6 = Gtk.Entry()
+        ipInputAddressEntry6.set_margin_start(15)
+        ipInputMaskEntry6 = Gtk.Entry()
+        ipInputGatewayEntry6 = Gtk.Entry()
+        ipInputGatewayEntry6.set_margin_end(15)
+
+        ipInputBox6 = Gtk.Box(orientation=0, spacing=0)
+        ipInputBox6.set_homogeneous(True)
+        ipInputBox6.pack_start(ipInputAddressLabel6, False, False, 0)
+        ipInputBox6.pack_start(ipInputMaskLabel6, False, False, 0)
+        ipInputBox6.pack_start(ipInputGatewayLabel6, False, False, 0)
+
+        ipEntryBox6 = Gtk.Box(orientation=0, spacing=30)
+        ipEntryBox6.pack_start(ipInputAddressEntry6, False, False, 0)
+        ipEntryBox6.pack_start(ipInputMaskEntry6, False, False, 0)
+        ipEntryBox6.pack_start(ipInputGatewayEntry6, False, False, 0)
+
+        ## Add DNS Server Settings
+        dnsLabel6 = Gtk.Label(label="DNS Servers: ")
+        dnsLabel6.set_margin_top(15)
+        dnsLabel6.set_margin_end(58)
+        dnsLabel6.set_margin_start(30)
+
+        dnsEntry6 = Gtk.Entry()
+        dnsEntry6.set_margin_end(30)
+
+        dnsEntryBox6 = Gtk.Box(orientation=0, spacing=0)
+        dnsEntryBox6.pack_start(dnsLabel6, False, False, 0)
+        dnsEntryBox6.pack_end(dnsEntry6, True, True, 0)
+
+        ## Add Search Domain Settings
+
+        searchLabel6 = Gtk.Label(label="Search domains: ")
+        searchLabel6.set_margin_top(15)
+        searchLabel6.set_margin_end(30)
+        searchLabel6.set_margin_start(30)
+
+        searchEntry6 = Gtk.Entry()
+        searchEntry6.set_margin_top(21)
+        searchEntry6.set_margin_end(30)
+        searchEntry6.set_margin_bottom(30)
+
+        searchBox6 = Gtk.Box(orientation=0, spacing=0)
+        searchBox6.pack_start(searchLabel6, False, False, 0)
+        searchBox6.pack_end(searchEntry6, True, True, 0)
+
+        ## Build the grid, which will handle the physical layout of the UI elements.
+        gridOne6 = Gtk.Grid()
+        gridOne6.set_column_homogeneous(True)
+        gridOne6.set_row_homogeneous(False)
+        gridOne6.set_column_spacing(5)
+        gridOne6.set_row_spacing(10)
+        gridOne6.attach(interfaceBox6, 0, 0, 4, 1)
+        gridOne6.attach(radioBox6, 0, 1, 4, 1)
+        gridOne6.attach(ipInputBox6, 0, 2, 4, 1)
+        gridOne6.attach(ipEntryBox6, 0, 3, 4, 1)
+        gridOne6.attach(dnsEntryBox6, 0, 4, 4, 1)
+        gridOne6.attach(searchBox6, 0, 5, 4, 1)
+
+        ### Build Notebook
+
+        nb = Gtk.Notebook()
+        nb.set_margin_start(10)
+        nb.set_margin_end(10)
+        nb.set_margin_top(10)
+        nb.set_margin_bottom(10)
+        nb.set_tab_pos(2)
+
+        ### Build Save & Cancel Buttons
+
+        saveButton = Gtk.Button(label="Save...")
+        saveButton.set_margin_bottom(10)
+        saveButton.set_margin_start(10)
+        saveButton.connect("clicked",self.commit_pending_changes)
+        cancelButton = Gtk.Button(label="Cancel...")
+        cancelButton.set_margin_bottom(10)
+        cancelButton.connect("clicked", self.discard_pending_changes)
+        buttonsWindow = Gtk.Box(orientation=0, spacing=10)
+        buttonsWindow.pack_start(saveButton, False, False, 0)
+        buttonsWindow.pack_start(cancelButton, False, False, 0)
+
+        # Apply Tab 1 content and formatting to the notebook
+        nb.append_page(gridOne)
+        nb.set_tab_label_text(gridOne, "IPv4 Settings")
+
+        ## Apply Tab 2 content and formatting to the notebook
+        nb.append_page(gridOne6)
+        nb.set_tab_label_text(gridOne6, "IPv6 Settings")
+
+        ### Put all the widgets together into one window
+        mainBox = Gtk.Box(orientation=1, spacing=0)
+        mainBox.pack_start(nb, False, False, 0)
+        mainBox.pack_start(buttonsWindow, False, False, 0)
+        self.add(mainBox)
+
+        #### Run any functions that need to execute once at window creation
+        self.cbox_config_refresh(interfaceComboBox)
+
+
+    # Returns a list of valid configureable interfaces.
+    def enumerate_nics(self):
+        validnics = list()
+        confnotnics = ["lo", "fwe", "fwip", "tap", "plip", "pfsync", "pflog",
+        "tun", "sl", "faith", "ppp", "bridge", "ixautomation"]
+        confncard = 'ifconfig -l'
+        confnics = Popen(confncard, shell=True, stdout=PIPE, close_fds=True, universal_newlines=True)
+        confnetcard = confnics.stdout.readlines()[0].rstrip()
+        confnetcardarray = confnetcard.split(" ")
+        for confnic in confnetcardarray:
+            nicgeneralized = re.findall( "[a-zA-Z]+", confnic)
+            stringnicgeneralized = str(nicgeneralized).replace("'", "")
+            stringnicgeneralized = stringnicgeneralized.replace("[", "")
+            stringnicgeneralized = stringnicgeneralized.replace("]", "")
+            if stringnicgeneralized in confnotnics:
+                print(f"{confnic} was generalized to {nicgeneralized} and was found in the notnics list! "
+                "It will not be added to the valid configurable nic list in the netCardConfigWindow.enumerate_nics method.")
+            else:
+                validnics.append(confnic)
+        return(validnics)   
+    # Used with the combo box to refresh the UI of tab 1 with active settings for the newly selected active interface.
+    def cbox_config_refresh(self, widget):
+        refreshedInterface = widget.get_active()
+        refreshedInterfaceName = self.enumerate_nics()[refreshedInterface]
+        # actions here need to refresh the values on the first two tabs.
+        print(f"Refreshing settings to match current settings on {refreshedInterface}. "
+        f"Interface name is {refreshedInterfaceName}") 
+        self.get_current_interface_settings(refreshedInterfaceName)
+        self.display_current_interface_settings(widget)
+
+    def get_current_interface_settings(self, active_int):
+        # Need to accurately determine if a wlanN interface is using DHCP
+        aInt = str(active_int)
+
+        DHCPStatus = os.path.exists(f"/var/db/dhclient.leases.{aInt}")
+        print(f"dhcpstatus return value = {DHCPStatus}")
+        if DHCPStatus is False:
+            RCConf = open("/etc/rc.conf", "r").read()
+            DHCPSearch = re.findall(f"^ifconfig_{aInt}=\".*DHCP", RCConf)
+            print(f"DHCPSearch is {DHCPSearch} and the length is {len(DHCPSearch)}")
+            if len(DHCPSearch) < 1:
+                DHCPStatusOutput = "Manual"
+            else:
+                DHCPStatusOutput = "DHCP"
+        else:
+            DHCPStatusOutput = "DHCP"
+
+        print(f"DHCPStatusOutput = {DHCPStatusOutput}")
+
+        ifconfigaInt = f"ifconfig -f inet:dotted {aInt}"
+        ifconfigaIntOutput = subprocess.check_output(ifconfigaInt.split(" "))
+        aIntIP = re.findall('inet [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+',str(ifconfigaIntOutput))[0]
+        aIntIPStrip = str(aIntIP).replace("inet ", "")
+        aIntIPStrip = str(aIntIPStrip).replace("'", "")
+        aIntIPStrip = str(aIntIPStrip).replace("[", "")
+        aIntIPStrip = str(aIntIPStrip).replace("]", "")
+        aIntMask = re.findall('netmask [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+',str(ifconfigaIntOutput))[0]
+        aIntMaskStrip = str(aIntMask).replace("netmask ", "")
+        aIntMaskStrip = str(aIntMaskStrip).replace("'", "")
+        aIntMaskStrip = str(aIntMaskStrip).replace("[", "")
+        aIntMaskStrip = str(aIntMaskStrip).replace("]", "")
+        aIntBroadcast = re.findall('broadcast [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+',str(ifconfigaIntOutput))[0]
+        aIntBroadcastStrip = str(aIntBroadcast).replace("broadcast ", "")
+        aIntBroadcastStrip = str(aIntBroadcastStrip).replace("'", "")
+        aIntBroadcastStrip = str(aIntBroadcastStrip).replace("[", "")
+        aIntBroadcastStrip = str(aIntBroadcastStrip).replace("]", "")
+
+        if (DHCPStatusOutput == "DHCP"):
+            print(f"{DHCPStatusOutput}")
+            DHClientFileTest = os.path.exists(f"/var/db/dhclient.leases.{aInt}")
+            if DHClientFileTest == False:
+                print(f"dhclientfiletest = {DHClientFileTest}")
+                RenewDHCP = f"dhclient {aInt}"
+                RenewDHCPOutput = subprocess.check_output(RenewDHCP.split(" "))
+                sleep(5)
+                DHClientFileTest = os.path.exists(f"/var/db/dhclient.leases.{aInt}")
+                if DHClientFileTest == False:
+                    print(f"DHCP is enabled, but we're unable to read the lease file a /var/db/dhclient.leases.{aInt}")
+                    aIntGatewayStrip = ""
+            else:
+                DHCPLeaseInfo = open(f"/var/db/dhclient.leases.{aInt}", "r").read()
+                aIntGateway = re.findall("option routers [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+;", DHCPLeaseInfo)[0]
+                aIntGatewayStrip = str(aIntGateway).replace("option routers ", "")
+                aIntGatewayStrip = str(aIntGatewayStrip).replace("'","")
+                aIntGatewayStrip = str(aIntGatewayStrip).replace("[", "")
+                aIntGatewayStrip = str(aIntGatewayStrip).replace("]","")
+                aIntGatewayStrip = str(aIntGatewayStrip).replace(";","")
+
+                aIntDHCP = f"resolvconf -l {aInt}.dhcp"  
+                aIntDHCPResults = subprocess.check_output(aIntDHCP.split(" "))  
+                DNSMatch = re.findall('nameserver [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' ,str(aIntDHCPResults))
+
+                SearchDomainMatch = re.findall('search [a-zA-Z.]*', str(aIntDHCPResults))
+                if len(SearchDomainMatch) < 1:
+                    RCConfDomainSearch = open('/etc/resolv.conf', 'r').read()
+                    SearchDomainMatch = re.findall('domain (.*)', RCConfDomainSearch)
+                SearchDomainMatchStrip = str(SearchDomainMatch).replace("domain ","")
+                SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("'", "")
+                SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("[", "")
+                SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("]", "")
+
+        else:
+            RRConfGatewaySearch = open('/etc/rc.conf', 'r').read()
+            RRConfGatewayResults = re.findall('defaultrouter="[0-9]+\.[0-9]+\.[0-9]+\.[0-9]"', RRConfGatewaySearch)
+            aIntGatewayStrip = str(RRConfGatewayResults).replace('defaultrouter="', "")
+            aIntGatewayStrip = str(aIntGatewayStrip).replace('"', "")
+            aIntGatewayStrip = str(aIntGatewayStrip).replace('[', "")
+            aIntGatewayStrip = str(aIntGatewayStrip).replace(']',"")
+            aIntGatewayStrip = str(aIntGatewayStrip).replace("'","")
+
+            DefaultDNSServers = open('/etc/resolv.conf').read()
+            DNSMatch = re.findall('nameserver [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' ,str(DefaultDNSServers))
+
+            RCConfDomainSearch = open('/etc/resolv.conf', 'r').read()
+            SearchDomainMatch = re.findall('domain (.*)', RCConfDomainSearch)
+            SearchDomainMatchStrip = str(SearchDomainMatch).replace("domain ","")
+            SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("'", "")
+            SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("[", "")
+            SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("]", "")
+
+
+        
+        #currentSettings = {}
+        currentSettings["Active Interface"] = active_int
+        currentSettings["Address Assignment Method"] = DHCPStatusOutput
+        currentSettings["Interface IP"] = aIntIPStrip
+        currentSettings["Interface Subnet Mask"] = aIntMaskStrip
+        currentSettings["Broadcast Address"] = aIntBroadcastStrip
+        currentSettings["Default Gateway"] = aIntGatewayStrip
+        #[currentSettings.append(str(DNSServer).replace("nameserver ", "")) for DNSServer in DNSMatch]
+        currentSettings["Search Domain"] = SearchDomainMatchStrip
+        i = 1
+        while i <= len(DNSMatch):
+            currentSettings[f"DNS Server {i}"] = str(DNSMatch[(i-1)]).replace("nameserver ", "")
+            i = i + 1
+
+        print(f"Current settings are below:")
+        print(f"{currentSettings}")
+
+    def display_current_interface_settings(self, widget):
+        print(f"display_current_interface_settings_go_here")
+
+    def commit_pending_changes(self, widget):
+        print(f"commit_pending_changes_goes_here")
+
+    def discard_pending_changes(self, widget):
+        print(f"discard_pending_changes_goes_here")
+
+
+
+
+def openNetCardConfigwindow(default_int):
+    win = netCardConfigWindow(default_int)
+    win.connect("destroy", Gtk.main_quit)
+    win.show_all()
+    Gtk.main()
+
+if "-auto" in sys.argv:
+    autoConfigure()
+elif "-configure" in sys.argv:
+    confloc = sys.argv.index('-configure')
+    intloc = confloc + 1
+    passedint = sys.argv[intloc]
+    openNetCardConfigwindow(passedint)
+else:
+    print(f"No acceptable flags were passed to the function.")
