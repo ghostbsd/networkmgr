@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.6
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import os
@@ -15,7 +15,7 @@ from subprocess import run
 # ,,python setup.py build_i18n -m''
 
 # silence pyflakes, __VERSION__ is properly assigned below...
-__VERSION__ = '3.1'
+__VERSION__ = '3.7'
 # for line in file('networkmgr').readlines():
 #    if (line.startswith('__VERSION__')):
 #        exec(line.strip())
@@ -31,21 +31,19 @@ def datafilelist(installbase, sourcebase):
         datafileList.append((root.replace(sourcebase, installbase), fileList))
     return datafileList
 
+prefix=sys.prefix
 
-# '{prefix}/share/man/man1'.format(prefix=sys.prefix), glob('data/*.1')),
+# '{prefix}/share/man/man1', glob('data/*.1')),
+
 data_files = [
-    ('{prefix}/etc/xdg/autostart'.format(prefix=sys.prefix),
-        ['src/networkmgr.desktop']),
-    ('{prefix}/share/networkmgr'.format(prefix=sys.prefix),
-        ['src/authentication.py']),
-    ('{prefix}/share/networkmgr'.format(prefix=sys.prefix),
-        ['src/net_api.py']),
-    ('{prefix}/share/networkmgr'.format(prefix=sys.prefix),
-        ['src/trayicon.py']),
+    (f'{prefix}/etc/xdg/autostart', ['src/networkmgr.desktop']),
+    (f'{prefix}/share/networkmgr', ['src/authentication.py']),
+    (f'{prefix}/share/networkmgr', ['src/net_api.py']),
+    (f'{prefix}/share/networkmgr', ['src/trayicon.py']),
+    (f'{prefix}/etc/sudoers.d', ['src/sudoers.d/networkmgr'])
 ]
 
-data_files.extend(datafilelist('{prefix}/share/icons/hicolor'.format(prefix=sys.prefix),
-                  'src/icons'))
+data_files.extend(datafilelist(f'{prefix}/share/icons/hicolor', 'src/icons'))
 
 # cmdclass ={
 #             "build" : DistUtilsExtra.command.build_extra.build_extra,
