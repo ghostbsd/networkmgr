@@ -25,18 +25,4 @@ If NetworkMgr installed by package deinstall networkmrg first before installing 
 
 `python3.6 setup.py install`
 
-Make sure that /usr/local/etc/doas.conf exists.  If not, create it.
-
-`touch /usr/local/etc/doas.conf`
-
-Make sure that doas.conf has something similar to this:
-```
-permit nopass keepenv root
-permit :wheel
-permit nopass keepenv :wheel cmd netcardmgr
-permit nopass keepenv :wheel cmd ifconfig
-permit nopass keepenv :wheel cmd service
-
-```
-
 When rebooting NetworkMgr should automatically start if the desktop supports xdg.  Make sure that the user using NetworkMgr is in the wheel group.
