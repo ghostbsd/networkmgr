@@ -35,6 +35,8 @@ venv/*
 # Pycharm stuff
 .idea/*
 
+# VSCode
+.vscode/*
 
 # Translations
 *.mo
