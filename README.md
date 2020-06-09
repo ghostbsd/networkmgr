@@ -23,6 +23,6 @@ If NetworkMgr installed by package deinstall networkmrg first before installing 
 
 `pkg delete networkmgr`
 
-`python3.6 setup.py install`
+`python3.7 setup.py install`
 
 When rebooting NetworkMgr should automatically start if the desktop supports xdg.  Make sure that the user using NetworkMgr is in the wheel group.
