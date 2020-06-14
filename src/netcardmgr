@@ -27,7 +27,7 @@ notnics = [
     "sl",
     "faith",
     "ppp",
-    "brige",
+    "bridge",
     "ixautomation",
     "vm-ixautomation",
     "wg"
