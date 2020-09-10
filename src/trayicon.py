@@ -12,7 +12,7 @@ path.append("/usr/local/share/networkmgr")
 from net_api import stopnetworkcard, isanewnetworkcardinstall
 from net_api import startnetworkcard, wifiDisconnection
 from net_api import stopallnetwork, startallnetwork, connectToSsid
-from net_api import disableWifi, enableWifi, start_wifi
+from net_api import disableWifi, enableWifi
 from net_api import connectionStatus, networkdictionary, openrc
 from authentication import Authentication, Open_Wpa_Supplicant
 

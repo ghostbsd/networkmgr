@@ -78,8 +78,7 @@ class Authentication():
 class Open_Wpa_Supplicant():
     def __init__(self, ssid, bssid, wificard):
         ws = '\nnetwork={'
-        ws += '\n ssid="%s"' % ssid
-        ws += '\n bssid=%s' % bssid
+        ws += f'\n ssid={ssid}'
         ws += '\n key_mgmt=NONE\n}'
         wsf = open(wpa_supplican, 'a')
         wsf.writelines(ws)
@@ -89,28 +88,29 @@ class Open_Wpa_Supplicant():
 
 class Lock_Wpa_Supplicant():
     def __init__(self, ssid, bssid, pwd, wificard):
+
         if 'RSN' in scanWifiBssid(bssid, wificard):
             # /etc/wpa_supplicant.conf written by networkmgr
             ws = '\nnetwork={'
-            ws += '\n ssid="%s"' % ssid
-            ws += '\n bssid=%s' % bssid
+            ws += f'\n ssid="{ssid}"'
             ws += '\n key_mgmt=WPA-PSK'
             ws += '\n proto=RSN'
-            ws += '\n psk="%s"\n}' % pwd
+            ws += f'\n psk="{pwd}"\n'
+            ws += '}'
         elif 'WPA' in scanWifiBssid(bssid, wificard):
             ws = '\nnetwork={'
-            ws += '\n ssid="%s"' % ssid
-            ws += '\n bssid=%s' % bssid
+            ws += f'\n ssid="{ssid}"'
             ws += '\n key_mgmt=WPA-PSK'
             ws += '\n proto=WPA'
-            ws += '\n psk="%s"\n}' % pwd
+            ws += f'\n psk="{pwd}"\n'
+            ws += '}'
         else:
             ws = '\nnetwork={'
-            ws += '\n ssid="%s"' % ssid
-            ws += '\n bssid=%s' % bssid
+            ws += f'\n ssid="{ssid}"'
             ws += '\n key_mgmt=NONE'
             ws += '\n wep_tx_keyidx=0'
-            ws += '\n wep_key0=%s\n}' % pwd
+            ws += f'\n wep_key0={pwd}\n'
+            ws += '}'
         wsf = open(wpa_supplican, 'a')
         wsf.writelines(ws)
         wsf.close()

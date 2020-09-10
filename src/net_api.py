@@ -346,23 +346,24 @@ def enableWifi(wificard):
     os.system(f'ifconfig {wificard} up scan')
     sleep(1)
 
+
 # work around of iwm on FreeBSD 12.0
 def start_wifi():
-   crd = Popen(ncard, shell=True, stdout=PIPE, universal_newlines=True)
-   for nic in crd.stdout.readlines()[0].rstrip().split():
-       print(nic)
-       if 'wlan' in nic:
-           os.system(f'wpa_supplicant -B -i {nic} -c /etc/wpa_supplicant.conf')
-           sleep(0.5)
-           os.system(f'ifconfig {nic} up')
-           sleep(0.5)
-           os.system(f'ifconfig {nic} scan')
-           sleep(2)
-           os.system(f'dhclient {nic}')
+    crd = Popen(ncard, shell=True, stdout=PIPE, universal_newlines=True)
+    for nic in crd.stdout.readlines()[0].rstrip().split():
+        print(nic)
+        if 'wlan' in nic:
+            os.system(f'wpa_supplicant -B -i {nic} -c /etc/wpa_supplicant.conf')
+            sleep(0.5)
+            os.system(f'ifconfig {nic} up')
+            sleep(0.5)
+            os.system(f'ifconfig {nic} scan')
+            sleep(2)
+            os.system(f'dhclient {nic}')
 
 
 def connectToSsid(name, wificard):
-    os.system(f'killall wpa_supplicant')
+    os.system('killall wpa_supplicant')
     sleep(0.5)
     os.system(f"ifconfig {wificard} ssid '{name}'")
     sleep(0.5)
@@ -376,10 +377,11 @@ def connectToSsid(name, wificard):
         os.system(f'dhclient {wificard}')
     sleep(0.5)
 
-def subnetHexToDec( ifconfigstring ):
+
+def subnetHexToDec(ifconfigstring):
     snethex = re.search('0x.{8}', ifconfigstring).group(0)[2:]
     snethexlist = re.findall('..', snethex)
     snetdeclist = [int(li, 16) for li in snethexlist]
     snetdec = ".".join(str(li) for li in snetdeclist)
-    outputline = ifconfigstring.replace(re.search('0x.{8}',ifconfigstring).group(0),snetdec)
+    outputline = ifconfigstring.replace(re.search('0x.{8}', ifconfigstring).group(0), snetdec)
     return outputline
