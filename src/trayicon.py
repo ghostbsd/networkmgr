@@ -9,7 +9,7 @@ from sys import path
 import locale
 import os
 path.append("/usr/local/share/networkmgr")
-from net_api import stopnetworkcard, isanewnetworkcardinstall
+from net_api import stopnetworkcard, network_card_to_add
 from net_api import startnetworkcard, wifiDisconnection
 from net_api import stopallnetwork, startallnetwork, connectToSsid
 from net_api import disableWifi, enableWifi
@@ -292,7 +292,7 @@ class trayIcon(object):
 
     def checkfornewcard(self):
         if os.path.exists("/usr/local/bin/netcardmgr"):
-            if isanewnetworkcardinstall() is True:
+            if network_card_to_add() is True:
                 os.system("netcardmgr")
 
     def updatetrayicon(self, defaultdev, card_type):

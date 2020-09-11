@@ -82,42 +82,35 @@ def wired_list():
     return list(set(card_list).difference(bad_list))
 
 
-def ifwificardadded():
-    wifis = 'sysctl -in net.wlan.devices'
-    wifinics = Popen(wifis, shell=True, stdout=PIPE, universal_newlines=True)
-    wifiscards = wifinics.stdout.readlines()
-    answer = False
-    if len(wifiscards) != 0:
-        ifwifi = wifiscards[0].rstrip()
-        rc_conf = open('/etc/rc.conf', 'r').read()
-        wificardlist = ifwifi.split()
-        for wfcard in wificardlist:
-            if 'wlans_%s=' % wfcard not in rc_conf:
-                answer = True
-                break
-    return answer
-
-
-def ifwiredcardadded():
-    cardlist = wired_list()
-    answer = False
-    if len(cardlist) != 0:
-        rc_conf = open('/etc/rc.conf', 'r').read()
-        for card in cardlist:
-            if 'ifconfig_%s=' % card not in rc_conf:
-                answer = True
-                break
-    return answer
-
-
-def isanewnetworkcardinstall():
-    if ifwificardadded() is True or ifwiredcardadded() is True:
+def wifi_card_added():
+    cmd = 'sysctl -in net.wlan.devices'
+    sysctl_output = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
+    wifi_cards = sysctl_output.stdout.read().strip().split()
+    rc_conf = open('/etc/rc.conf', 'r').read()
+    rc_conf_list = re.split('_|=|\n', rc_conf)
+    if set(wifi_cards).difference(set(rc_conf_list)):
         return True
     else:
         return False
 
 
-def ifcardisonline(netcard):
+def wired_card_added():
+    rc_conf = open('/etc/rc.conf', 'r').read()
+    rc_conf_list = re.split('_|=|\n', rc_conf)
+    if set(wired_list()).difference(set(rc_conf_list)):
+        return True
+    else:
+        return False
+
+
+def network_card_to_add():
+    if wifi_card_added() is True or wired_card_added() is True:
+        return True
+    else:
+        return False
+
+
+def card_online(netcard):
     lan = Popen('ifconfig ' + netcard, shell=True, stdout=PIPE,
                 universal_newlines=True)
     if 'inet ' in lan.stdout.read():
@@ -265,7 +258,7 @@ def networkdictionary():
                 'info': connectioninfo
             }
         else:
-            if ifcardisonline(card) is True:
+            if card_online(card) is True:
                 connectionstat = {"connection": "Connected"}
             elif ifcardconnected(card) is True:
                 connectionstat = {"connection": "Disconnected"}
