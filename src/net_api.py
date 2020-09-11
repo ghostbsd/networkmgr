@@ -33,10 +33,9 @@ from sys import path
 import os
 import re
 from time import sleep
-
 path.append("/usr/local/share/networkmgr")
-ncard = 'ifconfig -l'
-notnics = [
+
+not_nics = [
     "lo",
     "fwe",
     "fwip",
@@ -76,14 +75,11 @@ def scanWifiBssid(bssid, wificard):
 
 
 def wired_list():
-    crd = Popen(ncard, shell=True, stdout=PIPE, universal_newlines=True)
-    wiredlist = []
-    for wiredcn in crd.stdout.readlines()[0].rstrip().split(' '):
-        wnc = wiredcn
-        wcardn = re.sub(r'\d+', '', wiredcn)
-        if wcardn not in notnics:
-            wiredlist.append(wnc)
-    return wiredlist
+    crd = Popen('ifconfig -l', shell=True, stdout=PIPE, universal_newlines=True)
+    card_list = crd.stdout.read().strip().split()
+    re_compile = re.compile(("|".join(not_nics + ['wlan'])))
+    bad_list = list(filter(re_compile.match, card_list))
+    return list(set(card_list).difference(bad_list))
 
 
 def ifwificardadded():
@@ -180,14 +176,11 @@ def get_bssid(wificard):
 
 
 def networklist():
-    crd = Popen(ncard, shell=True, stdout=PIPE, universal_newlines=True)
-    devicelist = []
-    for deviced in crd.stdout.readlines()[0].rstrip().split(' '):
-        ndev = deviced
-        card = re.sub(r'\d+', '', deviced)
-        if card not in notnics:
-            devicelist.append(ndev)
-    return devicelist
+    crd = Popen('ifconfig -l', shell=True, stdout=PIPE, universal_newlines=True)
+    card_list = crd.stdout.read().strip().split()
+    re_compile = re.compile(("|".join(not_nics)))
+    bad_list = list(filter(re_compile.match, card_list))
+    return list(set(card_list).difference(bad_list))
 
 
 def ifcardconnected(netcard):
@@ -345,21 +338,6 @@ def enableWifi(wificard):
     os.system(f'ifconfig {wificard} up')
     os.system(f'ifconfig {wificard} up scan')
     sleep(1)
-
-
-# work around of iwm on FreeBSD 12.0
-def start_wifi():
-    crd = Popen(ncard, shell=True, stdout=PIPE, universal_newlines=True)
-    for nic in crd.stdout.readlines()[0].rstrip().split():
-        print(nic)
-        if 'wlan' in nic:
-            os.system(f'wpa_supplicant -B -i {nic} -c /etc/wpa_supplicant.conf')
-            sleep(0.5)
-            os.system(f'ifconfig {nic} up')
-            sleep(0.5)
-            os.system(f'ifconfig {nic} scan')
-            sleep(2)
-            os.system(f'dhclient {nic}')
 
 
 def connectToSsid(name, wificard):
