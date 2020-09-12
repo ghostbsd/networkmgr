@@ -178,7 +178,6 @@ class trayIcon(object):
         else:
             Open_Wpa_Supplicant(ssid, wificard)
         self.updateinfo()
-        self.ifruning = False
 
     def menu_click_lock(self, widget, ssid_info, wificard):
         if f'"{ssid_info[0]}"' in open('/etc/wpa_supplicant.conf').read():
@@ -186,42 +185,34 @@ class trayIcon(object):
         else:
             Authentication(ssid_info, wificard)
         self.updateinfo()
-        self.ifruning = False
 
     def disconnectwifi(self, widget, wificard):
         wifiDisconnection(wificard)
         self.updateinfo()
-        self.ifruning = False
 
     def disable_Wifi(self, widget, wificard):
         disableWifi(wificard)
         self.updateinfo()
-        self.ifruning = False
 
     def enable_Wifi(self, widget, wificard):
         enableWifi(wificard)
         self.updateinfo()
-        self.ifruning = False
 
     def connectcard(self, widget, netcard):
         startnetworkcard(netcard)
         self.updateinfo()
-        self.ifruning = False
 
     def disconnectcard(self, widget, netcard):
         stopnetworkcard(netcard)
         self.updateinfo()
-        self.ifruning = False
 
     def closeNetwork(self, widget):
         stopallnetwork()
         self.updateinfo()
-        self.ifruning = False
 
     def openNetwork(self, widget):
         startallnetwork()
         self.updateinfo()
-        self.ifruning = False
 
     def openwifi(self, bar):
         img = Gtk.Image()
@@ -259,8 +250,8 @@ class trayIcon(object):
             self.cardinfo = networkdictionary()
             defaultcard = self.cardinfo['default']
             default_type = self.network_type(defaultcard)
-            sleep(1)
             GLib.idle_add(self.updatetray, defaultcard, default_type)
+            self.ifruning = False
 
     def updatetray(self, defaultdev, default_type):
         self.updatetrayicon(defaultdev, default_type)
@@ -270,7 +261,6 @@ class trayIcon(object):
         while True:
             self.checkfornewcard()
             self.updateinfo()
-            self.ifruning = False
             sleep(20)
 
     def network_type(self, defaultdev):

@@ -284,40 +284,33 @@ def connectionStatus(card):
 
 def stopallnetwork():
     os.system(f'{rc}service {network} stop')
-    sleep(1)
 
 
 def startallnetwork():
     os.system(f'{rc}service {network} start')
-    sleep(1)
 
 
 def stopnetworkcard(netcard):
     os.system(f'ifconfig {netcard} down')
-    sleep(1)
 
 
 def startnetworkcard(netcard):
     os.system(f'ifconfig {netcard} up')
-    sleep(1)
 
 
 def wifiDisconnection(wificard):
     os.system(f'ifconfig {wificard} down')
     os.system(f"ifconfig {wificard} ssid 'none'")
     os.system(f'ifconfig {wificard} up')
-    sleep(1)
 
 
 def disableWifi(wificard):
     os.system(f'ifconfig {wificard} down')
-    sleep(1)
 
 
 def enableWifi(wificard):
     os.system(f'ifconfig {wificard} up')
     os.system(f'ifconfig {wificard} up scan')
-    sleep(1)
 
 
 def connectToSsid(name, wificard):
