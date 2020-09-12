@@ -101,8 +101,7 @@ class trayIcon(object):
                     self.menu.append(diswifi)
                 else:
                     ssid = cards[netcard]['state']["ssid"]
-                    bssid = cards[netcard]['state']["bssid"]
-                    bar = cards[netcard]['info'][bssid][4]
+                    bar = cards[netcard]['info'][ssid][4]
                     wc_title = Gtk.MenuItem("WiFi %s Connected" % wifinum)
                     wc_title.set_sensitive(False)
                     self.menu.append(wc_title)
@@ -114,7 +113,7 @@ class trayIcon(object):
                                             netcard)
                     self.menu.append(connection_item)
                     self.menu.append(disconnect_item)
-                    self.wifiListMenu(netcard, bssid, True, cards)
+                    self.wifiListMenu(netcard, ssid, True, cards)
                     diswifi = Gtk.MenuItem("Disable Wifi %s" % wifinum)
                     diswifi.connect("activate", self.disable_Wifi, netcard)
                     self.menu.append(diswifi)
@@ -138,54 +137,54 @@ class trayIcon(object):
         self.menu.show_all()
         return self.menu
 
-    def wifiListMenu(self, wificard, cbssid, passes, cards):
+    def wifiListMenu(self, wificard, cssid, passes, cards):
         wiconncmenu = Gtk.Menu()
         avconnmenu = Gtk.MenuItem("Available Connections")
         avconnmenu.set_submenu(wiconncmenu)
-        for bssid in cards[wificard]['info']:
-            ssid = cards[wificard]['info'][bssid][0]
-            sn = cards[wificard]['info'][bssid][4]
-            caps = cards[wificard]['info'][bssid][6]
+        for ssid in cards[wificard]['info']:
+            ssid = cards[wificard]['info'][ssid][0]
+            sn = cards[wificard]['info'][ssid][4]
+            caps = cards[wificard]['info'][ssid][6]
             if passes is True:
-                if cbssid != bssid:
+                if cssid != ssid:
                     menu_item = Gtk.ImageMenuItem(ssid)
                     if caps == 'E' or caps == 'ES':
                         menu_item.set_image(self.openwifi(sn))
                         menu_item.connect("activate", self.menu_click_open,
-                                          ssid, bssid, wificard)
+                                          ssid, wificard)
                     else:
                         menu_item.set_image(self.securewifi(sn))
                         menu_item.connect("activate", self.menu_click_lock,
-                                          ssid, bssid, wificard)
+                                          ssid, wificard)
                     menu_item.show()
                     wiconncmenu.append(menu_item)
             else:
                 menu_item = Gtk.ImageMenuItem(ssid)
                 if caps == 'E' or caps == 'ES':
                     menu_item.set_image(self.openwifi(sn))
-                    menu_item.connect("activate", self.menu_click_open, ssid,
-                                      bssid, wificard)
+                    menu_item.connect("activate", self.menu_click_open,
+                                      ssid, wificard)
                 else:
                     menu_item.set_image(self.securewifi(sn))
-                    menu_item.connect("activate", self.menu_click_lock, ssid,
-                                      bssid, wificard)
+                    menu_item.connect("activate", self.menu_click_lock,
+                                      ssid, wificard)
                 menu_item.show()
                 wiconncmenu.append(menu_item)
         self.menu.append(avconnmenu)
 
-    def menu_click_open(self, widget, ssid, bssid, wificard):
-        if bssid in open(wpa_supplican).read():
+    def menu_click_open(self, widget, ssid, wificard):
+        if ssid in open(wpa_supplican).read():
             connectToSsid(ssid, wificard)
         else:
-            Open_Wpa_Supplicant(ssid, bssid, wificard)
+            Open_Wpa_Supplicant(ssid, wificard)
         self.updateinfo()
         self.ifruning = False
 
-    def menu_click_lock(self, widget, ssid, bssid, wificard):
-        if bssid in open(wpa_supplican).read():
+    def menu_click_lock(self, widget, ssid, wificard):
+        if ssid in open(wpa_supplican).read():
             connectToSsid(ssid, wificard)
         else:
-            Authentication(ssid, bssid, wificard)
+            Authentication(ssid, wificard)
         self.updateinfo()
         self.ifruning = False
 
@@ -285,8 +284,8 @@ class trayIcon(object):
     def default_wifi_state(self, defaultdev):
         info = self.cardinfo['cards'][defaultdev]
         if info['state']["connection"] == "Connected":
-            bssid = info['state']["bssid"]
-            return info['info'][bssid][4]
+            ssid = info['state']["ssid"]
+            return info['info'][ssid][4]
         else:
             return None
 

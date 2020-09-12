@@ -3,7 +3,7 @@
 import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk
-from net_api import scanWifiBssid, connectToSsid
+from net_api import connectToSsid
 
 wpa_supplican = "/etc/wpa_supplicant.conf"
 
@@ -25,7 +25,7 @@ class Authentication():
 
     def add_to_wpa_supplicant(self, widget):
         pwd = self.password.get_text()
-        Lock_Wpa_Supplicant(self.ssid, self.bssid, pwd, self.wificard)
+        Lock_Wpa_Supplicant(self.ssid, pwd, self.wificard)
         self.window.hide()
 
     def on_check(self, widget):
@@ -34,10 +34,9 @@ class Authentication():
         else:
             self.password.set_visibility(False)
 
-    def __init__(self, ssid, bssid, wificard):
+    def __init__(self, ssid, wificard):
         self.wificard = wificard
         self.ssid = ssid
-        self.bssid = bssid
         self.window = Gtk.Window()
         self.window.set_title("wi-Fi Network Authetification Required")
         self.window.set_border_width(0)
@@ -76,7 +75,7 @@ class Authentication():
 
 
 class Open_Wpa_Supplicant():
-    def __init__(self, ssid, bssid, wificard):
+    def __init__(self, ssid, wificard):
         ws = '\nnetwork={'
         ws += f'\n ssid={ssid}'
         ws += '\n key_mgmt=NONE\n}'
@@ -87,9 +86,9 @@ class Open_Wpa_Supplicant():
 
 
 class Lock_Wpa_Supplicant():
-    def __init__(self, ssid, bssid, pwd, wificard):
+    def __init__(self, ssid, pwd, wificard):
 
-        if 'RSN' in scanWifiBssid(bssid, wificard):
+        if 'RSN' in wificard[-1]:
             # /etc/wpa_supplicant.conf written by networkmgr
             ws = '\nnetwork={'
             ws += f'\n ssid="{ssid}"'
@@ -97,7 +96,7 @@ class Lock_Wpa_Supplicant():
             ws += '\n proto=RSN'
             ws += f'\n psk="{pwd}"\n'
             ws += '}'
-        elif 'WPA' in scanWifiBssid(bssid, wificard):
+        elif 'WPA' in wificard[-1]:
             ws = '\nnetwork={'
             ws += f'\n ssid="{ssid}"'
             ws += '\n key_mgmt=WPA-PSK'

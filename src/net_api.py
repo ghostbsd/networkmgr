@@ -66,14 +66,6 @@ else:
     network = 'netif'
 
 
-def scanWifiBssid(bssid, wificard):
-    grepListScanv = "ifconfig -v %s list scan | grep -a %s" % (wificard, bssid)
-    wifi = Popen(grepListScanv, shell=True, stdout=PIPE,
-                 universal_newlines=True)
-    info = wifi.stdout.readlines()[0].rstrip()
-    return info
-
-
 def wired_list():
     crd = Popen('ifconfig -l', shell=True, stdout=PIPE, universal_newlines=True)
     card_list = crd.stdout.read().strip().split()
@@ -162,12 +154,6 @@ def get_ssid(wificard):
     return out
 
 
-def get_bssid(wificard):
-    wlan = Popen('ifconfig -v %s | grep bssid' % wificard,
-                 shell=True, stdout=PIPE, universal_newlines=True)
-    return wlan.stdout.readlines()[0].rstrip().split()[-1]
-
-
 def networklist():
     crd = Popen('ifconfig -l', shell=True, stdout=PIPE, universal_newlines=True)
     card_list = crd.stdout.read().strip().split()
@@ -216,42 +202,43 @@ def networkdictionary():
     cards = {}
     for card in nlist:
         if 'wlan' in card:
-            scanv = "ifconfig -v %s list scan | grep -va BSSID" % card
+            scanv = f"ifconfig {card} list scan | grep -va BSSID"
             wifi = Popen(scanv, shell=True, stdout=PIPE,
                          universal_newlines=True)
             connectioninfo = {}
             for line in wifi.stdout:
-                if line[0] == " ":
-                    ssid = "Unknown"
-                    newline = line[:83]
-                else:
-                    ssid = line[:33].strip()
-                    newline = line[:83].strip()
-                info = newline[33:].split(' ')
-                info = list(filter(None, info))
-                sn = info[3]
-                bssid = info[0]
-                info[3] = barpercent(sn)
+                # don't sort empty ssid
+                # Window, MacOS and Linux does not show does
+                if line[:5] == "     ":
+                    continue
+                ssid = line[:33].strip()
+                info = line[:83][33:].strip().split()
+                percentage = barpercent(info[3])
+                # if ssid exist and percentage is higher keep it
+                # else add the new one if percentage is higher
+                if ssid in connectioninfo:
+                    if connectioninfo[ssid][4] > percentage:
+                        continue
+                info[3] = percentage
                 info.insert(0, ssid)
-                connectioninfo[bssid] = info
+                # append left over
+                info.append(line[83:].strip())
+                connectioninfo[ssid] = info
             if ifWlanDisable(card) is True:
                 connectionstat = {
                     "connection": "Disabled",
                     "ssid": None,
-                    "bssid": None
                 }
             elif ifStatue(card) is False:
                 connectionstat = {
                     "connection": "Disconnected",
-                    "ssid": None, "bssid": None
+                    "ssid": None,
                 }
             else:
                 ssid = get_ssid(card)
-                bssid = get_bssid(card)
                 connectionstat = {
                     "connection": "Connected",
                     "ssid": ssid,
-                    "bssid": bssid
                 }
             seconddictionary = {
                 'state': connectionstat,
