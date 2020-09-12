@@ -19,7 +19,6 @@ from authentication import Authentication, Open_Wpa_Supplicant
 encoding = locale.getpreferredencoding()
 threadBreak = False
 GObject.threads_init()
-wpa_supplican = "/etc/wpa_supplicant.conf"
 
 
 class trayIcon(object):
@@ -174,7 +173,7 @@ class trayIcon(object):
         self.menu.append(avconnmenu)
 
     def menu_click_open(self, widget, ssid, wificard):
-        if f'"{ssid}"' in open(wpa_supplican).read():
+        if f'"{ssid}"' in open("/etc/wpa_supplicant.conf").read():
             connectToSsid(ssid, wificard)
         else:
             Open_Wpa_Supplicant(ssid, wificard)
@@ -182,7 +181,7 @@ class trayIcon(object):
         self.ifruning = False
 
     def menu_click_lock(self, widget, ssid_info, wificard):
-        if f'"{ssid_info[0]}"' in open(wpa_supplican).read():
+        if f'"{ssid_info[0]}"' in open('/etc/wpa_supplicant.conf').read():
             connectToSsid(ssid_info[0], wificard)
         else:
             Authentication(ssid_info, wificard)
