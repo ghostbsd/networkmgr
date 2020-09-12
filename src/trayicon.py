@@ -142,6 +142,7 @@ class trayIcon(object):
         avconnmenu = Gtk.MenuItem("Available Connections")
         avconnmenu.set_submenu(wiconncmenu)
         for ssid in cards[wificard]['info']:
+            ssid_info = cards[wificard]['info'][ssid]
             ssid = cards[wificard]['info'][ssid][0]
             sn = cards[wificard]['info'][ssid][4]
             caps = cards[wificard]['info'][ssid][6]
@@ -155,7 +156,7 @@ class trayIcon(object):
                     else:
                         menu_item.set_image(self.securewifi(sn))
                         menu_item.connect("activate", self.menu_click_lock,
-                                          ssid, wificard)
+                                          ssid_info, wificard)
                     menu_item.show()
                     wiconncmenu.append(menu_item)
             else:
@@ -167,7 +168,7 @@ class trayIcon(object):
                 else:
                     menu_item.set_image(self.securewifi(sn))
                     menu_item.connect("activate", self.menu_click_lock,
-                                      ssid, wificard)
+                                      ssid_info, wificard)
                 menu_item.show()
                 wiconncmenu.append(menu_item)
         self.menu.append(avconnmenu)
@@ -180,11 +181,11 @@ class trayIcon(object):
         self.updateinfo()
         self.ifruning = False
 
-    def menu_click_lock(self, widget, ssid, wificard):
-        if f'"{ssid}"' in open(wpa_supplican).read():
-            connectToSsid(ssid, wificard)
+    def menu_click_lock(self, widget, ssid_info, wificard):
+        if f'"{ssid_info[0]}"' in open(wpa_supplican).read():
+            connectToSsid(ssid_info[0], wificard)
         else:
-            Authentication(ssid, wificard)
+            Authentication(ssid_info, wificard)
         self.updateinfo()
         self.ifruning = False
 

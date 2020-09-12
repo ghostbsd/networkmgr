@@ -25,7 +25,7 @@ class Authentication():
 
     def add_to_wpa_supplicant(self, widget):
         pwd = self.password.get_text()
-        Lock_Wpa_Supplicant(self.ssid, pwd, self.wificard)
+        Lock_Wpa_Supplicant(self.ssid, self.ssid_info, pwd, self.wificard)
         self.window.hide()
 
     def on_check(self, widget):
@@ -34,9 +34,10 @@ class Authentication():
         else:
             self.password.set_visibility(False)
 
-    def __init__(self, ssid, wificard):
+    def __init__(self, ssid_info, wificard):
         self.wificard = wificard
-        self.ssid = ssid
+        self.ssid = ssid_info[0]
+        self.ssid_info = ssid_info
         self.window = Gtk.Window()
         self.window.set_title("wi-Fi Network Authetification Required")
         self.window.set_border_width(0)
@@ -51,7 +52,7 @@ class Authentication():
         box1.pack_start(box2, True, True, 0)
         box2.show()
         # Creating MBR or GPT drive
-        title = "Authetification required by %s Wi-Fi Network" % ssid
+        title = "Authetification required by %s Wi-Fi Network" % self.ssid
         label = Gtk.Label("<b><span size='large'>%s</span></b>" % title)
         label.set_use_markup(True)
         pwd_label = Gtk.Label("Password:")
@@ -86,9 +87,9 @@ class Open_Wpa_Supplicant():
 
 
 class Lock_Wpa_Supplicant():
-    def __init__(self, ssid, pwd, wificard):
+    def __init__(self, ssid, ssid_info, pwd, wificard):
 
-        if 'RSN' in wificard[-1]:
+        if 'RSN' in ssid_info[-1]:
             # /etc/wpa_supplicant.conf written by networkmgr
             ws = '\nnetwork={'
             ws += f'\n ssid="{ssid}"'
@@ -96,7 +97,7 @@ class Lock_Wpa_Supplicant():
             ws += '\n proto=RSN'
             ws += f'\n psk="{pwd}"\n'
             ws += '}'
-        elif 'WPA' in wificard[-1]:
+        elif 'WPA' in ssid_info[-1]:
             ws = '\nnetwork={'
             ws += f'\n ssid="{ssid}"'
             ws += '\n key_mgmt=WPA-PSK'
