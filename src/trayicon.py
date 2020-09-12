@@ -173,7 +173,7 @@ class trayIcon(object):
         self.menu.append(avconnmenu)
 
     def menu_click_open(self, widget, ssid, wificard):
-        if ssid in open(wpa_supplican).read():
+        if f'"{ssid}"' in open(wpa_supplican).read():
             connectToSsid(ssid, wificard)
         else:
             Open_Wpa_Supplicant(ssid, wificard)
@@ -181,7 +181,7 @@ class trayIcon(object):
         self.ifruning = False
 
     def menu_click_lock(self, widget, ssid, wificard):
-        if ssid in open(wpa_supplican).read():
+        if f'"{ssid}"' in open(wpa_supplican).read():
             connectToSsid(ssid, wificard)
         else:
             Authentication(ssid, wificard)
