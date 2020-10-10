@@ -16,6 +16,7 @@ wifiscard = wifinics.stdout.readlines()[0].rstrip()
 rcconf = open('/etc/rc.conf', 'r').read()
 
 notnics = [
+    "enc",
     "lo",
     "fwe",
     "fwip",
@@ -23,6 +24,7 @@ notnics = [
     "plip",
     "pfsync",
     "pflog",
+    "ipfw",
     "tun",
     "sl",
     "faith",
