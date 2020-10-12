@@ -9,17 +9,16 @@ from sys import path
 import locale
 import os
 path.append("/usr/local/share/networkmgr")
-from net_api import stopnetworkcard, isanewnetworkcardinstall
+from net_api import stopnetworkcard, network_card_to_add
 from net_api import startnetworkcard, wifiDisconnection
 from net_api import stopallnetwork, startallnetwork, connectToSsid
-from net_api import disableWifi, enableWifi, start_wifi
+from net_api import disableWifi, enableWifi
 from net_api import connectionStatus, networkdictionary, openrc
 from authentication import Authentication, Open_Wpa_Supplicant
 
 encoding = locale.getpreferredencoding()
 threadBreak = False
 GObject.threads_init()
-wpa_supplican = "/etc/wpa_supplicant.conf"
 
 
 class trayIcon(object):
@@ -101,8 +100,7 @@ class trayIcon(object):
                     self.menu.append(diswifi)
                 else:
                     ssid = cards[netcard]['state']["ssid"]
-                    bssid = cards[netcard]['state']["bssid"]
-                    bar = cards[netcard]['info'][bssid][4]
+                    bar = cards[netcard]['info'][ssid][4]
                     wc_title = Gtk.MenuItem("WiFi %s Connected" % wifinum)
                     wc_title.set_sensitive(False)
                     self.menu.append(wc_title)
@@ -114,7 +112,7 @@ class trayIcon(object):
                                             netcard)
                     self.menu.append(connection_item)
                     self.menu.append(disconnect_item)
-                    self.wifiListMenu(netcard, bssid, True, cards)
+                    self.wifiListMenu(netcard, ssid, True, cards)
                     diswifi = Gtk.MenuItem("Disable Wifi %s" % wifinum)
                     diswifi.connect("activate", self.disable_Wifi, netcard)
                     self.menu.append(diswifi)
@@ -138,91 +136,83 @@ class trayIcon(object):
         self.menu.show_all()
         return self.menu
 
-    def wifiListMenu(self, wificard, cbssid, passes, cards):
+    def wifiListMenu(self, wificard, cssid, passes, cards):
         wiconncmenu = Gtk.Menu()
         avconnmenu = Gtk.MenuItem("Available Connections")
         avconnmenu.set_submenu(wiconncmenu)
-        for bssid in cards[wificard]['info']:
-            ssid = cards[wificard]['info'][bssid][0]
-            sn = cards[wificard]['info'][bssid][4]
-            caps = cards[wificard]['info'][bssid][6]
+        for ssid in cards[wificard]['info']:
+            ssid_info = cards[wificard]['info'][ssid]
+            ssid = cards[wificard]['info'][ssid][0]
+            sn = cards[wificard]['info'][ssid][4]
+            caps = cards[wificard]['info'][ssid][6]
             if passes is True:
-                if cbssid != bssid:
+                if cssid != ssid:
                     menu_item = Gtk.ImageMenuItem(ssid)
                     if caps == 'E' or caps == 'ES':
                         menu_item.set_image(self.openwifi(sn))
                         menu_item.connect("activate", self.menu_click_open,
-                                          ssid, bssid, wificard)
+                                          ssid, wificard)
                     else:
                         menu_item.set_image(self.securewifi(sn))
                         menu_item.connect("activate", self.menu_click_lock,
-                                          ssid, bssid, wificard)
+                                          ssid_info, wificard)
                     menu_item.show()
                     wiconncmenu.append(menu_item)
             else:
                 menu_item = Gtk.ImageMenuItem(ssid)
                 if caps == 'E' or caps == 'ES':
                     menu_item.set_image(self.openwifi(sn))
-                    menu_item.connect("activate", self.menu_click_open, ssid,
-                                      bssid, wificard)
+                    menu_item.connect("activate", self.menu_click_open,
+                                      ssid, wificard)
                 else:
                     menu_item.set_image(self.securewifi(sn))
-                    menu_item.connect("activate", self.menu_click_lock, ssid,
-                                      bssid, wificard)
+                    menu_item.connect("activate", self.menu_click_lock,
+                                      ssid_info, wificard)
                 menu_item.show()
                 wiconncmenu.append(menu_item)
         self.menu.append(avconnmenu)
 
-    def menu_click_open(self, widget, ssid, bssid, wificard):
-        if bssid in open(wpa_supplican).read():
+    def menu_click_open(self, widget, ssid, wificard):
+        if f'"{ssid}"' in open("/etc/wpa_supplicant.conf").read():
             connectToSsid(ssid, wificard)
         else:
-            Open_Wpa_Supplicant(ssid, bssid, wificard)
+            Open_Wpa_Supplicant(ssid, wificard)
         self.updateinfo()
-        self.ifruning = False
 
-    def menu_click_lock(self, widget, ssid, bssid, wificard):
-        if bssid in open(wpa_supplican).read():
-            connectToSsid(ssid, wificard)
+    def menu_click_lock(self, widget, ssid_info, wificard):
+        if f'"{ssid_info[0]}"' in open('/etc/wpa_supplicant.conf').read():
+            connectToSsid(ssid_info[0], wificard)
         else:
-            Authentication(ssid, bssid, wificard)
+            Authentication(ssid_info, wificard)
         self.updateinfo()
-        self.ifruning = False
 
     def disconnectwifi(self, widget, wificard):
         wifiDisconnection(wificard)
         self.updateinfo()
-        self.ifruning = False
 
     def disable_Wifi(self, widget, wificard):
         disableWifi(wificard)
         self.updateinfo()
-        self.ifruning = False
 
     def enable_Wifi(self, widget, wificard):
         enableWifi(wificard)
         self.updateinfo()
-        self.ifruning = False
 
     def connectcard(self, widget, netcard):
         startnetworkcard(netcard)
         self.updateinfo()
-        self.ifruning = False
 
     def disconnectcard(self, widget, netcard):
         stopnetworkcard(netcard)
         self.updateinfo()
-        self.ifruning = False
 
     def closeNetwork(self, widget):
         stopallnetwork()
         self.updateinfo()
-        self.ifruning = False
 
     def openNetwork(self, widget):
         startallnetwork()
         self.updateinfo()
-        self.ifruning = False
 
     def openwifi(self, bar):
         img = Gtk.Image()
@@ -260,8 +250,8 @@ class trayIcon(object):
             self.cardinfo = networkdictionary()
             defaultcard = self.cardinfo['default']
             default_type = self.network_type(defaultcard)
-            sleep(1)
             GLib.idle_add(self.updatetray, defaultcard, default_type)
+            self.ifruning = False
 
     def updatetray(self, defaultdev, default_type):
         self.updatetrayicon(defaultdev, default_type)
@@ -271,7 +261,6 @@ class trayIcon(object):
         while True:
             self.checkfornewcard()
             self.updateinfo()
-            self.ifruning = False
             sleep(20)
 
     def network_type(self, defaultdev):
@@ -285,14 +274,14 @@ class trayIcon(object):
     def default_wifi_state(self, defaultdev):
         info = self.cardinfo['cards'][defaultdev]
         if info['state']["connection"] == "Connected":
-            bssid = info['state']["bssid"]
-            return info['info'][bssid][4]
+            ssid = info['state']["ssid"]
+            return info['info'][ssid][4]
         else:
             return None
 
     def checkfornewcard(self):
         if os.path.exists("/usr/local/bin/netcardmgr"):
-            if isanewnetworkcardinstall() is True:
+            if network_card_to_add() is True:
                 os.system("netcardmgr")
 
     def updatetrayicon(self, defaultdev, card_type):

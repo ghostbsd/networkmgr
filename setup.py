@@ -1,25 +1,19 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 import os
 import sys
-
+from platform import system
 from setuptools import setup
 from subprocess import run
 
-# import DistUtilsExtra.command.build_extra
-# import DistUtilsExtra.command.build_i18n
-# import DistUtilsExtra.command.clean_i18n
-
-# to update i18n .mo files (and merge .pot file into .po files) run on Linux:
-# ,,python setup.py build_i18n -m''
-
-# silence pyflakes, __VERSION__ is properly assigned below...
-__VERSION__ = '3.7'
-# for line in file('networkmgr').readlines():
-#    if (line.startswith('__VERSION__')):
-#        exec(line.strip())
+__VERSION__ = '4.2'
 PROGRAM_VERSION = __VERSION__
+
+if system() == 'FreeBSD':
+    prefix = '/usr/local'
+else:
+    prefix = sys.prefix
 
 
 def datafilelist(installbase, sourcebase):
@@ -31,9 +25,6 @@ def datafilelist(installbase, sourcebase):
         datafileList.append((root.replace(sourcebase, installbase), fileList))
     return datafileList
 
-prefix=sys.prefix
-
-# '{prefix}/share/man/man1', glob('data/*.1')),
 
 data_files = [
     (f'{prefix}/etc/xdg/autostart', ['src/networkmgr.desktop']),
@@ -44,12 +35,6 @@ data_files = [
 ]
 
 data_files.extend(datafilelist(f'{prefix}/share/icons/hicolor', 'src/icons'))
-
-# cmdclass ={
-#             "build" : DistUtilsExtra.command.build_extra.build_extra,
-#             "build_i18n" :  DistUtilsExtra.command.build_i18n.build_i18n,
-#             "clean": DistUtilsExtra.command.clean_i18n.clean_i18n,
-# }
 
 setup(
     name="networkmgr",
@@ -64,4 +49,4 @@ setup(
     scripts=['networkmgr', 'src/netcardmgr']
 )
 
-run('sudo gtk-update-icon-cache -f /usr/local/share/icons/hicolor', shell=True)
+run('gtk-update-icon-cache -f /usr/local/share/icons/hicolor', shell=True)

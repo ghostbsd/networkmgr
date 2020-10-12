@@ -3,7 +3,7 @@
 import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk
-from net_api import scanWifiBssid, connectToSsid
+from net_api import connectToSsid
 
 wpa_supplican = "/etc/wpa_supplicant.conf"
 
@@ -25,7 +25,7 @@ class Authentication():
 
     def add_to_wpa_supplicant(self, widget):
         pwd = self.password.get_text()
-        Lock_Wpa_Supplicant(self.ssid, self.bssid, pwd, self.wificard)
+        Lock_Wpa_Supplicant(self.ssid, self.ssid_info, pwd, self.wificard)
         self.window.hide()
 
     def on_check(self, widget):
@@ -34,10 +34,10 @@ class Authentication():
         else:
             self.password.set_visibility(False)
 
-    def __init__(self, ssid, bssid, wificard):
+    def __init__(self, ssid_info, wificard):
         self.wificard = wificard
-        self.ssid = ssid
-        self.bssid = bssid
+        self.ssid = ssid_info[0]
+        self.ssid_info = ssid_info
         self.window = Gtk.Window()
         self.window.set_title("wi-Fi Network Authetification Required")
         self.window.set_border_width(0)
@@ -52,7 +52,7 @@ class Authentication():
         box1.pack_start(box2, True, True, 0)
         box2.show()
         # Creating MBR or GPT drive
-        title = "Authetification required by %s Wi-Fi Network" % ssid
+        title = "Authetification required by %s Wi-Fi Network" % self.ssid
         label = Gtk.Label("<b><span size='large'>%s</span></b>" % title)
         label.set_use_markup(True)
         pwd_label = Gtk.Label("Password:")
@@ -76,10 +76,9 @@ class Authentication():
 
 
 class Open_Wpa_Supplicant():
-    def __init__(self, ssid, bssid, wificard):
+    def __init__(self, ssid, wificard):
         ws = '\nnetwork={'
-        ws += '\n ssid="%s"' % ssid
-        ws += '\n bssid=%s' % bssid
+        ws += f'\n ssid={ssid}'
         ws += '\n key_mgmt=NONE\n}'
         wsf = open(wpa_supplican, 'a')
         wsf.writelines(ws)
@@ -88,29 +87,30 @@ class Open_Wpa_Supplicant():
 
 
 class Lock_Wpa_Supplicant():
-    def __init__(self, ssid, bssid, pwd, wificard):
-        if 'RSN' in scanWifiBssid(bssid, wificard):
+    def __init__(self, ssid, ssid_info, pwd, wificard):
+
+        if 'RSN' in ssid_info[-1]:
             # /etc/wpa_supplicant.conf written by networkmgr
             ws = '\nnetwork={'
-            ws += '\n ssid="%s"' % ssid
-            ws += '\n bssid=%s' % bssid
+            ws += f'\n ssid="{ssid}"'
             ws += '\n key_mgmt=WPA-PSK'
             ws += '\n proto=RSN'
-            ws += '\n psk="%s"\n}' % pwd
-        elif 'WPA' in scanWifiBssid(bssid, wificard):
+            ws += f'\n psk="{pwd}"\n'
+            ws += '}'
+        elif 'WPA' in ssid_info[-1]:
             ws = '\nnetwork={'
-            ws += '\n ssid="%s"' % ssid
-            ws += '\n bssid=%s' % bssid
+            ws += f'\n ssid="{ssid}"'
             ws += '\n key_mgmt=WPA-PSK'
             ws += '\n proto=WPA'
-            ws += '\n psk="%s"\n}' % pwd
+            ws += f'\n psk="{pwd}"\n'
+            ws += '}'
         else:
             ws = '\nnetwork={'
-            ws += '\n ssid="%s"' % ssid
-            ws += '\n bssid=%s' % bssid
+            ws += f'\n ssid="{ssid}"'
             ws += '\n key_mgmt=NONE'
             ws += '\n wep_tx_keyidx=0'
-            ws += '\n wep_key0=%s\n}' % pwd
+            ws += f'\n wep_key0={pwd}\n'
+            ws += '}'
         wsf = open(wpa_supplican, 'a')
         wsf.writelines(ws)
         wsf.close()
