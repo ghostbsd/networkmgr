@@ -7,7 +7,7 @@ from platform import system
 from setuptools import setup
 from subprocess import run
 
-__VERSION__ = '4.2'
+__VERSION__ = '4.3'
 PROGRAM_VERSION = __VERSION__
 
 if system() == 'FreeBSD':
