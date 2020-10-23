@@ -288,7 +288,7 @@ class trayIcon(object):
         if card_type is None:
             self.statusIcon.set_from_icon_name('nm-no-connection')
         elif card_type == 'wire':
-            self.statusIcon.set_from_icon_name('nm-adhoc')
+            self.statusIcon.set_from_icon_name('nm-device-wired')
         else:
             wifi_state = self.default_wifi_state(defaultdev)
             if wifi_state is None:
