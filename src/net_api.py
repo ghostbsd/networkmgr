@@ -259,7 +259,7 @@ def networkdictionary():
 
 def connectionStatus(card):
     if card is None:
-        netstate = "No network card enable"
+        netstate = "Network card is not enabled"
     elif 'wlan' in card:
         if ifWlanDisable(card) is False and ifStatue(card) is True:
             cmd1 = "ifconfig %s | grep ssid" % card
