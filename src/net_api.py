@@ -50,6 +50,7 @@ not_nics = [
     "brige",
     "ixautomation",
     "vm-ixautomation",
+    "vm-public",
     "wg"
 ]
 
