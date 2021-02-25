@@ -14,7 +14,10 @@ wifinics = Popen(wifis, shell=True, stdout=PIPE, close_fds=True,
                  universal_newlines=True)
 wifiscard = wifinics.stdout.readlines()[0].rstrip()
 rcconf = open('/etc/rc.conf', 'r').read()
-rcconflocal = open('/etc/rc.conf.local', 'r').read()
+if os.path.exists('/etc/rc.conf.local'):
+    rcconflocal = open('/etc/rc.conf.local', 'r').read()
+else:
+    rcconflocal = "None"
 
 notnics = [
     "enc",
@@ -60,7 +63,7 @@ class autoConfigure():
             card = card.replace(".", "_")
             nc = re.sub(r'\d+', '', line.rstrip())
             if nc not in notnics:
-                if f'ifconfig_{card}=' in rcconf or in rcconflocal:
+                if f'ifconfig_{card}=' in (rcconf or rcconflocal):
                     print("Your wired network card is already configured.")
                 else:
                     rc = open('/etc/rc.conf', 'a')
@@ -76,9 +79,9 @@ class autoConfigure():
 
         for card in wifiscard.split():
             for wlanNum in range(0, 9):
-                if f'wlan{wlanNum}' not in rcconf and not in rcconflocal:
+                if f'wlan{wlanNum}' not in (rcconf and rcconflocal):
                     break
-            if f'wlans_{card}=' in rcconf or in rcconflocal:
+            if f'wlans_{card}=' in (rcconf or rcconflocal):
                 print("Your wifi network card is already configured.")
                 if not os.path.exists('/etc/wpa_supplicant.conf'):
                     open('/etc/wpa_supplicant.conf', 'a').close()
