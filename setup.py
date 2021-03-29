@@ -5,15 +5,16 @@ import os
 import sys
 from platform import system
 from setuptools import setup
-from subprocess import run
+from subprocess import run, Popen, PIPE
 
-__VERSION__ = '4.5'
+__VERSION__ = '4.6'
 PROGRAM_VERSION = __VERSION__
 
-if system() == 'FreeBSD':
-    prefix = '/usr/local'
-else:
-    prefix = sys.prefix
+prefix = '/usr/local' if system() == 'FreeBSD' else sys.prefix
+
+cmd = ["kenv", "rc_system"]
+rc_system = Popen(cmd, stdout=PIPE, universal_newlines=True).stdout.read()
+openrc = True if 'openrc' in rc_system else False
 
 
 def datafilelist(installbase, sourcebase):
@@ -26,13 +27,21 @@ def datafilelist(installbase, sourcebase):
     return datafileList
 
 
+share_networkmgr = [
+    'src/authentication.py',
+    'src/net_api.py',
+    'src/trayicon.py'
+]
+
 data_files = [
+    (f'{prefix}/etc/devd', ['src/setupnic.conf']),
     (f'{prefix}/etc/xdg/autostart', ['src/networkmgr.desktop']),
-    (f'{prefix}/share/networkmgr', ['src/authentication.py']),
-    (f'{prefix}/share/networkmgr', ['src/net_api.py']),
-    (f'{prefix}/share/networkmgr', ['src/trayicon.py']),
+    (f'{prefix}/share/networkmgr', share_networkmgr),
     (f'{prefix}/etc/sudoers.d', ['src/sudoers.d/networkmgr'])
 ]
+
+if openrc is True:
+    data_files.append((f'{prefix}/etc/devd-openrc', ['src/setupnic.conf']))
 
 data_files.extend(datafilelist(f'{prefix}/share/icons/hicolor', 'src/icons'))
 
@@ -46,7 +55,7 @@ setup(
     package_dir={'': '.'},
     data_files=data_files,
     install_requires=['setuptools'],
-    scripts=['networkmgr', 'src/netcardmgr']
+    scripts=['networkmgr', 'src/netcardmgr', 'src/setup-nic']
 )
 
 run('gtk-update-icon-cache -f /usr/local/share/icons/hicolor', shell=True)
