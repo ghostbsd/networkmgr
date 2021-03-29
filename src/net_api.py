@@ -67,42 +67,6 @@ else:
     network = 'netif'
 
 
-def wired_list():
-    crd = Popen('ifconfig -l', shell=True, stdout=PIPE, universal_newlines=True)
-    card_list = crd.stdout.read().strip().split()
-    re_compile = re.compile(("|".join(not_nics + ['wlan'])))
-    bad_list = list(filter(re_compile.match, card_list))
-    return list(set(card_list).difference(bad_list))
-
-
-def wifi_card_added():
-    cmd = 'sysctl -in net.wlan.devices'
-    sysctl_output = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
-    wifi_cards = sysctl_output.stdout.read().strip().split()
-    rc_conf = open('/etc/rc.conf', 'r').read()
-    rc_conf_list = re.split('_|=|\n', rc_conf)
-    if set(wifi_cards).difference(set(rc_conf_list)):
-        return True
-    else:
-        return False
-
-
-def wired_card_added():
-    rc_conf = open('/etc/rc.conf', 'r').read()
-    rc_conf_list = re.split('_|=|\n', rc_conf)
-    if set(wired_list()).difference(set(rc_conf_list)):
-        return True
-    else:
-        return False
-
-
-def network_card_to_add():
-    if wifi_card_added() is True or wired_card_added() is True:
-        return True
-    else:
-        return False
-
-
 def card_online(netcard):
     lan = Popen('ifconfig ' + netcard, shell=True, stdout=PIPE,
                 universal_newlines=True)
@@ -296,7 +260,10 @@ def stopnetworkcard(netcard):
 
 
 def startnetworkcard(netcard):
-    os.system(f'ifconfig {netcard} up')
+    if openrc is True:
+        os.system(f'dhcpcd {netcard}')
+    else:
+        os.system(f'dhclient {netcard}')
 
 
 def wifiDisconnection(wificard):
@@ -320,14 +287,10 @@ def connectToSsid(name, wificard):
     os.system(f"ifconfig {wificard} ssid '{name}'")
     sleep(0.5)
     os.system(f'wpa_supplicant -B -i {wificard} -c /etc/wpa_supplicant.conf')
-    sleep(0.5)
-    os.system(f'ifconfig {wificard} up')
-    sleep(0.5)
-    os.system(f'ifconfig {wificard} scan')
-    if openrc is False:
-        sleep(2)
+    if openrc is True:
+        os.system(f'dhcpcd {wificard}')
+    else:
         os.system(f'dhclient {wificard}')
-    sleep(0.5)
 
 
 def subnetHexToDec(ifconfigstring):

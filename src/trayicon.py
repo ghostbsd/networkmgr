@@ -7,13 +7,21 @@ from time import sleep
 import threading
 from sys import path
 import locale
-import os
 path.append("/usr/local/share/networkmgr")
-from net_api import stopnetworkcard, network_card_to_add
-from net_api import startnetworkcard, wifiDisconnection
-from net_api import stopallnetwork, startallnetwork, connectToSsid
-from net_api import disableWifi, enableWifi
-from net_api import connectionStatus, networkdictionary, openrc
+from net_api import (
+    stopnetworkcard,
+    startnetworkcard,
+    wifiDisconnection,
+    stopallnetwork,
+    startallnetwork,
+    connectToSsid,
+    disableWifi,
+    enableWifi,
+    connectionStatus,
+    networkdictionary,
+    openrc
+)
+
 from authentication import Authentication, Open_Wpa_Supplicant
 
 encoding = locale.getpreferredencoding()
@@ -259,7 +267,6 @@ class trayIcon(object):
 
     def updatetrayloop(self):
         while True:
-            self.checkfornewcard()
             self.updateinfo()
             sleep(20)
 
@@ -278,11 +285,6 @@ class trayIcon(object):
             return info['info'][ssid][4]
         else:
             return None
-
-    def checkfornewcard(self):
-        if os.path.exists("/usr/local/bin/netcardmgr"):
-            if network_card_to_add() is True:
-                os.system("netcardmgr")
 
     def updatetrayicon(self, defaultdev, card_type):
         if card_type is None:
