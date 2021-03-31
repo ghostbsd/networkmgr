@@ -261,9 +261,9 @@ def stopnetworkcard(netcard):
 
 def startnetworkcard(netcard):
     if openrc is True:
-        os.system(f'dhcpcd {netcard}')
+        os.system(f'{rc}service dhcpcd.{netcard} restart')
     else:
-        os.system(f'dhclient {netcard}')
+        os.system(f'service dhclient restart {netcard}')
 
 
 def wifiDisconnection(wificard):
