@@ -35,9 +35,9 @@ data_files = [
     (f'{prefix}/share/networkmgr', share_networkmgr),
     (f'{prefix}/etc/sudoers.d', ['src/sudoers.d/networkmgr'])
 ]
-if os.path.exist(f'{prefix}/etc/devd'):
+if os.path.exist('/etc/devd'):
     data_files.append((f'{prefix}/etc/devd', ['src/setupnic.conf']))
-if os.path.exist(f'{prefix}/etc/devd-openrc'):
+if os.path.exist('/etc/devd-openrc'):
     data_files.append((f'{prefix}/etc/devd-openrc', ['src/setupnic.conf']))
 
 data_files.extend(datafilelist(f'{prefix}/share/icons/hicolor', 'src/icons'))
