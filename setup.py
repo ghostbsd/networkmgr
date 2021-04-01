@@ -5,16 +5,12 @@ import os
 import sys
 from platform import system
 from setuptools import setup
-from subprocess import run, Popen, PIPE
+from subprocess import run
 
 __VERSION__ = '4.6'
 PROGRAM_VERSION = __VERSION__
 
 prefix = '/usr/local' if system() == 'FreeBSD' else sys.prefix
-
-cmd = ["kenv", "rc_system"]
-rc_system = Popen(cmd, stdout=PIPE, universal_newlines=True).stdout.read()
-openrc = True if 'openrc' in rc_system else False
 
 
 def datafilelist(installbase, sourcebase):
@@ -39,8 +35,9 @@ data_files = [
     (f'{prefix}/share/networkmgr', share_networkmgr),
     (f'{prefix}/etc/sudoers.d', ['src/sudoers.d/networkmgr'])
 ]
-
-if openrc is True:
+if os.path.exist(f'{prefix}/etc/devd'):
+    data_files.append((f'{prefix}/etc/devd', ['src/setupnic.conf']))
+if os.path.exist(f'{prefix}/etc/devd-openrc'):
     data_files.append((f'{prefix}/etc/devd-openrc', ['src/setupnic.conf']))
 
 data_files.extend(datafilelist(f'{prefix}/share/icons/hicolor', 'src/icons'))
