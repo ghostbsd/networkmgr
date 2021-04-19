@@ -79,9 +79,9 @@ class autoConfigure():
 
         for card in wifiscard.split():
             for wlanNum in range(0, 9):
-                if f'wlan{wlanNum}' not in (rcconf and rcconflocal):
+                if f'wlan{wlanNum}' not in (rcconf + rcconflocal):
                     break
-            if f'wlans_{card}=' in (rcconf or rcconflocal):
+            if f'wlans_{card}=' in (rcconf + rcconflocal):
                 print("Your wifi network card is already configured.")
                 if not os.path.exists('/etc/wpa_supplicant.conf'):
                     open('/etc/wpa_supplicant.conf', 'a').close()
