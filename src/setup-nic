@@ -40,31 +40,38 @@ def autoConfigure(nic):
             rc.writelines(f'ifconfig_wlan{wlanNum}="WPA DHCP"\n')
             rc.close()
             if openrc is True:
-                start_network = f'sh /etc/rc.devd network.wlan{wlanNum} start'
-                os.system(f'/etc/pccard_ether {nic} startchildren')
+                os.system(f'sh /etc/rc.devd network.wlan{wlanNum} start')
             else:
-                start_network = f'service netif start wlan{wlanNum}'
-            os.system(start_network)
-            os.system(f'ifconfig wlan{wlanNum} up scan')
+                os.system('service netif start wlan{wlanNum}')
             os.system(f'ifconfig wlan{wlanNum} up scan')
         else:
-            os.system(f'/etc/pccard_ether {nic} startchildren')
+            if openrc is True:
+                data_list = re.findall('wlans_rtwn0.*', f"{rcconf}\n{rcconflocal}")
+                raw_device = ''.join(data_list)
+                wlan = raw_device.replace('"', '').split('=')[1]
+                cmd = ['rc-service', f'network.{wlan}', 'status']
+                status = Popen(cmd, stdout=PIPE, universal_newlines=True).stdout.read()
+                if 'stopped' in status:
+                    os.system(f'sh /etc/rc.devd network.{wlan} start')
+            else:
+                os.system(f'/etc/pccard_ether {nic} startchildren')
     else:
         if f'ifconfig_{nic}=' not in (rcconf + rcconflocal):
             rc = open('/etc/rc.conf', 'a')
             rc.writelines(f'ifconfig_{nic}="DHCP"\n')
             rc.close()
             if openrc is True:
-                start_network = f'sh /etc/rc.devd network.{nic} start'
+                os.system(f'sh /etc/rc.devd network.{nic} start')
             else:
-                start_network = f'service netif start {nic}'
-            os.system(start_network)
+                os.system(f'service netif start {nic}')
         else:
             if openrc is True:
-                start_network = f'sh /etc/rc.devd dhcpcd.{nic} restart'
+                cmd = ['rc-service', f'dhcpcd.{nic}', 'status']
+                status = Popen(cmd, stdout=PIPE, universal_newlines=True).stdout.read()
+                if 'stopped' in status:
+                    os.system(f'sh /etc/rc.devd dhcpcd.{nic} start')
             else:
-                start_network = f'service dhclient quietstart {nic}'
-            os.system(start_network)
+                os.system(f'service dhclient quietstart {nic}')
 
 
 args = sys.argv
