@@ -46,7 +46,7 @@ def autoConfigure(nic):
             os.system(f'ifconfig wlan{wlanNum} up scan')
         else:
             if openrc is True:
-                data_list = re.findall('wlans_rtwn0.*', f"{rcconf}\n{rcconflocal}")
+                data_list = re.findall((f'wlans_{nic}.*', f"{rcconf}\n{rcconflocal}")
                 raw_device = ''.join(data_list)
                 wlan = raw_device.replace('"', '').split('=')[1]
                 cmd = ['rc-service', f'network.{wlan}', 'status']
