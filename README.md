@@ -9,7 +9,7 @@ Installation
 
 Packages to be installed before NetworkMgr.
 
-`pkg install sudo py37-setuptools py37-gobject3 gtk-update-icon-cache hicolor-icon-theme`
+`pkg install sudo py38-setuptools py38-gobject3 gtk-update-icon-cache hicolor-icon-theme`
 
 Download NetworkMgr or clone it:
 
@@ -23,6 +23,6 @@ If NetworkMgr installed by package deinstall networkmrg first before installing 
 
 `pkg delete networkmgr`
 
-`python3.7 setup.py install`
+`python3.8 setup.py install`
 
 When rebooting NetworkMgr should automatically start if the desktop supports xdg.  Make sure that the user using NetworkMgr is in the wheel group.
