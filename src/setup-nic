@@ -50,8 +50,9 @@ def autoConfigure(nic):
                 raw_device = ''.join(data_list)
                 wlan = raw_device.replace('"', '').split('=')[1]
                 cmd = ['rc-service', f'network.{wlan}', 'status']
-                status = Popen(cmd, stdout=PIPE, universal_newlines=True).stdout.read()
-                if 'stopped' in status:
+                status = Popen(cmd, stdout=PIPE, universal_newlines=True)
+                status_output = status.communicate()[0]
+                if 'stopped' in status_output or status.returncode != 0:
                     os.system(f'sh /etc/rc.devd network.{wlan} start')
             else:
                 os.system(f'/etc/pccard_ether {nic} startchildren')
@@ -62,13 +63,16 @@ def autoConfigure(nic):
             rc.close()
             if openrc is True:
                 os.system(f'sh /etc/rc.devd network.{nic} start')
+                os.system(f'sh /etc/rc.devd dhcpcd.{nic} start')
             else:
-                os.system(f'service netif start {nic}')
+                os.system(f'service netif quietstart {nic}')
+                os.system(f'service dhclient quietstart {nic}')
         else:
             if openrc is True:
                 cmd = ['rc-service', f'dhcpcd.{nic}', 'status']
-                status = Popen(cmd, stdout=PIPE, universal_newlines=True).stdout.read()
-                if 'stopped' in status:
+                status = Popen(cmd, stdout=PIPE, universal_newlines=True)
+                status_output = status.communicate()[0]
+                if 'stopped' in status_output or status.returncode != 0:
                     os.system(f'sh /etc/rc.devd dhcpcd.{nic} start')
             else:
                 os.system(f'service dhclient quietstart {nic}')
