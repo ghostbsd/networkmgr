@@ -38,4 +38,4 @@ Users of NetworkMgr must be members of the _wheel_ group. To add a user:
 
 ### Starting 
 
-If the desktop environment supports XDG: log out, or restart the computer. NetworkMgr should start automatically at login tim. 
+If the desktop environment supports XDG: log out, or restart the computer. NetworkMgr should start automatically at login time. 
