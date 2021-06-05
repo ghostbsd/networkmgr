@@ -28,7 +28,7 @@ ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 """
 
-from subprocess import Popen, PIPE
+from subprocess import Popen, PIPE, run
 from sys import path
 import os
 import re
@@ -283,14 +283,17 @@ def enableWifi(wificard):
 
 def connectToSsid(name, wificard):
     os.system('killall wpa_supplicant')
+    # service
     sleep(0.5)
     os.system(f"ifconfig {wificard} ssid '{name}'")
     sleep(0.5)
-    os.system(f'wpa_supplicant -B -i {wificard} -c /etc/wpa_supplicant.conf')
-    if openrc is True:
-        os.system(f'dhcpcd {wificard}')
-    else:
-        os.system(f'dhclient {wificard}')
+    wpa_supplicant = run(
+        f'wpa_supplicant -B -i {wificard} -c /etc/wpa_supplicant.conf',
+        shell=True
+    )
+    if wpa_supplicant.returncode != 0:
+        return False
+    return True
 
 
 def subnetHexToDec(ifconfigstring):
@@ -300,3 +303,37 @@ def subnetHexToDec(ifconfigstring):
     snetdec = ".".join(str(li) for li in snetdeclist)
     outputline = ifconfigstring.replace(re.search('0x.{8}', ifconfigstring).group(0), snetdec)
     return outputline
+
+
+def get_ssid_wpa_supplicant_config(ssid):
+    cmd = """grep -A 3 'ssid="ericbsd"' /etc/wpa_supplicant.conf"""
+    out = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
+    return out.stdout.read().splitlines()
+
+
+def delete_ssid_wpa_supplicant_config(ssid):
+    cmd = f"""awk '/sid="{ssid}"/ """ \
+        """{print NR-2 "," NR+4 "d"}' """ \
+        """/etc/wpa_supplicant.conf | sed -f - /etc/wpa_supplicant.conf"""
+    out = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
+    left_over = out.stdout.read()
+    wpa_supplicant_conf = open('/etc/wpa_supplicant.conf', 'w')
+    wpa_supplicant_conf.writelines(left_over)
+    wpa_supplicant_conf.close()
+
+
+def wlan_status(card):
+    out = Popen(
+        f'ifconfig {card} | grep status:',
+        shell=True, stdout=PIPE,
+        universal_newlines=True
+    )
+    return out.stdout.read().split(':')[1].strip()
+
+
+def start_dhcp(wificard):
+    if openrc is True:
+        os.system(f'dhcpcd -x {wificard}')
+        os.system(f'dhcpcd {wificard}')
+    else:
+        os.system(f'dhclient {wificard}')

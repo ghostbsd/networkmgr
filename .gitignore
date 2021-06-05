@@ -45,3 +45,5 @@ venv/*
 .mr.developer.cfg
 .project
 .pydevproject
+# python core dump
+python*.core
