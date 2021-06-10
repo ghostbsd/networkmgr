@@ -26,8 +26,6 @@ from net_api import (
     wlan_status
 )
 
-# from authentication import Authentication, Open_Wpa_Supplicant
-
 encoding = locale.getpreferredencoding()
 threadBreak = False
 GObject.threads_init()
@@ -360,9 +358,7 @@ class trayIcon(object):
         self.window = Gtk.Window()
         self.window.set_title("wi-Fi Network Authentication Required")
         self.window.set_border_width(0)
-        # self.window.set_position(Gtk.WIN_POS_CENTER)
         self.window.set_size_request(500, 200)
-        # self.window.set_icon_from_file("/usr/local/etc/gbi/logo.png")
         box1 = Gtk.VBox(False, 0)
         self.window.add(box1)
         box1.show()

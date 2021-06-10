@@ -24,7 +24,6 @@ def datafilelist(installbase, sourcebase):
 
 
 share_networkmgr = [
-    'src/authentication.py',
     'src/net_api.py',
     'src/trayicon.py'
 ]
