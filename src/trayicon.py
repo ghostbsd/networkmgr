@@ -335,7 +335,7 @@ class trayIcon(object):
             delete_ssid_wpa_supplicant_config(ssid)
             GLib.idle_add(self.restart_authentication, ssid_info, card)
         else:
-            for _ in list(range(30)):
+            for _ in list(range(60)):
                 if wlan_status(card) == 'associated':
                     self.updateinfo()
                     break
