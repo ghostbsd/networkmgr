@@ -4,7 +4,6 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GObject, GLib
 from time import sleep
-import os
 import threading
 import _thread
 from sys import path
@@ -26,6 +25,7 @@ from net_api import (
     delete_ssid_wpa_supplicant_config,
     wlan_status
 )
+from netcardmgr import openNetCardConfigwindow
 
 encoding = locale.getpreferredencoding()
 threadBreak = False
@@ -190,7 +190,7 @@ class trayIcon(object):
         self.menu.append(avconnmenu)
 
     def configuration_window_open(self, widget, interface):
-        os.system(f"doas netcardmgr -configure {interface}")
+        openNetCardConfigwindow(interface)
 
     def menu_click_open(self, widget, ssid, wificard):
         if f'"{ssid}"' in open("/etc/wpa_supplicant.conf").read():

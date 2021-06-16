@@ -6,7 +6,6 @@ from gi.repository import Gtk
 from subprocess import Popen, PIPE
 import os
 import re
-import sys
 import subprocess
 from time import sleep
 
@@ -56,70 +55,6 @@ else:
     network = 'netif'
 
 restart_network = f'{rc}service {network} restart'
-
-
-class autoConfigure():
-
-    def __init__(self):
-        for line in netcard.split():
-            card = line.rstrip()
-        # VLAN tags in ifconfig are delimited by period
-        # but in rc.conf delimiter is underscore
-            card = card.replace(".", "_")
-            nc = re.sub(r'\d+', '', line.rstrip())
-            if nc not in notnics:
-                if f'ifconfig_{card}=' in (rcconf or rcconflocal):
-                    print("Your wired network card is already configured.")
-                else:
-                    rc = open('/etc/rc.conf', 'a')
-                    rc.writelines(f'ifconfig_{card}="DHCP"\n')
-                    rc.close()
-                    sleep(1)
-                    os.system(restart_network)
-                    sleep(1)
-                    if os.path.exists("/sbin/openrc") is True:
-                        cmd = f"rc-service dhcpcd.{card} restart"
-                        os.system(cmd)
-                    print("Your wired network card is configured.")
-
-        for card in wifiscard.split():
-            for wlanNum in range(0, 9):
-                if f'wlan{wlanNum}' not in (rcconf + rcconflocal):
-                    break
-            if f'wlans_{card}=' in (rcconf + rcconflocal):
-                print("Your wifi network card is already configured.")
-                if not os.path.exists('/etc/wpa_supplicant.conf'):
-                    open('/etc/wpa_supplicant.conf', 'a').close()
-                    os.system('chown root:wheel /etc/wpa_supplicant.conf')
-                    os.system('chmod 765 /etc/wpa_supplicant.conf')
-                else:
-                    os.system('chown root:wheel /etc/wpa_supplicant.conf')
-                    os.system('chmod 765 /etc/wpa_supplicant.conf')
-            else:
-                rc = open('/etc/rc.conf', 'a')
-                rc.writelines(f'wlans_{card}="wlan{wlanNum}"\n')
-                rc.writelines(f'ifconfig_wlan{wlanNum}="WPA DHCP"\n')
-                rc.close()
-                if not os.path.exists('/etc/wpa_supplicant.conf'):
-                    open('/etc/wpa_supplicant.conf', 'a').close()
-                    os.system('chown root:wheel /etc/wpa_supplicant.conf')
-                    os.system('chmod 765 /etc/wpa_supplicant.conf')
-                sleep(1)
-                os.system(restart_network)
-                sleep(1)
-                nicslist = 'ifconfig -l'
-                ifconfig = Popen(nicslist, shell=True, stdout=PIPE,
-                                 close_fds=True, universal_newlines=True)
-                cardlist = ifconfig.stdout.read()
-                if f'wlan{wlanNum}' not in cardlist:
-                    sleep(1)
-                    os.system(restart_network)
-                    sleep(1)
-                os.system(f'ifconfig wlan{wlanNum} up scan')
-                os.system(f'ifconfig wlan{wlanNum} up scan')
-                sleep(1)
-            wlanNum += 1
-
 
 currentSettings = {}
 
@@ -228,10 +163,11 @@ class netCardConfigWindow(Gtk.Window):
         dnsEntry = Gtk.Entry()
         dnsEntry.set_margin_end(30)
         DNSList = [(key, value) for key, value in currentSettings.items() if key.startswith("DNS Server")]
+        print(DNSList)
         i = 0
         DNSString = ""
         while i < len(DNSList):
-            DNSString = DNSString + DNSList[i][i + 1]
+            DNSString = DNSString + DNSList[i][1]
             if i + 1 < len(DNSList):
                 DNSString = DNSString + ","
             i = i + 1
@@ -582,14 +518,3 @@ def openNetCardConfigwindow(default_int):
     win.connect("destroy", Gtk.main_quit)
     win.show_all()
     Gtk.main()
-
-
-if "-auto" in sys.argv:
-    autoConfigure()
-elif "-configure" in sys.argv:
-    confloc = sys.argv.index('-configure')
-    intloc = confloc + 1
-    passedint = sys.argv[intloc]
-    openNetCardConfigwindow(passedint)
-else:
-    print("No acceptable flags were passed to the function.")

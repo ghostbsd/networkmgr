@@ -25,7 +25,8 @@ def datafilelist(installbase, sourcebase):
 
 share_networkmgr = [
     'src/net_api.py',
-    'src/trayicon.py'
+    'src/trayicon.py',
+    'src/netcardmgr.py'
 ]
 
 data_files = [
@@ -51,7 +52,7 @@ setup(
     package_dir={'': '.'},
     data_files=data_files,
     install_requires=['setuptools'],
-    scripts=['networkmgr', 'src/netcardmgr', 'src/setup-nic']
+    scripts=['networkmgr', 'src/setup-nic']
 )
 
 run('gtk-update-icon-cache -f /usr/local/share/icons/hicolor', shell=True)
