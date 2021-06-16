@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+
+from subprocess import Popen, PIPE
+import os
+import re
+import sys
+
+rcconf = open('/etc/rc.conf', 'r').read()
+if os.path.exists('/etc/rc.conf.local'):
+    rcconflocal = open('/etc/rc.conf.local', 'r').read()
+else:
+    rcconflocal = "None"
+
+cmd = ["kenv", "rc_system"]
+rc_system = Popen(cmd, stdout=PIPE, universal_newlines=True).stdout.read()
+openrc = True if 'openrc' in rc_system else False
+
+notnics_regex = "(enc|lo|fwe|fwip|tap|plip|pfsync|pflog|ipfw|tun|sl|faith|" \
+    "ppp|bridge|ixautomation|vm-ixautomation|wg|wlan)[0-9]+"
+
+# wifi_driver_regex is taken from devd.conf wifi-driver-regex
+wifi_driver_regex = "(ath|bwi|bwn|ipw|iwi|iwm|iwn|malo|mwl|otus|ral|rsu|" \
+    "rtwn|rum|run|uath|upgt|ural|urtw|wi|wpi|wtap|zyd)[0-9]+"
+
+
+def autoConfigure(nic):
+    if re.search(notnics_regex, nic):
+        exit(0)
+    if re.search(wifi_driver_regex, nic):
+        if not os.path.exists('/etc/wpa_supplicant.conf'):
+            open('/etc/wpa_supplicant.conf', 'a').close()
+            os.system('chown root:wheel /etc/wpa_supplicant.conf')
+            os.system('chmod 765 /etc/wpa_supplicant.conf')
+        for wlanNum in range(0, 9):
+            if f'wlan{wlanNum}' not in (rcconf + rcconflocal):
+                break
+        if f'wlans_{nic}=' not in (rcconf + rcconflocal):
+            rc = open('/etc/rc.conf', 'a')
+            rc.writelines(f'wlans_{nic}="wlan{wlanNum}"\n')
+            rc.writelines(f'ifconfig_wlan{wlanNum}="WPA DHCP"\n')
+            rc.close()
+            if openrc is True:
+                os.system(f'sh /etc/rc.devd network.wlan{wlanNum} start')
+            else:
+                os.system('service netif start wlan{wlanNum}')
+            os.system(f'ifconfig wlan{wlanNum} up scan')
+        else:
+            if openrc is True:
+                data_list = re.findall(f'wlans_{nic}.*', f"{rcconf}\n{rcconflocal}")
+                raw_device = ''.join(data_list)
+                wlan = raw_device.replace('"', '').split('=')[1]
+                cmd = ['rc-service', f'network.{wlan}', 'status']
+                status = Popen(cmd, stdout=PIPE, universal_newlines=True)
+                status_output = status.communicate()[0]
+                if 'stopped' in status_output or status.returncode != 0:
+                    os.system(f'sh /etc/rc.devd network.{wlan} start')
+            else:
+                os.system(f'/etc/pccard_ether {nic} startchildren')
+    else:
+        if f'ifconfig_{nic}=' not in (rcconf + rcconflocal):
+            rc = open('/etc/rc.conf', 'a')
+            rc.writelines(f'ifconfig_{nic}="DHCP"\n')
+            rc.close()
+            if openrc is True:
+                os.system(f'sh /etc/rc.devd network.{nic} start')
+                os.system(f'sh /etc/rc.devd dhcpcd.{nic} start')
+            else:
+                os.system(f'service netif quietstart {nic}')
+                os.system(f'service dhclient quietstart {nic}')
+        else:
+            if openrc is True:
+                cmd = ['rc-service', f'dhcpcd.{nic}', 'status']
+                status = Popen(cmd, stdout=PIPE, universal_newlines=True)
+                status_output = status.communicate()[0]
+                if 'stopped' in status_output or status.returncode != 0:
+                    os.system(f'sh /etc/rc.devd dhcpcd.{nic} start')
+            else:
+                os.system(f'service dhclient quietstart {nic}')
+
+
+args = sys.argv
+if len(args) != 2:
+    exit()
+autoConfigure(args[1])

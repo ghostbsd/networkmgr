@@ -27,6 +27,14 @@ pip-log.txt
 .tox
 nosetests.xml
 
+# Pipenv and lock files
+Pipfile
+Pipfile.lock
+venv/*
+
+# Pycharm stuff
+.idea/*
+
 # Translations
 *.mo
 
@@ -37,3 +45,7 @@ nosetests.xml
 
 # Editor Configuration Files
 .vscode
+
+# python core dump
+python*.core
+

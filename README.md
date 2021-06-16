@@ -1,42 +1,41 @@
-NetworkMgr
-==========
-NetworkMgr is a Python GTK3 network manager for FreeBSD, GhostBSD, TrueOS and DragonFlyBSD. NetworkMgr support both netif and OpenRC network.
+## NetworkMgr
+
+A Python GTK3 network manager for FreeBSD, GhostBSD, TrueOS and DragonFlyBSD. 
 
 ![alt text](https://image.ibb.co/bWha3R/Screenshot_at_2017_11_24_20_57_33.png)
 
-Installation
-============
+rc(8) and openrc(8) are supported. 
 
-Packages to be installed before NetworkMgr.
+### Installation
 
-`pkg install sudo py37-setuptools py37-gobject3 gtk-update-icon-cache hicolor-icon-theme`
+#### On FreeBSD
 
-Download NetworkMgr or clone it:
+See https://www.freshports.org/net-mgmt/networkmgr/#add
 
-`git clone https://github.com/GhostBSD/networkmgr.git`
-  
-To install NetworkMgr:
+#### Install using Python
 
-`cd networkmgr`
+Packages to be installed before NetworkMgr:
 
-If NetworkMgr installed by package deinstall networkmrg first before installing with setup.py
+`pkg install sudo py38-setuptools py38-gobject3 gtk-update-icon-cache hicolor-icon-theme`
+
+If NetworkMgr was previously installed using a package, remove it:  
 
 `pkg delete networkmgr`
 
-`python3.6 setup.py install`
+Download NetworkMgr, or clone this repository:
 
-Make sure that /usr/local/etc/doas.conf exists.  If not, create it.
+`git clone https://github.com/GhostBSD/networkmgr.git`
 
-`touch /usr/local/etc/doas.conf`
+Then: 
 
-Make sure that doas.conf has something similar to this:
-```
-permit nopass keepenv root
-permit :wheel
-permit nopass keepenv :wheel cmd netcardmgr
-permit nopass keepenv :wheel cmd ifconfig
-permit nopass keepenv :wheel cmd service
+`cd networkmgr`
 
-```
+`python3.8 setup.py install`
 
-When rebooting NetworkMgr should automatically start if the desktop supports xdg.  Make sure that the user using NetworkMgr is in the wheel group.
+Users of NetworkMgr must be members of the _wheel_ group. To add a user: 
+
+`pw groupmod wheel -m username`
+
+### Starting 
+
+If the desktop environment supports XDG: log out, or restart the computer. NetworkMgr should start automatically at login time. 

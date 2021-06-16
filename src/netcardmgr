@@ -2,7 +2,7 @@
 
 import gi
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, GObject, GLib
+from gi.repository import Gtk
 from subprocess import Popen, PIPE
 import os
 import re
@@ -19,8 +19,13 @@ wifinics = Popen(wifis, shell=True, stdout=PIPE, close_fds=True,
                  universal_newlines=True)
 wifiscard = wifinics.stdout.readlines()[0].rstrip()
 rcconf = open('/etc/rc.conf', 'r').read()
+if os.path.exists('/etc/rc.conf.local'):
+    rcconflocal = open('/etc/rc.conf.local', 'r').read()
+else:
+    rcconflocal = "None"
 
 notnics = [
+    "enc",
     "lo",
     "fwe",
     "fwip",
@@ -28,11 +33,12 @@ notnics = [
     "plip",
     "pfsync",
     "pflog",
+    "ipfw",
     "tun",
     "sl",
     "faith",
     "ppp",
-    "brige",
+    "bridge",
     "ixautomation",
     "vm-ixautomation",
     "wg"
@@ -62,7 +68,7 @@ class autoConfigure():
             card = card.replace(".", "_")
             nc = re.sub(r'\d+', '', line.rstrip())
             if nc not in notnics:
-                if f'ifconfig_{card}=' in rcconf:
+                if f'ifconfig_{card}=' in (rcconf or rcconflocal):
                     print("Your wired network card is already configured.")
                 else:
                     rc = open('/etc/rc.conf', 'a')
@@ -78,9 +84,9 @@ class autoConfigure():
 
         for card in wifiscard.split():
             for wlanNum in range(0, 9):
-                if f'wlan{wlanNum}' not in rcconf:
+                if f'wlan{wlanNum}' not in (rcconf + rcconflocal):
                     break
-            if f'wlans_{card}=' in rcconf:
+            if f'wlans_{card}=' in (rcconf + rcconflocal):
                 print("Your wifi network card is already configured.")
                 if not os.path.exists('/etc/wpa_supplicant.conf'):
                     open('/etc/wpa_supplicant.conf', 'a').close()
@@ -114,13 +120,16 @@ class autoConfigure():
                 sleep(1)
             wlanNum += 1
 
+
 currentSettings = {}
+
+
 class netCardConfigWindow(Gtk.Window):
 
     def __init__(self, defaultactiveint):
-        ### Build Default Window
+        # Build Default Window
         Gtk.Window.__init__(self, title="Network Interface Configuration")
-        self.set_default_size(475,400)
+        self.set_default_size(475, 400)
 
         # Build Tab 1 Content
 
@@ -131,12 +140,11 @@ class netCardConfigWindow(Gtk.Window):
         interfaceComboBox.pack_start(cell, expand=True)
         interfaceComboBox.add_attribute(cell, 'text', 0)
 
-
         # Add interfaces to a ListStore
         store = Gtk.ListStore(str)
         validinterfaces = self.enumerate_nics()
         for validinterface in validinterfaces:
-            store.append ([validinterface])
+            store.append([validinterface])
 
         # Build the UI aspects of the ComboBox, passing the interface clicked in the trayicon
         # as the interface that needs to be the active one when the combo box is drawn
@@ -188,7 +196,7 @@ class netCardConfigWindow(Gtk.Window):
 
         ipInputGatewayLabel = Gtk.Label(label="Gateway")
         ipInputGatewayLabel.set_margin_top(15)
-        
+
         ipInputAddressEntry = Gtk.Entry()
         ipInputAddressEntry.set_margin_start(15)
         ipInputAddressEntry.set_text(currentSettings["Interface IP"])
@@ -263,23 +271,23 @@ class netCardConfigWindow(Gtk.Window):
         gridOne.attach(dnsEntryBox, 0, 4, 4, 1)
         gridOne.attach(searchBox, 0, 5, 4, 1)
 
-        ## Build Tab 2 Content
+        # Build Tab 2 Content
 
-        ## Interface Drop Down Combo Box
+        # Interface Drop Down Combo Box
         cell6 = Gtk.CellRendererText()
 
         interfaceComboBox6 = Gtk.ComboBox()
         interfaceComboBox6.pack_start(cell6, expand=True)
         interfaceComboBox6.add_attribute(cell6, 'text', 0)
 
-        ## Add interfaces to a ListStore
+        # Add interfaces to a ListStore
         store6 = Gtk.ListStore(str)
         validinterfaces6 = self.enumerate_nics()
         for validinterface6 in validinterfaces6:
-            store6.append ([validinterface6])
+            store6.append([validinterface6])
 
-        ## Build the UI aspects of the ComboBox, passing the interface clicked in the trayicon
-        ## as the interface that needs to be the active one when the combo box is drawn
+        # Build the UI aspects of the ComboBox, passing the interface clicked in the trayicon
+        # as the interface that needs to be the active one when the combo box is drawn
         activeComboBoxObjectIndex6 = validinterfaces6.index(f"{defaultactiveint}")
         interfaceComboBox6.set_model(store)
         interfaceComboBox6.set_margin_top(15)
@@ -287,17 +295,17 @@ class netCardConfigWindow(Gtk.Window):
         interfaceComboBox6.set_active(activeComboBoxObjectIndex6)
         interfaceComboBox6.connect("changed", self.cbox_config_refresh)
 
-        ## Build Label to sit in front of the ComboBox
+        # Build Label to sit in front of the ComboBox
         labelOne6 = Gtk.Label(label="Interface:")
         labelOne6.set_margin_top(15)
         labelOne6.set_margin_start(30)
 
-        ## Add both objects to a single box, which will then be added to the grid
+        # Add both objects to a single box, which will then be added to the grid
         interfaceBox6 = Gtk.Box(orientation=0, spacing=100)
         interfaceBox6.pack_start(labelOne6, False, False, 0)
         interfaceBox6.pack_end(interfaceComboBox6, True, True, 0)
 
-        ## Add radio button to toggle DHCP or not
+        # Add radio button to toggle DHCP or not
         radioButton1V6 = Gtk.RadioButton.new_with_label(None, "SLAAC")
         radioButton1V6.set_margin_top(15)
         radioButton2V6 = Gtk.RadioButton.new_with_label_from_widget(radioButton1V6, "Manual")
@@ -314,7 +322,7 @@ class netCardConfigWindow(Gtk.Window):
         radioBox6.pack_start(radioButton1V6, True, False, 0)
         radioBox6.pack_end(radioButton2V6, True, True, 0)
 
-        ## Add Manual Address Field
+        # Add Manual Address Field
         ipInputAddressLabel6 = Gtk.Label(label="Address")
         ipInputAddressLabel6.set_margin_top(15)
 
@@ -323,7 +331,7 @@ class netCardConfigWindow(Gtk.Window):
 
         ipInputGatewayLabel6 = Gtk.Label(label="Gateway")
         ipInputGatewayLabel6.set_margin_top(15)
-        
+
         ipInputAddressEntry6 = Gtk.Entry()
         ipInputAddressEntry6.set_margin_start(15)
         ipInputMaskEntry6 = Gtk.Entry()
@@ -341,7 +349,7 @@ class netCardConfigWindow(Gtk.Window):
         ipEntryBox6.pack_start(ipInputMaskEntry6, False, False, 0)
         ipEntryBox6.pack_start(ipInputGatewayEntry6, False, False, 0)
 
-        ## Add DNS Server Settings
+        # Add DNS Server Settings
         dnsLabel6 = Gtk.Label(label="DNS Servers: ")
         dnsLabel6.set_margin_top(15)
         dnsLabel6.set_margin_end(58)
@@ -354,7 +362,7 @@ class netCardConfigWindow(Gtk.Window):
         dnsEntryBox6.pack_start(dnsLabel6, False, False, 0)
         dnsEntryBox6.pack_end(dnsEntry6, True, True, 0)
 
-        ## Add Search Domain Settings
+        # Add Search Domain Settings
 
         searchLabel6 = Gtk.Label(label="Search domains: ")
         searchLabel6.set_margin_top(15)
@@ -370,7 +378,7 @@ class netCardConfigWindow(Gtk.Window):
         searchBox6.pack_start(searchLabel6, False, False, 0)
         searchBox6.pack_end(searchEntry6, True, True, 0)
 
-        ## Build the grid, which will handle the physical layout of the UI elements.
+        # Build the grid, which will handle the physical layout of the UI elements.
         gridOne6 = Gtk.Grid()
         gridOne6.set_column_homogeneous(True)
         gridOne6.set_row_homogeneous(False)
@@ -383,7 +391,7 @@ class netCardConfigWindow(Gtk.Window):
         gridOne6.attach(dnsEntryBox6, 0, 4, 4, 1)
         gridOne6.attach(searchBox6, 0, 5, 4, 1)
 
-        ### Build Notebook
+        # Build Notebook
 
         nb = Gtk.Notebook()
         nb.set_margin_start(10)
@@ -392,12 +400,12 @@ class netCardConfigWindow(Gtk.Window):
         nb.set_margin_bottom(10)
         nb.set_tab_pos(2)
 
-        ### Build Save & Cancel Buttons
+        # Build Save & Cancel Buttons
 
         saveButton = Gtk.Button(label="Save...")
         saveButton.set_margin_bottom(10)
         saveButton.set_margin_start(10)
-        saveButton.connect("clicked",self.commit_pending_changes)
+        saveButton.connect("clicked", self.commit_pending_changes)
         cancelButton = Gtk.Button(label="Cancel...")
         cancelButton.set_margin_bottom(10)
         cancelButton.connect("clicked", self.discard_pending_changes)
@@ -409,47 +417,47 @@ class netCardConfigWindow(Gtk.Window):
         nb.append_page(gridOne)
         nb.set_tab_label_text(gridOne, "IPv4 Settings")
 
-        ## Apply Tab 2 content and formatting to the notebook
+        # Apply Tab 2 content and formatting to the notebook
         nb.append_page(gridOne6)
         nb.set_tab_label_text(gridOne6, "IPv6 Settings")
 
-        ### Put all the widgets together into one window
+        # Put all the widgets together into one window
         mainBox = Gtk.Box(orientation=1, spacing=0)
         mainBox.pack_start(nb, False, False, 0)
         mainBox.pack_start(buttonsWindow, False, False, 0)
         self.add(mainBox)
 
-        #### Run any functions that need to execute once at window creation
+        # Run any functions that need to execute once at window creation
         self.cbox_config_refresh(interfaceComboBox)
 
-
-    # Returns a list of valid configureable interfaces.
+    # Returns a list of valid configurable interfaces.
     def enumerate_nics(self):
         validnics = list()
         confnotnics = ["lo", "fwe", "fwip", "tap", "plip", "pfsync", "pflog",
-        "tun", "sl", "faith", "ppp", "bridge", "ixautomation"]
+                       "tun", "sl", "faith", "ppp", "bridge", "ixautomation"]
         confncard = 'ifconfig -l'
         confnics = Popen(confncard, shell=True, stdout=PIPE, close_fds=True, universal_newlines=True)
         confnetcard = confnics.stdout.readlines()[0].rstrip()
         confnetcardarray = confnetcard.split(" ")
         for confnic in confnetcardarray:
-            nicgeneralized = re.findall( "[a-zA-Z]+", confnic)
+            nicgeneralized = re.findall("[a-zA-Z]+", confnic)
             stringnicgeneralized = str(nicgeneralized).replace("'", "")
             stringnicgeneralized = stringnicgeneralized.replace("[", "")
             stringnicgeneralized = stringnicgeneralized.replace("]", "")
             if stringnicgeneralized in confnotnics:
                 print(f"{confnic} was generalized to {nicgeneralized} and was found in the notnics list! "
-                "It will not be added to the valid configurable nic list in the netCardConfigWindow.enumerate_nics method.")
+                      "It will not be added to the valid configurable nic list in the netCardConfigWindow.enumerate_nics method.")
             else:
                 validnics.append(confnic)
-        return(validnics)   
+        return(validnics)
+
     # Used with the combo box to refresh the UI of tab 1 with active settings for the newly selected active interface.
     def cbox_config_refresh(self, widget):
         refreshedInterface = widget.get_active()
         refreshedInterfaceName = self.enumerate_nics()[refreshedInterface]
         # actions here need to refresh the values on the first two tabs.
         print(f"Refreshing settings to match current settings on {refreshedInterface}. "
-        f"Interface name is {refreshedInterfaceName}") 
+              f"Interface name is {refreshedInterfaceName}")
         self.get_current_interface_settings(refreshedInterfaceName)
         self.display_current_interface_settings(widget)
 
@@ -474,17 +482,17 @@ class netCardConfigWindow(Gtk.Window):
 
         ifconfigaInt = f"ifconfig -f inet:dotted {aInt}"
         ifconfigaIntOutput = subprocess.check_output(ifconfigaInt.split(" "))
-        aIntIP = re.findall('inet [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+',str(ifconfigaIntOutput))[0]
+        aIntIP = re.findall(r'inet [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+', str(ifconfigaIntOutput))[0]
         aIntIPStrip = str(aIntIP).replace("inet ", "")
         aIntIPStrip = str(aIntIPStrip).replace("'", "")
         aIntIPStrip = str(aIntIPStrip).replace("[", "")
         aIntIPStrip = str(aIntIPStrip).replace("]", "")
-        aIntMask = re.findall('netmask [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+',str(ifconfigaIntOutput))[0]
+        aIntMask = re.findall(r'netmask [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+', str(ifconfigaIntOutput))[0]
         aIntMaskStrip = str(aIntMask).replace("netmask ", "")
         aIntMaskStrip = str(aIntMaskStrip).replace("'", "")
         aIntMaskStrip = str(aIntMaskStrip).replace("[", "")
         aIntMaskStrip = str(aIntMaskStrip).replace("]", "")
-        aIntBroadcast = re.findall('broadcast [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+',str(ifconfigaIntOutput))[0]
+        aIntBroadcast = re.findall(r'broadcast [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+', str(ifconfigaIntOutput))[0]
         aIntBroadcastStrip = str(aIntBroadcast).replace("broadcast ", "")
         aIntBroadcastStrip = str(aIntBroadcastStrip).replace("'", "")
         aIntBroadcastStrip = str(aIntBroadcastStrip).replace("[", "")
@@ -493,85 +501,80 @@ class netCardConfigWindow(Gtk.Window):
         if (DHCPStatusOutput == "DHCP"):
             print(f"{DHCPStatusOutput}")
             DHClientFileTest = os.path.exists(f"/var/db/dhclient.leases.{aInt}")
-            if DHClientFileTest == False:
+            if DHClientFileTest is False:
                 print(f"dhclientfiletest = {DHClientFileTest}")
-                RenewDHCP = f"dhclient {aInt}"
-                RenewDHCPOutput = subprocess.check_output(RenewDHCP.split(" "))
+                # RenewDHCP = f"dhclient {aInt}"
+                # RenewDHCPOutput = subprocess.check_output(RenewDHCP.split(" "))
                 sleep(5)
                 DHClientFileTest = os.path.exists(f"/var/db/dhclient.leases.{aInt}")
-                if DHClientFileTest == False:
+                if DHClientFileTest is False:
                     print(f"DHCP is enabled, but we're unable to read the lease file a /var/db/dhclient.leases.{aInt}")
                     aIntGatewayStrip = ""
             else:
                 DHCPLeaseInfo = open(f"/var/db/dhclient.leases.{aInt}", "r").read()
-                aIntGateway = re.findall("option routers [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+;", DHCPLeaseInfo)[0]
+                aIntGateway = re.findall(r"option routers [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+;", DHCPLeaseInfo)[0]
                 aIntGatewayStrip = str(aIntGateway).replace("option routers ", "")
-                aIntGatewayStrip = str(aIntGatewayStrip).replace("'","")
+                aIntGatewayStrip = str(aIntGatewayStrip).replace("'", "")
                 aIntGatewayStrip = str(aIntGatewayStrip).replace("[", "")
-                aIntGatewayStrip = str(aIntGatewayStrip).replace("]","")
-                aIntGatewayStrip = str(aIntGatewayStrip).replace(";","")
+                aIntGatewayStrip = str(aIntGatewayStrip).replace("]", "")
+                aIntGatewayStrip = str(aIntGatewayStrip).replace(";", "")
 
-                aIntDHCP = f"resolvconf -l {aInt}.dhcp"  
-                aIntDHCPResults = subprocess.check_output(aIntDHCP.split(" "))  
-                DNSMatch = re.findall('nameserver [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' ,str(aIntDHCPResults))
+                aIntDHCP = f"resolvconf -l {aInt}.dhcp"
+                aIntDHCPResults = subprocess.check_output(aIntDHCP.split(" "))
+                DNSMatch = re.findall(r'nameserver [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+', str(aIntDHCPResults))
 
                 SearchDomainMatch = re.findall('search [a-zA-Z.]*', str(aIntDHCPResults))
                 if len(SearchDomainMatch) < 1:
                     RCConfDomainSearch = open('/etc/resolv.conf', 'r').read()
                     SearchDomainMatch = re.findall('domain (.*)', RCConfDomainSearch)
-                SearchDomainMatchStrip = str(SearchDomainMatch).replace("domain ","")
+                SearchDomainMatchStrip = str(SearchDomainMatch).replace("domain ", "")
                 SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("'", "")
                 SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("[", "")
                 SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("]", "")
-
         else:
             RRConfGatewaySearch = open('/etc/rc.conf', 'r').read()
-            RRConfGatewayResults = re.findall('defaultrouter="[0-9]+\.[0-9]+\.[0-9]+\.[0-9]"', RRConfGatewaySearch)
+            RRConfGatewayResults = re.findall(r'defaultrouter="[0-9]+\.[0-9]+\.[0-9]+\.[0-9]"', RRConfGatewaySearch)
             aIntGatewayStrip = str(RRConfGatewayResults).replace('defaultrouter="', "")
             aIntGatewayStrip = str(aIntGatewayStrip).replace('"', "")
             aIntGatewayStrip = str(aIntGatewayStrip).replace('[', "")
-            aIntGatewayStrip = str(aIntGatewayStrip).replace(']',"")
-            aIntGatewayStrip = str(aIntGatewayStrip).replace("'","")
+            aIntGatewayStrip = str(aIntGatewayStrip).replace(']', "")
+            aIntGatewayStrip = str(aIntGatewayStrip).replace("'", "")
 
             DefaultDNSServers = open('/etc/resolv.conf').read()
-            DNSMatch = re.findall('nameserver [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' ,str(DefaultDNSServers))
+            DNSMatch = re.findall(r'nameserver [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+', str(DefaultDNSServers))
 
             RCConfDomainSearch = open('/etc/resolv.conf', 'r').read()
             SearchDomainMatch = re.findall('domain (.*)', RCConfDomainSearch)
-            SearchDomainMatchStrip = str(SearchDomainMatch).replace("domain ","")
+            SearchDomainMatchStrip = str(SearchDomainMatch).replace("domain ", "")
             SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("'", "")
             SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("[", "")
             SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("]", "")
 
-
-        
-        #currentSettings = {}
+        # currentSettings = {}
         currentSettings["Active Interface"] = active_int
         currentSettings["Address Assignment Method"] = DHCPStatusOutput
         currentSettings["Interface IP"] = aIntIPStrip
         currentSettings["Interface Subnet Mask"] = aIntMaskStrip
         currentSettings["Broadcast Address"] = aIntBroadcastStrip
         currentSettings["Default Gateway"] = aIntGatewayStrip
-        #[currentSettings.append(str(DNSServer).replace("nameserver ", "")) for DNSServer in DNSMatch]
+        # [currentSettings.append(str(DNSServer).replace("nameserver ", "")) for DNSServer in DNSMatch]
         currentSettings["Search Domain"] = SearchDomainMatchStrip
         i = 1
         while i <= len(DNSMatch):
-            currentSettings[f"DNS Server {i}"] = str(DNSMatch[(i-1)]).replace("nameserver ", "")
+            currentSettings[f"DNS Server {i}"] = str(DNSMatch[(i - 1)]).replace("nameserver ", "")
             i = i + 1
 
-        print(f"Current settings are below:")
+        print("Current settings are below:")
         print(f"{currentSettings}")
 
     def display_current_interface_settings(self, widget):
-        print(f"display_current_interface_settings_go_here")
+        print("display_current_interface_settings_go_here")
 
     def commit_pending_changes(self, widget):
-        print(f"commit_pending_changes_goes_here")
+        print("commit_pending_changes_goes_here")
 
     def discard_pending_changes(self, widget):
-        print(f"discard_pending_changes_goes_here")
-
-
+        print("discard_pending_changes_goes_here")
 
 
 def openNetCardConfigwindow(default_int):
@@ -579,6 +582,7 @@ def openNetCardConfigwindow(default_int):
     win.connect("destroy", Gtk.main_quit)
     win.show_all()
     Gtk.main()
+
 
 if "-auto" in sys.argv:
     autoConfigure()
@@ -588,4 +592,4 @@ elif "-configure" in sys.argv:
     passedint = sys.argv[intloc]
     openNetCardConfigwindow(passedint)
 else:
-    print(f"No acceptable flags were passed to the function.")
+    print("No acceptable flags were passed to the function.")
