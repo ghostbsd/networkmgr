@@ -1,6 +1,6 @@
 ## NetworkMgr
 
-A Python GTK3 network manager for FreeBSD, GhostBSD, TrueOS and DragonFlyBSD. 
+A Python GTK3 network manager for FreeBSD, GhostBSD, and DragonFlyBSD. 
 
 ![alt text](https://image.ibb.co/bWha3R/Screenshot_at_2017_11_24_20_57_33.png)
 
