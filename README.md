@@ -42,4 +42,4 @@ If the desktop environment supports XDG: log out, or restart the computer. Netwo
 
 ### For Develpment dicussion 
 
-You can join us at #[networkmgr](irc://irc.libera.chat:6697/ghostbsd) on irc.libera.chat:6697
+You can join us at [#networkmgr](irc://irc.libera.chat:6697/networkmgr) on irc.libera.chat:6697
