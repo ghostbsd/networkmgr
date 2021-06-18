@@ -40,6 +40,6 @@ Users of NetworkMgr must be members of the _wheel_ group. To add a user:
 
 If the desktop environment supports XDG: log out, or restart the computer. NetworkMgr should start automatically at login time.
 
-### For Develpment dicussion 
+### For Development dicussion 
 
 You can join us at [#networkmgr](irc://irc.libera.chat:6697/networkmgr) on irc.libera.chat:6697
