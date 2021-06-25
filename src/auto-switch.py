@@ -29,7 +29,7 @@ notnics_regex = r"(enc|lo|fwe|fwip|tap|plip|pfsync|pflog|ipfw|tun|sl|faith|" \
     r"ppp|bridge|ixautomation|vm-ixautomation|wg)[0-9]+(\s*)"
 
 recompile = re.compile(notnics_regex)
-nics = recompile.sub('', nics).replace(nic, '').strip().
+nics = recompile.sub('', nics).replace(nic, '').strip()
 
 if not nics:
     exit()
