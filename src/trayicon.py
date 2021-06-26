@@ -356,7 +356,7 @@ class trayIcon(object):
 
     def Authentication(self, ssid_info, card, failed):
         self.window = Gtk.Window()
-        self.window.set_title("wi-Fi Network Authentication Required")
+        self.window.set_title("Wi-Fi Network Authentication Required")
         self.window.set_border_width(0)
         self.window.set_size_request(500, 200)
         box1 = Gtk.VBox(False, 0)
