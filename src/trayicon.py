@@ -430,7 +430,7 @@ class trayIcon(object):
 
     def Open_Wpa_Supplicant(self, ssid, card):
         ws = '\nnetwork={'
-        ws += f'\n ssid={ssid}'
+        ws += f'\n ssid="{ssid}"'
         ws += '\n key_mgmt=NONE\n}\n'
         wsf = open("/etc/wpa_supplicant.conf", 'a')
         wsf.writelines(ws)
