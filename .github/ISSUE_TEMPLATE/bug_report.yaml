@@ -6,8 +6,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to fill out this bug report! |
-        For question use [Discussions](https://github.com/ghostbsd/networkmgr/discussions)
+        Thanks for taking the time to fill out this bug report!
+        For question or comment use [Discussions](https://github.com/ghostbsd/networkmgr/discussions).
   - type: dropdown
     id: browsers
     attributes:
