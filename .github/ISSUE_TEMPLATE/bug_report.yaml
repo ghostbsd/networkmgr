@@ -7,12 +7,30 @@ body:
     attributes:
       value: |
         Thanks for taking the time to fill out this bug report!
+    - type: dropdown
+    id: browsers
+    attributes:
+      label: Which BSD system
+      multiple: true
+      options:
+        - GhostBSD
+        - FreeBSD
+        - DragonFly BSD
+    validations:
+      required: true
   - type: textarea
-    id: what-happened
+    id: describe 
     attributes:
       label: Describe the bug
       description: A clear and concise description of what the bug is?
-      placeholder: description us what happen!
-      value: "A bug happened!"
+      placeholder: Description us what happen!
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce the bug
+      description: what are steps to reproduce the behavior?
+      placeholder: Steps to reproduce the behavior!
     validations:
       required: true
