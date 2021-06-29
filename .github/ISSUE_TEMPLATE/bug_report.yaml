@@ -6,7 +6,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to fill out this bug report!
+        Thanks for taking the time to fill out this bug report! |
+        For question use [Discussions](https://github.com/ghostbsd/networkmgr/discussions)
   - type: dropdown
     id: browsers
     attributes:
@@ -29,7 +30,7 @@ body:
   - type: textarea
     id: reproduce
     attributes:
-      label: How to reproduce the bug
+      label: How to reproduce the bug?
       description: The steps to reproduce the behavior.
       placeholder: what are the steps to reproduce the behavior?
     validations:
