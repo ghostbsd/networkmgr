@@ -247,6 +247,34 @@ def connectionStatus(card):
     return netstate
 
 
+def switch_default(nic):
+    nics = Popen(
+        ['ifconfig', '-l', 'ether'],
+        stdout=PIPE,
+        close_fds=True,
+        universal_newlines=True
+    )
+    nics = nics.stdout.read().replace(nic, '').strip()
+    if not nics:
+        exit()
+    nic_list = nics.split()
+    for nics in nic_list:
+        output = Popen(
+            ['ifconfig', nics],
+            stdout=PIPE,
+            close_fds=True,
+            universal_newlines=True
+        )
+        nic_ifconfig = output.stdout.read()
+        if 'status: active' in nic_ifconfig or 'status: associated' in nic_ifconfig:
+            if 'inet ' in nic_ifconfig or 'inet6' in nic_ifconfig:
+                if openrc:
+                    os.system(f'service dhcpcd.{nics} restart')
+                else:
+                    os.system(f'service dhclient restart {nics}')
+                break
+
+
 def stopallnetwork():
     os.system(f'{rc}service {network} stop')
 
@@ -256,14 +284,22 @@ def startallnetwork():
 
 
 def stopnetworkcard(netcard):
-    os.system(f'ifconfig {netcard} down')
+    if openrc is True:
+        os.system(f'ifconfig {netcard} down')
+    else:
+        os.system(f'service netif stop {netcard}')
+        switch_default(netcard)
 
 
 def startnetworkcard(netcard):
     if openrc is True:
+        os.system(f'ifconfig {netcard} up')
         os.system(f'{rc}service dhcpcd.{netcard} restart')
     else:
-        os.system(f'service dhclient restart {netcard}')
+        os.system(f'service netif start {netcard}')
+        sleep(1)
+        os.system('service routing restart')
+        os.system(f'service dhclient start {netcard}')
 
 
 def wifiDisconnection(wificard):
@@ -306,7 +342,7 @@ def subnetHexToDec(ifconfigstring):
 
 
 def get_ssid_wpa_supplicant_config(ssid):
-    cmd = """grep -A 3 'ssid="ericbsd"' /etc/wpa_supplicant.conf"""
+    cmd = f"""grep -A 3 'ssid="{ssid}"' /etc/wpa_supplicant.conf"""
     out = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
     return out.stdout.read().splitlines()
 

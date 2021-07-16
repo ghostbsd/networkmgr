@@ -2,7 +2,6 @@
 
 import sys
 import os
-import re
 from subprocess import Popen, PIPE
 
 args = sys.argv
@@ -14,33 +13,32 @@ cmd = ["kenv", "rc_system"]
 rc_system = Popen(cmd, stdout=PIPE, universal_newlines=True).stdout.read()
 openrc = True if 'openrc' in rc_system else False
 
+cmd = 'netstat -rn | grep default'
+defautl_nic = Popen(cmd, stdout=PIPE, shell=True, universal_newlines=True).stdout.read()
+
 if openrc:
     os.system(f'service dhcpcd.{nic} stop')
+else:
+    if nic in defautl_nic and 'wlan' not in defautl_nic:
+        os.system(f'service netif stop {nic}')
 
 nics = Popen(
-    ['ifconfig', '-l'],
+    ['ifconfig', '-l', 'ether'],
     stdout=PIPE,
     close_fds=True,
     universal_newlines=True
 )
-nics = nics.stdout.read().strip()
 
-notnics_regex = r"(enc|lo|fwe|fwip|tap|plip|pfsync|pflog|ipfw|tun|sl|faith|" \
-    r"ppp|bridge|ixautomation|vm-ixautomation|wg)[0-9]+(\s*)"
-
-recompile = re.compile(notnics_regex)
-nics = recompile.sub('', nics).replace(nic, '').strip()
+nics = nics.stdout.read().replace(nic, '').strip()
 
 if not nics:
     exit()
 
 nic_list = nics.split()
 
-for card in nic_list:
-    print(card)
-    ncard = 'ifconfig -l'
+for nics in nic_list:
     output = Popen(
-        ['ifconfig', card],
+        ['ifconfig', nics],
         stdout=PIPE,
         close_fds=True,
         universal_newlines=True
@@ -49,7 +47,7 @@ for card in nic_list:
     if 'status: active' in nic_ifconfig or 'status: associated' in nic_ifconfig:
         if 'inet ' in nic_ifconfig or 'inet6' in nic_ifconfig:
             if openrc:
-                os.system(f'service dhcpcd.{card} restart')
+                os.system(f'service dhcpcd.{nics} restart')
             else:
-                os.system(f'service dhclient restart {card}')
+                os.system(f'service dhclient restart {nics}')
             break
