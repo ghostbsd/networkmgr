@@ -256,7 +256,7 @@ def switch_default(nic):
     )
     nics = nics.stdout.read().replace(nic, '').strip()
     if not nics:
-        exit()
+        return
     nic_list = nics.split()
     for nics in nic_list:
         output = Popen(
@@ -273,6 +273,7 @@ def switch_default(nic):
                 else:
                     os.system(f'service dhclient restart {nics}')
                 break
+    return
 
 
 def stopallnetwork():
