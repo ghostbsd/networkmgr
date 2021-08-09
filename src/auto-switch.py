@@ -2,6 +2,7 @@
 
 import sys
 import os
+import re
 from subprocess import Popen, PIPE
 
 args = sys.argv
@@ -29,16 +30,18 @@ nics = Popen(
     universal_newlines=True
 )
 
-nics = nics.stdout.read().replace(nic, '').strip()
+notnics_regex = r"(enc|lo|fwe|fwip|tap|plip|pfsync|pflog|ipfw|tun|sl|faith|" \
+    r"ppp|bridge|wg)[0-9]+(\s*)|vm-[a-z]+(\s*)"
 
-if not nics:
+nics_lelfover = nics.stdout.read().replace(nic, '').strip()
+nic_list = re.sub(notnics_regex, '', nics_lelfover).strip().split()
+
+if not nic_list:
     exit()
 
-nic_list = nics.split()
-
-for nics in nic_list:
+for current_nic in nic_list:
     output = Popen(
-        ['ifconfig', nics],
+        ['ifconfig', current_nic],
         stdout=PIPE,
         close_fds=True,
         universal_newlines=True
@@ -47,7 +50,7 @@ for nics in nic_list:
     if 'status: active' in nic_ifconfig or 'status: associated' in nic_ifconfig:
         if 'inet ' in nic_ifconfig or 'inet6' in nic_ifconfig:
             if openrc:
-                os.system(f'service dhcpcd.{nics} restart')
+                os.system(f'service dhcpcd.{current_nic} restart')
             else:
-                os.system(f'service dhclient restart {nics}')
+                os.system(f'service dhclient restart {current_nic}')
             break
