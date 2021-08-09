@@ -16,7 +16,7 @@ else:
     rcconflocal = "None"
 
 notnics_regex = "(enc|lo|fwe|fwip|tap|plip|pfsync|pflog|ipfw|tun|sl|faith|" \
-    "ppp|bridge|ixautomation|vm-ixautomation|wg|wlan)[0-9]+"
+    "ppp|bridge|wg|wlan)[0-9]+|vm-[a-z]+"
 
 # wifi_driver_regex is taken from devd.conf wifi-driver-regex
 wifi_driver_regex = "(ath|bwi|bwn|ipw|iwi|iwm|iwn|malo|mwl|otus|ral|rsu|" \
