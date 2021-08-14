@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/local/bin/python3
 
 import os
 import re
@@ -23,7 +23,9 @@ wifi_driver_regex = "(ath|bwi|bwn|ipw|iwi|iwm|iwn|malo|mwl|otus|ral|rsu|" \
     "rtwn|rum|run|uath|upgt|ural|urtw|wi|wpi|wtap|zyd)[0-9]+"
 
 if re.search(notnics_regex, nic):
+    print(f"exit {nic}")
     exit(0)
+
 if re.search(wifi_driver_regex, nic):
     if not os.path.exists('/etc/wpa_supplicant.conf'):
         open('/etc/wpa_supplicant.conf', 'a').close()
