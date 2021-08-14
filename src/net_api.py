@@ -35,24 +35,6 @@ import re
 from time import sleep
 path.append("/usr/local/share/networkmgr")
 
-not_nics = [
-    "lo",
-    "fwe",
-    "fwip",
-    "tap",
-    "plip",
-    "pfsync",
-    "pflog",
-    "tun",
-    "sl",
-    "faith",
-    "ppp",
-    "brige",
-    "ixautomation",
-    "vm-ixautomation",
-    "vm-public",
-    "wg"
-]
 
 cmd = "kenv | grep rc_system"
 rc_system = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
@@ -119,12 +101,16 @@ def get_ssid(wificard):
     return out
 
 
-def networklist():
-    crd = Popen('ifconfig -l', shell=True, stdout=PIPE, universal_newlines=True)
-    card_list = crd.stdout.read().strip().split()
-    re_compile = re.compile(("|".join(not_nics)))
-    bad_list = list(filter(re_compile.match, card_list))
-    return list(set(card_list).difference(bad_list))
+def nics_list():
+    notnics_regex = r"(enc|lo|fwe|fwip|tap|plip|pfsync|pflog|ipfw|tun|sl|" \
+        r"faith|ppp|bridge|wg)[0-9]+(\s*)|vm-[a-z]+(\s*)"
+    nics = Popen(
+        'ifconfig -l ether',
+        shell=True,
+        stdout=PIPE,
+        universal_newlines=True
+    ).stdout.read().strip()
+    return re.sub(notnics_regex, '', nics).strip().split()
 
 
 def ifcardconnected(netcard):
@@ -159,7 +145,7 @@ def network_service_state():
 
 
 def networkdictionary():
-    nlist = networklist()
+    nlist = nics_list()
     maindictionary = {
         'service': network_service_state(),
         'default': defaultcard()
@@ -248,30 +234,23 @@ def connectionStatus(card):
 
 
 def switch_default(nic):
-    nics = Popen(
-        ['ifconfig', '-l', 'ether'],
-        stdout=PIPE,
-        close_fds=True,
-        universal_newlines=True
-    )
-    nics = nics.stdout.read().replace(nic, '').strip()
+    nics = nics_list()
+    nics.remove(nic)
     if not nics:
         return
-    nic_list = nics.split()
-    for nics in nic_list:
-        output = Popen(
-            ['ifconfig', nics],
+    for card in nics:
+        nic_info = Popen(
+            ['ifconfig', card],
             stdout=PIPE,
             close_fds=True,
             universal_newlines=True
-        )
-        nic_ifconfig = output.stdout.read()
-        if 'status: active' in nic_ifconfig or 'status: associated' in nic_ifconfig:
-            if 'inet ' in nic_ifconfig or 'inet6' in nic_ifconfig:
+        ).stdout.read()
+        if 'status: active' in nic_info or 'status: associated' in nic_info:
+            if 'inet ' in nic_info or 'inet6' in nic_info:
                 if openrc:
-                    os.system(f'service dhcpcd.{nics} restart')
+                    os.system(f'service dhcpcd.{card} restart')
                 else:
-                    os.system(f'service dhclient restart {nics}')
+                    os.system(f'service dhclient restart {card}')
                 break
     return
 
