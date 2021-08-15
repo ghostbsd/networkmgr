@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/local/bin/python3
 
 import sys
 import os
@@ -13,15 +13,6 @@ nic = args[1]
 cmd = ["kenv", "rc_system"]
 rc_system = Popen(cmd, stdout=PIPE, universal_newlines=True).stdout.read()
 openrc = True if 'openrc' in rc_system else False
-
-cmd = 'netstat -rn | grep default'
-defautl_nic = Popen(cmd, stdout=PIPE, shell=True, universal_newlines=True).stdout.read()
-
-if openrc:
-    os.system(f'service dhcpcd.{nic} stop')
-else:
-    if nic in defautl_nic and 'wlan' not in defautl_nic:
-        os.system(f'service netif stop {nic}')
 
 nics = Popen(
     ['ifconfig', '-l', 'ether'],
@@ -38,6 +29,15 @@ nic_list = re.sub(notnics_regex, '', nics_lelfover).strip().split()
 
 if not nic_list:
     exit()
+
+cmd = 'netstat -rn | grep default'
+defautl_nic = Popen(cmd, stdout=PIPE, shell=True, universal_newlines=True).stdout.read()
+
+if openrc:
+    os.system(f'service dhcpcd.{nic} stop')
+else:
+    if nic in defautl_nic and 'wlan' not in defautl_nic:
+        os.system(f'service netif stop {nic}')
 
 for current_nic in nic_list:
     output = Popen(
