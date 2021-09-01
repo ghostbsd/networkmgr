@@ -25,19 +25,13 @@ notnics_regex = r"(enc|lo|fwe|fwip|tap|plip|pfsync|pflog|ipfw|tun|sl|faith|" \
     r"ppp|bridge|wg)[0-9]+(\s*)|vm-[a-z]+(\s*)"
 
 nics_lelfover = nics.stdout.read().replace(nic, '').strip()
-nic_list = re.sub(notnics_regex, '', nics_lelfover).strip().split()
+nic_list = sorted(re.sub(notnics_regex, '', nics_lelfover).strip().split())
 
 if not nic_list:
     exit()
 
 cmd = 'netstat -rn | grep default'
 defautl_nic = Popen(cmd, stdout=PIPE, shell=True, universal_newlines=True).stdout.read()
-
-if openrc:
-    os.system(f'service dhcpcd.{nic} stop')
-else:
-    if nic in defautl_nic and 'wlan' not in defautl_nic:
-        os.system(f'service netif stop {nic}')
 
 for current_nic in nic_list:
     output = Popen(
@@ -48,6 +42,11 @@ for current_nic in nic_list:
     )
     nic_ifconfig = output.stdout.read()
     if 'status: active' in nic_ifconfig or 'status: associated' in nic_ifconfig:
+        if openrc:
+            os.system(f'service dhcpcd.{nic} stop')
+        else:
+            if nic in defautl_nic and nic_ifconfig not in defautl_nic:
+                os.system(f'service netif stop {nic}')
         if 'inet ' in nic_ifconfig or 'inet6' in nic_ifconfig:
             if openrc:
                 os.system(f'service dhcpcd.{current_nic} restart')
