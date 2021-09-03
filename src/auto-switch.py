@@ -14,6 +14,27 @@ cmd = ["kenv", "rc_system"]
 rc_system = Popen(cmd, stdout=PIPE, universal_newlines=True).stdout.read()
 openrc = True if 'openrc' in rc_system else False
 
+cmd = 'netstat -rn | grep default'
+defautl_nic = Popen(cmd, stdout=PIPE, shell=True, universal_newlines=True).stdout.read()
+
+nic_ifconfig = Popen(
+    ['ifconfig', nic],
+    stdout=PIPE,
+    close_fds=True,
+    universal_newlines=True
+).stdout.read()
+
+# Only stop dhclient if the status is not active or associated
+active_status = (
+    'status: active' in nic_ifconfig,
+    'status: associated' in nic_ifconfig
+)
+if any(active_status) is False:
+    if openrc:
+        os.system(f'service dhcpcd.{nic} stop')
+    else:
+        os.system(f'service dhclient stop {nic}')
+
 nics = Popen(
     ['ifconfig', '-l', 'ether'],
     stdout=PIPE,
@@ -30,9 +51,6 @@ nic_list = sorted(re.sub(notnics_regex, '', nics_lelfover).strip().split())
 if not nic_list:
     exit()
 
-cmd = 'netstat -rn | grep default'
-defautl_nic = Popen(cmd, stdout=PIPE, shell=True, universal_newlines=True).stdout.read()
-
 for current_nic in nic_list:
     output = Popen(
         ['ifconfig', current_nic],
@@ -42,11 +60,6 @@ for current_nic in nic_list:
     )
     nic_ifconfig = output.stdout.read()
     if 'status: active' in nic_ifconfig or 'status: associated' in nic_ifconfig:
-        if openrc:
-            os.system(f'service dhcpcd.{nic} stop')
-        else:
-            if nic in defautl_nic and nic_ifconfig not in defautl_nic:
-                os.system(f'service netif stop {nic}')
         if 'inet ' in nic_ifconfig or 'inet6' in nic_ifconfig:
             if openrc:
                 os.system(f'service dhcpcd.{current_nic} restart')
