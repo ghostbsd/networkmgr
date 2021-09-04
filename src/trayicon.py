@@ -88,7 +88,7 @@ class trayIcon(object):
                     disconnected = Gtk.MenuItem("Wired %s Unplug" % cardnum)
                     disconnected.set_sensitive(False)
                     self.menu.append(disconnected)
-                    cardnum += 1
+                cardnum += 1
                 self.menu.append(Gtk.SeparatorMenuItem())
             elif "wlan" in netcard:
                 if connection_state == "Disabled":

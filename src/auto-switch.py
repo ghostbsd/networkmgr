@@ -33,7 +33,11 @@ if any(active_status) is False:
     if openrc:
         os.system(f'service dhcpcd.{nic} stop')
     else:
-        os.system(f'service dhclient stop {nic}')
+        if 'wlan' in nic:
+            os.system(f'service dhclient stop {nic}')
+        else:
+            os.system(f'service netif stop {nic}')
+            os.system('service routing restart')
 
 nics = Popen(
     ['ifconfig', '-l', 'ether'],
