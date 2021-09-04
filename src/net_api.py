@@ -110,7 +110,7 @@ def nics_list():
         stdout=PIPE,
         universal_newlines=True
     ).stdout.read().strip()
-    return re.sub(notnics_regex, '', nics).strip().split()
+    return sorted(re.sub(notnics_regex, '', nics).strip().split())
 
 
 def ifcardconnected(netcard):
