@@ -92,7 +92,7 @@ class trayIcon(object):
                     disconnected = Gtk.MenuItem("Wired %s Unplug" % cardnum)
                     disconnected.set_sensitive(False)
                     self.menu.append(disconnected)
-                    cardnum += 1
+                cardnum += 1
                 self.menu.append(Gtk.SeparatorMenuItem())
             elif "wlan" in netcard:
                 if connection_state == "Disabled":
@@ -366,7 +366,7 @@ class trayIcon(object):
 
     def Authentication(self, ssid_info, card, failed):
         self.window = Gtk.Window()
-        self.window.set_title("wi-Fi Network Authentication Required")
+        self.window.set_title("Wi-Fi Network Authentication Required")
         self.window.set_border_width(0)
         self.window.set_size_request(500, 200)
         box1 = Gtk.VBox(False, 0)
@@ -440,7 +440,7 @@ class trayIcon(object):
 
     def Open_Wpa_Supplicant(self, ssid, card):
         ws = '\nnetwork={'
-        ws += f'\n ssid={ssid}'
+        ws += f'\n ssid="{ssid}"'
         ws += '\n key_mgmt=NONE\n}\n'
         wsf = open("/etc/wpa_supplicant.conf", 'a')
         wsf.writelines(ws)

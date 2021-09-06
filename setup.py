@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import os
@@ -7,7 +7,7 @@ from platform import system
 from setuptools import setup
 from subprocess import run
 
-__VERSION__ = '5.5'
+__VERSION__ = '6.1'
 PROGRAM_VERSION = __VERSION__
 
 prefix = '/usr/local' if system() == 'FreeBSD' else sys.prefix
@@ -24,21 +24,22 @@ def datafilelist(installbase, sourcebase):
 
 
 share_networkmgr = [
+    'src/auto-switch.py',
     'src/net_api.py',
-    'src/trayicon.py',
-    'src/netcardmgr.py'
+    'src/setup-nic.py',
+    'src/trayicon.py'
 ]
 
 data_files = [
-    (f'{prefix}/etc/devd', ['src/setupnic.conf']),
     (f'{prefix}/etc/xdg/autostart', ['src/networkmgr.desktop']),
     (f'{prefix}/share/networkmgr', share_networkmgr),
     (f'{prefix}/etc/sudoers.d', ['src/sudoers.d/networkmgr'])
 ]
+
 if os.path.exists('/etc/devd'):
-    data_files.append((f'{prefix}/etc/devd', ['src/setupnic.conf']))
+    data_files.append((f'{prefix}/etc/devd', ['src/networkmgr.conf']))
 if os.path.exists('/etc/devd-openrc'):
-    data_files.append((f'{prefix}/etc/devd-openrc', ['src/setupnic.conf']))
+    data_files.append((f'{prefix}/etc/devd-openrc', ['src/networkmgr.conf']))
 
 data_files.extend(datafilelist(f'{prefix}/share/icons/hicolor', 'src/icons'))
 
@@ -52,7 +53,7 @@ setup(
     package_dir={'': '.'},
     data_files=data_files,
     install_requires=['setuptools'],
-    scripts=['networkmgr', 'src/setup-nic']
+    scripts=['networkmgr', 'src/netcardmgr']
 )
 
 run('gtk-update-icon-cache -f /usr/local/share/icons/hicolor', shell=True)
