@@ -30,17 +30,14 @@ if re.search(wifi_driver_regex, nic):
         open('/etc/wpa_supplicant.conf', 'a').close()
         os.system('chown root:wheel /etc/wpa_supplicant.conf')
         os.system('chmod 765 /etc/wpa_supplicant.conf')
-    for wlanNum in range(0, 9):
+    for wlanNum in range(9):
         if f'wlan{wlanNum}' not in (rcconf + rcconflocal):
             break
     if f'wlans_{nic}=' not in (rcconf + rcconflocal):
-        rc = open('/etc/rc.conf', 'a')
-        rc.writelines(f'wlans_{nic}="wlan{wlanNum}"\n')
-        rc.writelines(f'ifconfig_wlan{wlanNum}="WPA DHCP"\n')
-        rc.close()
-else:
-    if f'ifconfig_{nic}=' not in (rcconf + rcconflocal):
-        rc = open('/etc/rc.conf', 'a')
+        with open('/etc/rc.conf', 'a') as rc:
+            rc.writelines(f'wlans_{nic}="wlan{wlanNum}"\n')
+            rc.writelines(f'ifconfig_wlan{wlanNum}="WPA DHCP"\n')
+elif f'ifconfig_{nic}=' not in (rcconf + rcconflocal):
+    with open('/etc/rc.conf', 'a') as rc:
         rc.writelines(f'ifconfig_{nic}="DHCP"\n')
-        rc.close()
 os.system(f'/etc/pccard_ether {nic} startchildren')
