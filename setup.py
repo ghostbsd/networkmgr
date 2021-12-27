@@ -16,7 +16,9 @@ prefix = '/usr/local' if system() == 'FreeBSD' else sys.prefix
 def datafilelist(installbase, sourcebase):
     datafileList = []
     for root, subFolders, files in os.walk(sourcebase):
-        fileList = [os.path.join(root, f) for f in files]
+        fileList = []
+        for f in files:
+            fileList.append(os.path.join(root, f))
         datafileList.append((root.replace(sourcebase, installbase), fileList))
     return datafileList
 
