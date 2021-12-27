@@ -12,7 +12,7 @@ nic = args[1]
 
 cmd = ["kenv", "rc_system"]
 rc_system = Popen(cmd, stdout=PIPE, universal_newlines=True).stdout.read()
-openrc = 'openrc' in rc_system
+openrc = True if 'openrc' in rc_system else False
 
 cmd = 'netstat -rn | grep default'
 defautl_nic = Popen(cmd, stdout=PIPE, shell=True, universal_newlines=True).stdout.read()
@@ -32,11 +32,12 @@ active_status = (
 if any(active_status) is False:
     if openrc:
         os.system(f'service dhcpcd.{nic} stop')
-    elif 'wlan' in nic:
-        os.system(f'service dhclient stop {nic}')
     else:
-        os.system(f'service netif stop {nic}')
-        os.system('service routing restart')
+        if 'wlan' in nic:
+            os.system(f'service dhclient stop {nic}')
+        else:
+            os.system(f'service netif stop {nic}')
+            os.system('service routing restart')
 
 nics = Popen(
     ['ifconfig', '-l', 'ether'],
@@ -62,12 +63,10 @@ for current_nic in nic_list:
         universal_newlines=True
     )
     nic_ifconfig = output.stdout.read()
-    if (
-        'status: active' in nic_ifconfig
-        or 'status: associated' in nic_ifconfig
-    ) and ('inet ' in nic_ifconfig or 'inet6' in nic_ifconfig):
-        if openrc:
-            os.system(f'service dhcpcd.{current_nic} restart')
-        else:
-            os.system(f'service dhclient restart {current_nic}')
-        break
+    if 'status: active' in nic_ifconfig or 'status: associated' in nic_ifconfig:
+        if 'inet ' in nic_ifconfig or 'inet6' in nic_ifconfig:
+            if openrc:
+                os.system(f'service dhcpcd.{current_nic} restart')
+            else:
+                os.system(f'service dhclient restart {current_nic}')
+            break

@@ -52,7 +52,10 @@ else:
 def card_online(netcard):
     lan = Popen('ifconfig ' + netcard, shell=True, stdout=PIPE,
                 universal_newlines=True)
-    return 'inet ' in lan.stdout.read()
+    if 'inet ' in lan.stdout.read():
+        return True
+    else:
+        return False
 
 
 def defaultcard():
@@ -68,14 +71,20 @@ def defaultcard():
 def ifWlanDisable(wificard):
     cmd = "ifconfig %s list scan" % wificard
     nics = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
-    return nics.stdout.read() == ""
+    if "" == nics.stdout.read():
+        return True
+    else:
+        return False
 
 
 def ifStatue(wificard):
     cmd = "ifconfig %s" % wificard
     wl = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
     wlout = wl.stdout.read()
-    return "associated" in wlout
+    if "associated" in wlout:
+        return True
+    else:
+        return False
 
 
 def get_ssid(wificard):
@@ -85,7 +94,11 @@ def get_ssid(wificard):
     # otherwise use the default whitespace. This is to handle ssid strings
     # with spaces in them. These ssid strings will be double quoted by ifconfig
     temp = wlan.stdout.readlines()[0].rstrip()
-    return temp.split('"')[1] if '"' in temp else temp.split()[1]
+    if '"' in temp:
+        out = temp.split('"')[1]
+    else:
+        out = temp.split()[1]
+    return out
 
 
 def nics_list():
@@ -103,7 +116,10 @@ def nics_list():
 def ifcardconnected(netcard):
     wifi = Popen('ifconfig ' + netcard, shell=True, stdout=PIPE,
                  universal_newlines=True)
-    return 'status: active' in wifi.stdout.read()
+    if 'status: active' in wifi.stdout.read():
+        return True
+    else:
+        return False
 
 
 def barpercent(sn):
@@ -113,15 +129,19 @@ def barpercent(sn):
 
 
 def network_service_state():
-    if openrc is not True:
+    if openrc is True:
+        status = Popen(
+            f'{rc}service {network} status',
+            shell=True,
+            stdout=PIPE,
+            universal_newlines=True
+        )
+        if 'status: started' in status.stdout.read():
+            return True
+        else:
+            return False
+    else:
         return False
-    status = Popen(
-        f'{rc}service {network} status',
-        shell=True,
-        stdout=PIPE,
-        universal_newlines=True
-    )
-    return 'status: started' in status.stdout.read()
 
 
 def networkdictionary():
@@ -147,11 +167,9 @@ def networkdictionary():
                 percentage = barpercent(info[3])
                 # if ssid exist and percentage is higher keep it
                 # else add the new one if percentage is higher
-                if (
-                    ssid in connectioninfo
-                    and connectioninfo[ssid][4] > percentage
-                ):
-                    continue
+                if ssid in connectioninfo:
+                    if connectioninfo[ssid][4] > percentage:
+                        continue
                 info[3] = percentage
                 info.insert(0, ssid)
                 # append left over
@@ -227,14 +245,13 @@ def switch_default(nic):
             close_fds=True,
             universal_newlines=True
         ).stdout.read()
-        if (
-            'status: active' in nic_info or 'status: associated' in nic_info
-        ) and ('inet ' in nic_info or 'inet6' in nic_info):
-            if openrc:
-                os.system(f'service dhcpcd.{card} restart')
-            else:
-                os.system(f'service dhclient restart {card}')
-            break
+        if 'status: active' in nic_info or 'status: associated' in nic_info:
+            if 'inet ' in nic_info or 'inet6' in nic_info:
+                if openrc:
+                    os.system(f'service dhcpcd.{card} restart')
+                else:
+                    os.system(f'service dhclient restart {card}')
+                break
     return
 
 
@@ -290,7 +307,9 @@ def connectToSsid(name, wificard):
         f'wpa_supplicant -B -i {wificard} -c /etc/wpa_supplicant.conf',
         shell=True
     )
-    return wpa_supplicant.returncode == 0
+    if wpa_supplicant.returncode != 0:
+        return False
+    return True
 
 
 def subnetHexToDec(ifconfigstring):
@@ -298,9 +317,8 @@ def subnetHexToDec(ifconfigstring):
     snethexlist = re.findall('..', snethex)
     snetdeclist = [int(li, 16) for li in snethexlist]
     snetdec = ".".join(str(li) for li in snetdeclist)
-    return ifconfigstring.replace(
-        re.search('0x.{8}', ifconfigstring).group(0), snetdec
-    )
+    outputline = ifconfigstring.replace(re.search('0x.{8}', ifconfigstring).group(0), snetdec)
+    return outputline
 
 
 def get_ssid_wpa_supplicant_config(ssid):
@@ -315,8 +333,9 @@ def delete_ssid_wpa_supplicant_config(ssid):
         """/etc/wpa_supplicant.conf | sed -f - /etc/wpa_supplicant.conf"""
     out = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
     left_over = out.stdout.read()
-    with open('/etc/wpa_supplicant.conf', 'w') as wpa_supplicant_conf:
-        wpa_supplicant_conf.writelines(left_over)
+    wpa_supplicant_conf = open('/etc/wpa_supplicant.conf', 'w')
+    wpa_supplicant_conf.writelines(left_over)
+    wpa_supplicant_conf.close()
 
 
 def wlan_status(card):

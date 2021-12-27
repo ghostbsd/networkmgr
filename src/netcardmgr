@@ -66,8 +66,9 @@ class autoConfigure():
                 if f'ifconfig_{card}=' in (rcconf or rcconflocal):
                     print("Your wired network card is already configured.")
                 else:
-                    with open('/etc/rc.conf', 'a') as rc:
-                        rc.writelines(f'ifconfig_{card}="DHCP"\n')
+                    rc = open('/etc/rc.conf', 'a')
+                    rc.writelines(f'ifconfig_{card}="DHCP"\n')
+                    rc.close()
                     sleep(1)
                     os.system(restart_network)
                     sleep(1)
@@ -77,19 +78,23 @@ class autoConfigure():
                     print("Your wired network card is configured.")
 
         for card in wifiscard.split():
-            for wlanNum in range(9):
+            for wlanNum in range(0, 9):
                 if f'wlan{wlanNum}' not in (rcconf + rcconflocal):
                     break
             if f'wlans_{card}=' in (rcconf + rcconflocal):
                 print("Your wifi network card is already configured.")
                 if not os.path.exists('/etc/wpa_supplicant.conf'):
                     open('/etc/wpa_supplicant.conf', 'a').close()
-                os.system('chown root:wheel /etc/wpa_supplicant.conf')
-                os.system('chmod 765 /etc/wpa_supplicant.conf')
+                    os.system('chown root:wheel /etc/wpa_supplicant.conf')
+                    os.system('chmod 765 /etc/wpa_supplicant.conf')
+                else:
+                    os.system('chown root:wheel /etc/wpa_supplicant.conf')
+                    os.system('chmod 765 /etc/wpa_supplicant.conf')
             else:
-                with open('/etc/rc.conf', 'a') as rc:
-                    rc.writelines(f'wlans_{card}="wlan{wlanNum}"\n')
-                    rc.writelines(f'ifconfig_wlan{wlanNum}="WPA DHCP"\n')
+                rc = open('/etc/rc.conf', 'a')
+                rc.writelines(f'wlans_{card}="wlan{wlanNum}"\n')
+                rc.writelines(f'ifconfig_wlan{wlanNum}="WPA DHCP"\n')
+                rc.close()
                 if not os.path.exists('/etc/wpa_supplicant.conf'):
                     open('/etc/wpa_supplicant.conf', 'a').close()
                     os.system('chown root:wheel /etc/wpa_supplicant.conf')
