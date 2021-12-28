@@ -83,7 +83,7 @@ def test_connectionStatus_card_is_default():
 
 
 def test_connectionStatus_card_is_wlan_not_connected():
-    card = 'wlan00'
+    card = 'wlan99'
     result = connectionStatus(card)
     assert isinstance(result, str)
     assert f"WiFi {card} not connected"
