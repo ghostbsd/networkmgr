@@ -65,3 +65,25 @@ def test_card_not_online():
     netcard = "em99"
     result = card_online(netcard)
     assert not result
+
+
+def test_connectionStatus_card_is_none():
+    card = None
+    result = connectionStatus(card)
+    assert isinstance(result, str)
+
+
+def test_connectionStatus_card_is_default():
+    card = defaultcard()
+    result = connectionStatus(card)
+    assert isinstance(result, str)
+    assert "inet" in result
+    assert "netmask" in result
+    assert "broadcast" in result
+
+
+def test_connectionStatus_card_is_wlan_not_connected():
+    card = 'wlan00'
+    result = connectionStatus(card)
+    assert isinstance(result, str)
+    assert f"WiFi {card} not connected"
