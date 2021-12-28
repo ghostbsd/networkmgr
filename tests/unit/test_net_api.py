@@ -87,3 +87,13 @@ def test_connectionStatus_card_is_wlan_not_connected():
     result = connectionStatus(card)
     assert isinstance(result, str)
     assert f"WiFi {card} not connected"
+
+
+def test_connectionStatus_card_is_wlan_connected():
+    card = 'wlan0'
+    result = connectionStatus(card)
+    assert isinstance(result, str)
+    assert "inet" in result
+    assert "ssid" in result
+    assert "netmask" in result
+    assert "broadcast" in result
