@@ -1,5 +1,9 @@
 import sys
 from pathlib import Path
+from subprocess import Popen
+import subprocess
+
+import pytest
 
 top_dir = str(Path(__file__).absolute().parent.parent.parent)
 
@@ -21,6 +25,7 @@ try:
         wifiDisconnection,
         wlan_status,
     )
+    import src.net_api
 except ImportError:
     sys.path.append(top_dir)
     from src.net_api import (
@@ -40,12 +45,15 @@ except ImportError:
         wifiDisconnection,
         wlan_status,
     )
+    import src.net_api
 
 
 def test_defaultcard_returns_str():
     result = defaultcard()
     assert isinstance(result, str)
 
+
+# TODO: mock subprocess to return empty list
 
 def test_card_online():
     netcard = defaultcard()
