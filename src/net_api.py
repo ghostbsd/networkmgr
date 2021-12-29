@@ -223,7 +223,7 @@ def connectionStatus(card):
             line2 = out2.stdout.read().strip()
             netstate = line1 + '\n' + subnetHexToDec(line2)
         else:
-            netstate = "WiFi %s not conected" % card
+            netstate = "WiFi %s not connected" % card
     else:
         cmd = "ifconfig %s | grep 'inet '" % card
         out = Popen(cmd, shell=True, stdout=PIPE,
