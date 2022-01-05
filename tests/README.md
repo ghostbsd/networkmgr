@@ -63,7 +63,7 @@ unit/test_net_api.py::test_connection_status_card_is_wlan_connected PASSED      
 -------- coverage: platform freebsd13, python 3.8.12-final-0 ---------
 Name                                                                Stmts   Miss  Cover
 ---------------------------------------------------------------------------------------
-/usr/home/rgeorgia/PycharmProjects/networkmgr-fork/src/net_api.py     199    119    40%
+/usr/home/<your project>/networkmgr-fork/src/net_api.py     199    119    40%
 ---------------------------------------------------------------------------------------
 TOTAL                                                                 199    119    40%
 
