@@ -73,6 +73,7 @@ def test_connection_status_card_is_none():
     card = None
     result = connectionStatus(card)
     assert isinstance(result, str)
+    assert "Network card is not enabled" == result
 
 
 def test_connection_status_card_is_default():
