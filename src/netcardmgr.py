@@ -3,10 +3,10 @@
 import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk
-from subprocess import Popen, PIPE
+from subprocess import Popen, PIPE, check_output
 import os
 import re
-import subprocess
+# import subprocess
 from time import sleep
 
 ncard = 'ifconfig -l'
@@ -61,6 +61,22 @@ currentSettings = {}
 
 class netCardConfigWindow(Gtk.Window):
 
+    def edit_ipv4_setting(self, widget, value):
+        if value == "DHCP":
+            self.ipInputAddressEntry.set_sensitive(False)
+            self.ipInputMaskEntry.set_sensitive(False)
+            self.ipInputGatewayEntry.set_sensitive(False)
+            self.dnsEntry.set_sensitive(False)
+            self.searchEntry.set_sensitive(False)
+            self.saveButton.set_sensitive(False)
+        else:
+            self.ipInputAddressEntry.set_sensitive(True)
+            self.ipInputMaskEntry.set_sensitive(True)
+            self.ipInputGatewayEntry.set_sensitive(True)
+            self.dnsEntry.set_sensitive(True)
+            self.searchEntry.set_sensitive(True)
+            self.saveButton.set_sensitive(True)
+
     def __init__(self, defaultactiveint):
         # Build Default Window
         Gtk.Window.__init__(self, title="Network Interface Configuration")
@@ -102,15 +118,17 @@ class netCardConfigWindow(Gtk.Window):
         interfaceBox.pack_end(interfaceComboBox, True, True, 0)
 
         # Add radio button to toggle DHCP or not
-        radioButton1 = Gtk.RadioButton.new_with_label(None, "DHCP")
-        radioButton1.set_margin_top(15)
-        radioButton2 = Gtk.RadioButton.new_with_label_from_widget(radioButton1, "Manual")
-        radioButton2.set_margin_top(15)
+        rb_dhcp4 = Gtk.RadioButton.new_with_label(None, "DHCP")
+        rb_dhcp4.set_margin_top(15)
+        rb_dhcp4.connect("toggled", self.edit_ipv4_setting, "DHCP")
+        rb_manual4 = Gtk.RadioButton.new_with_label_from_widget(rb_dhcp4, "Manual")
+        rb_manual4.set_margin_top(15)
+        rb_manual4.connect("toggled", self.edit_ipv4_setting, "Manual")
         if currentSettings["Address Assignment Method"] == "DHCP":
-            radioButton1.set_active(True)
+            rb_dhcp4.set_active(True)
         else:
-            radioButton2.set_active(True)
-        radioButton2.join_group(radioButton1)
+            rb_manual4.set_active(True)
+        rb_manual4.join_group(rb_dhcp4)
 
         radioButtonLabel = Gtk.Label(label="IPv4 Method:")
         radioButtonLabel.set_margin_top(15)
@@ -119,8 +137,8 @@ class netCardConfigWindow(Gtk.Window):
         radioBox = Gtk.Box(orientation=0, spacing=50)
         radioBox.set_homogeneous(False)
         radioBox.pack_start(radioButtonLabel, False, False, 0)
-        radioBox.pack_start(radioButton1, True, False, 0)
-        radioBox.pack_end(radioButton2, True, True, 0)
+        radioBox.pack_start(rb_dhcp4, True, False, 0)
+        radioBox.pack_end(rb_manual4, True, True, 0)
 
         # Add Manual Address Field
         ipInputAddressLabel = Gtk.Label(label="Address")
@@ -132,16 +150,16 @@ class netCardConfigWindow(Gtk.Window):
         ipInputGatewayLabel = Gtk.Label(label="Gateway")
         ipInputGatewayLabel.set_margin_top(15)
 
-        ipInputAddressEntry = Gtk.Entry()
-        ipInputAddressEntry.set_margin_start(15)
-        ipInputAddressEntry.set_text(currentSettings["Interface IP"])
+        self.ipInputAddressEntry = Gtk.Entry()
+        self.ipInputAddressEntry.set_margin_start(15)
+        self.ipInputAddressEntry.set_text(currentSettings["Interface IP"])
 
-        ipInputMaskEntry = Gtk.Entry()
-        ipInputMaskEntry.set_text(currentSettings["Interface Subnet Mask"])
+        self.ipInputMaskEntry = Gtk.Entry()
+        self.ipInputMaskEntry.set_text(currentSettings["Interface Subnet Mask"])
 
-        ipInputGatewayEntry = Gtk.Entry()
-        ipInputGatewayEntry.set_margin_end(15)
-        ipInputGatewayEntry.set_text(currentSettings["Default Gateway"])
+        self.ipInputGatewayEntry = Gtk.Entry()
+        self.ipInputGatewayEntry.set_margin_end(15)
+        self.ipInputGatewayEntry.set_text(currentSettings["Default Gateway"])
 
         ipInputBox = Gtk.Box(orientation=0, spacing=0)
         ipInputBox.set_homogeneous(True)
@@ -150,9 +168,9 @@ class netCardConfigWindow(Gtk.Window):
         ipInputBox.pack_start(ipInputGatewayLabel, False, False, 0)
 
         ipEntryBox = Gtk.Box(orientation=0, spacing=30)
-        ipEntryBox.pack_start(ipInputAddressEntry, False, False, 0)
-        ipEntryBox.pack_start(ipInputMaskEntry, False, False, 0)
-        ipEntryBox.pack_start(ipInputGatewayEntry, False, False, 0)
+        ipEntryBox.pack_start(self.ipInputAddressEntry, False, False, 0)
+        ipEntryBox.pack_start(self.ipInputMaskEntry, False, False, 0)
+        ipEntryBox.pack_start(self.ipInputGatewayEntry, False, False, 0)
 
         # Add DNS Server Settings
         dnsLabel = Gtk.Label(label="DNS Servers: ")
@@ -160,8 +178,8 @@ class netCardConfigWindow(Gtk.Window):
         dnsLabel.set_margin_end(58)
         dnsLabel.set_margin_start(30)
 
-        dnsEntry = Gtk.Entry()
-        dnsEntry.set_margin_end(30)
+        self.dnsEntry = Gtk.Entry()
+        self.dnsEntry.set_margin_end(30)
         DNSList = [(key, value) for key, value in currentSettings.items() if key.startswith("DNS Server")]
         print(DNSList)
         i = 0
@@ -171,11 +189,11 @@ class netCardConfigWindow(Gtk.Window):
             if i + 1 < len(DNSList):
                 DNSString = DNSString + ","
             i = i + 1
-        dnsEntry.set_text(DNSString)
+        self.dnsEntry.set_text(DNSString)
 
         dnsEntryBox = Gtk.Box(orientation=0, spacing=0)
         dnsEntryBox.pack_start(dnsLabel, False, False, 0)
-        dnsEntryBox.pack_end(dnsEntry, True, True, 0)
+        dnsEntryBox.pack_end(self.dnsEntry, True, True, 0)
 
         # Add Search Domain Settings
 
@@ -184,16 +202,21 @@ class netCardConfigWindow(Gtk.Window):
         searchLabel.set_margin_end(30)
         searchLabel.set_margin_start(30)
 
-        searchEntry = Gtk.Entry()
-        searchEntry.set_margin_top(21)
-        searchEntry.set_margin_end(30)
-        searchEntry.set_margin_bottom(30)
-        searchEntry.set_text(currentSettings["Search Domain"])
+        self.searchEntry = Gtk.Entry()
+        self.searchEntry.set_margin_top(21)
+        self.searchEntry.set_margin_end(30)
+        self.searchEntry.set_margin_bottom(30)
+        self.searchEntry.set_text(currentSettings["Search Domain"])
 
         searchBox = Gtk.Box(orientation=0, spacing=0)
         searchBox.pack_start(searchLabel, False, False, 0)
-        searchBox.pack_end(searchEntry, True, True, 0)
-
+        searchBox.pack_end(self.searchEntry, True, True, 0)
+        if currentSettings["Address Assignment Method"] == "DHCP":
+            self.ipInputAddressEntry.set_sensitive(False)
+            self.ipInputMaskEntry.set_sensitive(False)
+            self.ipInputGatewayEntry.set_sensitive(False)
+            self.dnsEntry.set_sensitive(False)
+            self.searchEntry.set_sensitive(False)
         # Build the grid, which will handle the physical layout of the UI elements.
         gridOne = Gtk.Grid()
         gridOne.set_column_homogeneous(True)
@@ -242,11 +265,11 @@ class netCardConfigWindow(Gtk.Window):
         interfaceBox6.pack_end(interfaceComboBox6, True, True, 0)
 
         # Add radio button to toggle DHCP or not
-        radioButton1V6 = Gtk.RadioButton.new_with_label(None, "SLAAC")
-        radioButton1V6.set_margin_top(15)
-        radioButton2V6 = Gtk.RadioButton.new_with_label_from_widget(radioButton1V6, "Manual")
-        radioButton2V6.set_margin_top(15)
-        radioButton2V6.join_group(radioButton1V6)
+        rb_slaac6 = Gtk.RadioButton.new_with_label(None, "SLAAC")
+        rb_slaac6.set_margin_top(15)
+        rb_manual6 = Gtk.RadioButton.new_with_label_from_widget(rb_slaac6, "Manual")
+        rb_manual6.set_margin_top(15)
+        rb_manual6.join_group(rb_slaac6)
 
         radioButtonLabel6 = Gtk.Label(label="IPv4 Method:")
         radioButtonLabel6.set_margin_top(15)
@@ -255,8 +278,8 @@ class netCardConfigWindow(Gtk.Window):
         radioBox6 = Gtk.Box(orientation=0, spacing=50)
         radioBox6.set_homogeneous(False)
         radioBox6.pack_start(radioButtonLabel6, False, False, 0)
-        radioBox6.pack_start(radioButton1V6, True, False, 0)
-        radioBox6.pack_end(radioButton2V6, True, True, 0)
+        radioBox6.pack_start(rb_slaac6, True, False, 0)
+        radioBox6.pack_end(rb_manual6, True, True, 0)
 
         # Add Manual Address Field
         ipInputAddressLabel6 = Gtk.Label(label="Address")
@@ -268,11 +291,11 @@ class netCardConfigWindow(Gtk.Window):
         ipInputGatewayLabel6 = Gtk.Label(label="Gateway")
         ipInputGatewayLabel6.set_margin_top(15)
 
-        ipInputAddressEntry6 = Gtk.Entry()
-        ipInputAddressEntry6.set_margin_start(15)
-        ipInputMaskEntry6 = Gtk.Entry()
-        ipInputGatewayEntry6 = Gtk.Entry()
-        ipInputGatewayEntry6.set_margin_end(15)
+        self.ipInputAddressEntry6 = Gtk.Entry()
+        self.ipInputAddressEntry6.set_margin_start(15)
+        self.ipInputMaskEntry6 = Gtk.Entry()
+        self.ipInputGatewayEntry6 = Gtk.Entry()
+        self.ipInputGatewayEntry6.set_margin_end(15)
 
         ipInputBox6 = Gtk.Box(orientation=0, spacing=0)
         ipInputBox6.set_homogeneous(True)
@@ -281,9 +304,9 @@ class netCardConfigWindow(Gtk.Window):
         ipInputBox6.pack_start(ipInputGatewayLabel6, False, False, 0)
 
         ipEntryBox6 = Gtk.Box(orientation=0, spacing=30)
-        ipEntryBox6.pack_start(ipInputAddressEntry6, False, False, 0)
-        ipEntryBox6.pack_start(ipInputMaskEntry6, False, False, 0)
-        ipEntryBox6.pack_start(ipInputGatewayEntry6, False, False, 0)
+        ipEntryBox6.pack_start(self.ipInputAddressEntry6, False, False, 0)
+        ipEntryBox6.pack_start(self.ipInputMaskEntry6, False, False, 0)
+        ipEntryBox6.pack_start(self.ipInputGatewayEntry6, False, False, 0)
 
         # Add DNS Server Settings
         dnsLabel6 = Gtk.Label(label="DNS Servers: ")
@@ -291,12 +314,12 @@ class netCardConfigWindow(Gtk.Window):
         dnsLabel6.set_margin_end(58)
         dnsLabel6.set_margin_start(30)
 
-        dnsEntry6 = Gtk.Entry()
-        dnsEntry6.set_margin_end(30)
+        self.dnsEntry6 = Gtk.Entry()
+        self.dnsEntry6.set_margin_end(30)
 
         dnsEntryBox6 = Gtk.Box(orientation=0, spacing=0)
         dnsEntryBox6.pack_start(dnsLabel6, False, False, 0)
-        dnsEntryBox6.pack_end(dnsEntry6, True, True, 0)
+        dnsEntryBox6.pack_end(self.dnsEntry6, True, True, 0)
 
         # Add Search Domain Settings
 
@@ -305,15 +328,20 @@ class netCardConfigWindow(Gtk.Window):
         searchLabel6.set_margin_end(30)
         searchLabel6.set_margin_start(30)
 
-        searchEntry6 = Gtk.Entry()
-        searchEntry6.set_margin_top(21)
-        searchEntry6.set_margin_end(30)
-        searchEntry6.set_margin_bottom(30)
+        self.searchEntry6 = Gtk.Entry()
+        self.searchEntry6.set_margin_top(21)
+        self.searchEntry6.set_margin_end(30)
+        self.searchEntry6.set_margin_bottom(30)
 
         searchBox6 = Gtk.Box(orientation=0, spacing=0)
         searchBox6.pack_start(searchLabel6, False, False, 0)
-        searchBox6.pack_end(searchEntry6, True, True, 0)
+        searchBox6.pack_end(self.searchEntry6, True, True, 0)
 
+        self.ipInputAddressEntry6.set_sensitive(False)
+        self.ipInputMaskEntry6.set_sensitive(False)
+        self.ipInputGatewayEntry6.set_sensitive(False)
+        self.dnsEntry6.set_sensitive(False)
+        self.searchEntry6.set_sensitive(False)
         # Build the grid, which will handle the physical layout of the UI elements.
         gridOne6 = Gtk.Grid()
         gridOne6.set_column_homogeneous(True)
@@ -338,15 +366,17 @@ class netCardConfigWindow(Gtk.Window):
 
         # Build Save & Cancel Buttons
 
-        saveButton = Gtk.Button(label="Save...")
-        saveButton.set_margin_bottom(10)
-        saveButton.set_margin_start(10)
-        saveButton.connect("clicked", self.commit_pending_changes)
+        self.saveButton = Gtk.Button(label="Save...")
+        self.saveButton.set_margin_bottom(10)
+        self.saveButton.set_margin_start(10)
+        self.saveButton.connect("clicked", self.commit_pending_changes)
+        if currentSettings["Address Assignment Method"] == "DHCP":
+            self.saveButton.set_sensitive(False)
         cancelButton = Gtk.Button(label="Cancel...")
         cancelButton.set_margin_bottom(10)
         cancelButton.connect("clicked", self.discard_pending_changes)
         buttonsWindow = Gtk.Box(orientation=0, spacing=10)
-        buttonsWindow.pack_start(saveButton, False, False, 0)
+        buttonsWindow.pack_start(self.saveButton, False, False, 0)
         buttonsWindow.pack_start(cancelButton, False, False, 0)
 
         # Apply Tab 1 content and formatting to the notebook
@@ -397,9 +427,9 @@ class netCardConfigWindow(Gtk.Window):
         self.get_current_interface_settings(refreshedInterfaceName)
         self.display_current_interface_settings(widget)
 
-    def get_current_interface_settings(self, active_int):
+    def get_current_interface_settings(self, active_nic):
         # Need to accurately determine if a wlanN interface is using DHCP
-        aInt = str(active_int)
+        aInt = str(active_nic)
 
         DHCPStatus = os.path.exists(f"/var/db/dhclient.leases.{aInt}")
         print(f"dhcpstatus return value = {DHCPStatus}")
@@ -417,7 +447,8 @@ class netCardConfigWindow(Gtk.Window):
         print(f"DHCPStatusOutput = {DHCPStatusOutput}")
 
         ifconfigaInt = f"ifconfig -f inet:dotted {aInt}"
-        ifconfigaIntOutput = subprocess.check_output(ifconfigaInt.split(" "))
+        ifconfigaIntOutput = check_output(ifconfigaInt.split(" "))
+
         aIntIP = re.findall(r'inet [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+', str(ifconfigaIntOutput))[0]
         aIntIPStrip = str(aIntIP).replace("inet ", "")
         aIntIPStrip = str(aIntIPStrip).replace("'", "")
@@ -455,11 +486,16 @@ class netCardConfigWindow(Gtk.Window):
                 aIntGatewayStrip = str(aIntGatewayStrip).replace("]", "")
                 aIntGatewayStrip = str(aIntGatewayStrip).replace(";", "")
 
-                aIntDHCP = f"resolvconf -l {aInt}.dhcp"
-                aIntDHCPResults = subprocess.check_output(aIntDHCP.split(" "))
-                DNSMatch = re.findall(r'nameserver [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+', str(aIntDHCPResults))
+                # aIntDHCP = f"resolvconf -l {aInt}"
+                # aIntDHCPResults = subprocess.check_output(aIntDHCP.split(" "))
+                # aIntDHCPResults = subprocess.run(aIntDHCP.split(" "),
+                #                                  capture_output=True,
+                #                                  text=True)
+                # DNSMatch = re.findall(r'nameserver [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+', str(aIntDHCPResults))
+                DefaultDNSServers = open('/etc/resolv.conf').read()
+                DNSMatch = re.findall(r'nameserver [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+', str(DefaultDNSServers))
 
-                SearchDomainMatch = re.findall('search [a-zA-Z.]*', str(aIntDHCPResults))
+                SearchDomainMatch = re.findall('search [a-zA-Z.]*', str(DefaultDNSServers))
                 if len(SearchDomainMatch) < 1:
                     RCConfDomainSearch = open('/etc/resolv.conf', 'r').read()
                     SearchDomainMatch = re.findall('domain (.*)', RCConfDomainSearch)
@@ -487,7 +523,7 @@ class netCardConfigWindow(Gtk.Window):
             SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("]", "")
 
         # currentSettings = {}
-        currentSettings["Active Interface"] = active_int
+        currentSettings["Active Interface"] = active_nic
         currentSettings["Address Assignment Method"] = DHCPStatusOutput
         currentSettings["Interface IP"] = aIntIPStrip
         currentSettings["Interface Subnet Mask"] = aIntMaskStrip
@@ -511,6 +547,7 @@ class netCardConfigWindow(Gtk.Window):
 
     def discard_pending_changes(self, widget):
         print("discard_pending_changes_goes_here")
+        self.destroy()
 
 
 def openNetCardConfigwindow(default_int):
