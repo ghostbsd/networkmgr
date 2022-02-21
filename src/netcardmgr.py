@@ -6,55 +6,13 @@ from gi.repository import Gtk
 from subprocess import Popen, PIPE, check_output
 import os
 import re
-# import subprocess
 from time import sleep
 
-ncard = 'ifconfig -l'
-nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True,
-             universal_newlines=True)
-netcard = nics.stdout.readlines()[0].rstrip()
-wifis = 'sysctl -in net.wlan.devices'
-wifinics = Popen(wifis, shell=True, stdout=PIPE, close_fds=True,
-                 universal_newlines=True)
-wifiscard = wifinics.stdout.readlines()[0].rstrip()
 rcconf = open('/etc/rc.conf', 'r').read()
 if os.path.exists('/etc/rc.conf.local'):
     rcconflocal = open('/etc/rc.conf.local', 'r').read()
 else:
     rcconflocal = "None"
-
-notnics = [
-    "enc",
-    "lo",
-    "fwe",
-    "fwip",
-    "tap",
-    "plip",
-    "pfsync",
-    "pflog",
-    "ipfw",
-    "tun",
-    "sl",
-    "faith",
-    "ppp",
-    "bridge",
-    "ixautomation",
-    "vm-ixautomation",
-    "wg"
-]
-
-cmd = "kenv | grep rc_system"
-rc_system = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
-if 'openrc' in rc_system.stdout.read():
-    openrc = True
-    rc = 'rc-'
-    network = 'network'
-else:
-    openrc = False
-    rc = ''
-    network = 'netif'
-
-restart_network = f'{rc}service {network} restart'
 
 currentSettings = {}
 
