@@ -7,7 +7,7 @@ from platform import system
 from setuptools import setup
 from subprocess import run
 
-__VERSION__ = '6.1'
+__VERSION__ = '6.2'
 PROGRAM_VERSION = __VERSION__
 
 prefix = '/usr/local' if system() == 'FreeBSD' else sys.prefix
@@ -27,7 +27,8 @@ share_networkmgr = [
     'src/auto-switch.py',
     'src/net_api.py',
     'src/setup-nic.py',
-    'src/trayicon.py'
+    'src/trayicon.py',
+    'src/netcardmgr.py'
 ]
 
 data_files = [
@@ -53,7 +54,7 @@ setup(
     package_dir={'': '.'},
     data_files=data_files,
     install_requires=['setuptools'],
-    scripts=['networkmgr', 'src/netcardmgr']
+    scripts=['networkmgr']
 )
 
 run('gtk-update-icon-cache -f /usr/local/share/icons/hicolor', shell=True)
