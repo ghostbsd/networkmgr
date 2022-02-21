@@ -21,7 +21,6 @@ from net_api import (
     enableWifi,
     connectionStatus,
     networkdictionary,
-    openrc,
     delete_ssid_wpa_supplicant_config,
     wlan_status
 )
@@ -135,18 +134,16 @@ class trayIcon(object):
                     self.menu.append(configure_item)
                 self.menu.append(Gtk.SeparatorMenuItem())
                 wifinum += 1
-
-        if openrc is True:
-            if self.cardinfo['service'] is False:
-                open_item = Gtk.MenuItem("Enable Networking")
-                open_item.connect("activate", self.openNetwork)
-                self.menu.append(open_item)
-            else:
-                close_item = Gtk.MenuItem("Disable Networking")
-                close_item.connect("activate", self.closeNetwork)
-                self.menu.append(close_item)
+        if self.cardinfo['service'] is False:
+            open_item = Gtk.MenuItem("Enable Networking")
+            open_item.connect("activate", self.openNetwork)
+            self.menu.append(open_item)
         else:
-            print('service netif status not supported')
+            close_item = Gtk.MenuItem("Disable Networking")
+            close_item.connect("activate", self.closeNetwork)
+            self.menu.append(close_item)
+        # else:
+        #     print('service netif status not supported')
         close_manager = Gtk.MenuItem("Close Network Manager")
         close_manager.connect("activate", self.stop_manager)
         self.menu.append(close_manager)

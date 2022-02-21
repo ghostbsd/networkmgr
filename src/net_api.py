@@ -36,19 +36,6 @@ from time import sleep
 path.append("/usr/local/share/networkmgr")
 
 
-cmd = "kenv | grep rc_system"
-rc_system = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
-
-if 'openrc' in rc_system.stdout.read():
-    openrc = True
-    rc = 'rc-'
-    network = 'network'
-else:
-    openrc = False
-    rc = ''
-    network = 'netif'
-
-
 def card_online(netcard):
     lan = Popen('ifconfig ' + netcard, shell=True, stdout=PIPE,
                 universal_newlines=True)
@@ -129,19 +116,7 @@ def barpercent(sn):
 
 
 def network_service_state():
-    if openrc is True:
-        status = Popen(
-            f'{rc}service {network} status',
-            shell=True,
-            stdout=PIPE,
-            universal_newlines=True
-        )
-        if 'status: started' in status.stdout.read():
-            return True
-        else:
-            return False
-    else:
-        return False
+    return False
 
 
 def networkdictionary():
@@ -247,39 +222,29 @@ def switch_default(nic):
         ).stdout.read()
         if 'status: active' in nic_info or 'status: associated' in nic_info:
             if 'inet ' in nic_info or 'inet6' in nic_info:
-                if openrc:
-                    os.system(f'service dhcpcd.{card} restart')
-                else:
-                    os.system(f'service dhclient restart {card}')
+                os.system(f'service dhclient restart {card}')
                 break
     return
 
 
 def stopallnetwork():
-    os.system(f'{rc}service {network} stop')
+    os.system('service netif stop')
 
 
 def startallnetwork():
-    os.system(f'{rc}service {network} start')
+    os.system('service netif start')
 
 
 def stopnetworkcard(netcard):
-    if openrc is True:
-        os.system(f'ifconfig {netcard} down')
-    else:
-        os.system(f'service netif stop {netcard}')
-        switch_default(netcard)
+    os.system(f'service netif stop {netcard}')
+    switch_default(netcard)
 
 
 def startnetworkcard(netcard):
-    if openrc is True:
-        os.system(f'ifconfig {netcard} up')
-        os.system(f'{rc}service dhcpcd.{netcard} restart')
-    else:
-        os.system(f'service netif start {netcard}')
-        sleep(1)
-        os.system('service routing restart')
-        os.system(f'service dhclient start {netcard}')
+    os.system(f'service netif start {netcard}')
+    sleep(1)
+    os.system('service routing restart')
+    os.system(f'service dhclient start {netcard}')
 
 
 def wifiDisconnection(wificard):
@@ -348,8 +313,4 @@ def wlan_status(card):
 
 
 def start_dhcp(wificard):
-    if openrc is True:
-        os.system(f'dhcpcd -x {wificard}')
-        os.system(f'dhcpcd {wificard}')
-    else:
-        os.system(f'dhclient {wificard}')
+    os.system(f'dhclient {wificard}')
