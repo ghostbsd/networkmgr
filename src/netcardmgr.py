@@ -35,6 +35,22 @@ class netCardConfigWindow(Gtk.Window):
             self.searchEntry.set_sensitive(True)
             self.saveButton.set_sensitive(True)
 
+    def edit_ipv6_setting(self, widget, value):
+        if value == "SLAAC":
+            self.ipInputAddressEntry6.set_sensitive(False)
+            self.ipInputMaskEntry6.set_sensitive(False)
+            self.ipInputGatewayEntry6.set_sensitive(False)
+            self.dnsEntry6.set_sensitive(False)
+            self.searchEntry6.set_sensitive(False)
+            self.saveButton.set_sensitive(False)
+        else:
+            self.ipInputAddressEntry6.set_sensitive(True)
+            self.ipInputMaskEntry6.set_sensitive(True)
+            self.ipInputGatewayEntry6.set_sensitive(True)
+            self.dnsEntry6.set_sensitive(True)
+            self.searchEntry6.set_sensitive(True)
+            self.saveButton.set_sensitive(True)
+
     def __init__(self, defaultactiveint):
         # Build Default Window
         Gtk.Window.__init__(self, title="Network Interface Configuration")
@@ -225,9 +241,11 @@ class netCardConfigWindow(Gtk.Window):
         # Add radio button to toggle DHCP or not
         rb_slaac6 = Gtk.RadioButton.new_with_label(None, "SLAAC")
         rb_slaac6.set_margin_top(15)
+        rb_slaac6.connect("toggled", self.edit_ipv6_setting, "SLAAC")
         rb_manual6 = Gtk.RadioButton.new_with_label_from_widget(rb_slaac6, "Manual")
         rb_manual6.set_margin_top(15)
         rb_manual6.join_group(rb_slaac6)
+        rb_manual6.connect("toggled", self.edit_ipv6_setting, "Manual")
 
         radioButtonLabel6 = Gtk.Label(label="IPv4 Method:")
         radioButtonLabel6.set_margin_top(15)
@@ -344,7 +362,6 @@ class netCardConfigWindow(Gtk.Window):
         # Apply Tab 2 content and formatting to the notebook
         nb.append_page(gridOne6)
         nb.set_tab_label_text(gridOne6, "IPv6 Settings")
-
         # Put all the widgets together into one window
         mainBox = Gtk.Box(orientation=1, spacing=0)
         mainBox.pack_start(nb, False, False, 0)
@@ -383,7 +400,7 @@ class netCardConfigWindow(Gtk.Window):
         print(f"Refreshing settings to match current settings on {refreshedInterface}. "
               f"Interface name is {refreshedInterfaceName}")
         self.get_current_interface_settings(refreshedInterfaceName)
-        self.display_current_interface_settings(widget)
+        # self.display_current_interface_settings(widget)
 
     def get_current_interface_settings(self, active_nic):
         # Need to accurately determine if a wlanN interface is using DHCP
