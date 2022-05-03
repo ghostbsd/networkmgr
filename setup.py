@@ -30,9 +30,14 @@ share_networkmgr = [
     'src/trayicon.py'
 ]
 
+locales = [
+    'src/locale/zh_CN/'
+]
+
 data_files = [
     (f'{prefix}/etc/xdg/autostart', ['src/networkmgr.desktop']),
     (f'{prefix}/share/networkmgr', share_networkmgr),
+    (f'{prefix}/share/locale', locales)
     (f'{prefix}/etc/sudoers.d', ['src/sudoers.d/networkmgr'])
 ]
 
