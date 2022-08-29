@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2022-08-29 15:22+0800\n"
+"POT-Creation-Date: 2022-08-29 15:53+0800\n"
 "PO-Revision-Date: 2022-05-02 22:30+0800\n"
 "Last-Translator: SAIHAZE <saihaze@outlook.com>\n"
 "Language-Team: Language locale/zh\n"
@@ -34,6 +34,11 @@ msgstr "禁用"
 #, python-format
 msgid "Wired %s Disconnected"
 msgstr "有线网络 %s 已断开"
+
+#: src/trayicon.py:89
+#, fuzzy
+msgid "Enable"
+msgstr "启用"
 
 #: src/trayicon.py:93
 #, python-format
@@ -99,3 +104,11 @@ msgstr "{ssid_info[0]} 无线网络认证失败"
 #, python-brace-format
 msgid "Authentication required by {ssid_info[0]} Wi-Fi Network"
 msgstr "{ssid_info[0]} 无线网络需要认证"
+
+#: src/trayicon.py:381
+msgid "Password:"
+msgstr "密码："
+
+#: src/trayicon.py:384
+msgid "Show password"
+msgstr "展示密码"

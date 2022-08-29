@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2022-08-29 15:30+0800\n"
+"POT-Creation-Date: 2022-08-29 15:54+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -33,6 +33,10 @@ msgstr ""
 #: src/trayicon.py:86
 #, python-format
 msgid "Wired %s Disconnected"
+msgstr ""
+
+#: src/trayicon.py:89
+msgid "Enable"
 msgstr ""
 
 #: src/trayicon.py:93
@@ -98,4 +102,12 @@ msgstr ""
 #: src/trayicon.py:378
 #, python-brace-format
 msgid "Authentication required by {ssid_info[0]} Wi-Fi Network"
+msgstr ""
+
+#: src/trayicon.py:381
+msgid "Password:"
+msgstr ""
+
+#: src/trayicon.py:384
+msgid "Show password"
 msgstr ""
