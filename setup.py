@@ -12,7 +12,7 @@ PROGRAM_VERSION = __VERSION__
 
 prefix = '/usr/local' if system() == 'FreeBSD' else sys.prefix
 
-# compiling trainslations
+# compiling translations
 os.system("sh compile_translations.sh")
 
 def datafilelist(installbase, sourcebase):
