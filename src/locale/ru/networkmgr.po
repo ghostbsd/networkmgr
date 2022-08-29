@@ -9,7 +9,7 @@ msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2022-08-29 15:54+0800\n"
-"PO-Revision-Date: 2022-08-29 19:54+0300\n"
+"PO-Revision-Date: 2022-08-30 00:05+0300\n"
 "Last-Translator: Alexander Alexeev <alexax66@gmail.com>\n"
 "Language-Team: Language locale/ru\n"
 "Language: locale/ru/LC_MESSAGES/networkmgr\n"
@@ -88,11 +88,11 @@ msgstr "Закрыть Network Manager"
 
 #: src/trayicon.py:156
 msgid "Available Connections"
-msgstr "Доступные соединения"
+msgstr "Доступные подключения"
 
 #: src/trayicon.py:364
 msgid "Wi-Fi Network Authentication Required"
-msgstr "Требуется регитрация в сети WiFi"
+msgstr "Требуется региcтрация в сети WiFi"
 
 #: src/trayicon.py:376
 #, python-brace-format
@@ -102,7 +102,7 @@ msgstr "Ошибка при регистрации в сети WiFi {ssid_info[0
 #: src/trayicon.py:378
 #, python-brace-format
 msgid "Authentication required by {ssid_info[0]} Wi-Fi Network"
-msgstr "Требуется регитрация в сети WiFi {ssid_info[0]}"
+msgstr "Требуется региcтрация в сети WiFi {ssid_info[0]}"
 
 #: src/trayicon.py:381
 msgid "Password:"
