@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2022-05-02 22:28+0800\n"
+"POT-Creation-Date: 2022-08-29 15:30+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,81 +17,85 @@ msgstr ""
 "Content-Type: text/plain; charset=CHARSET\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: trayicon.py:67
+#: src/trayicon.py:67
 msgid "Ethernet Network"
 msgstr ""
 
-#: trayicon.py:78
+#: src/trayicon.py:78
 #, python-format
 msgid "Wired %s Connected"
 msgstr ""
 
-#: trayicon.py:86
+#: src/trayicon.py:81
+msgid "Disable"
+msgstr ""
+
+#: src/trayicon.py:86
 #, python-format
 msgid "Wired %s Disconnected"
 msgstr ""
 
-#: trayicon.py:93
+#: src/trayicon.py:93
 #, python-format
 msgid "Wired %s Unplug"
 msgstr ""
 
-#: trayicon.py:101
+#: src/trayicon.py:101
 #, python-format
 msgid "WiFi %s Disabled"
 msgstr ""
 
-#: trayicon.py:104
+#: src/trayicon.py:104
 #, python-format
 msgid "Enable Wifi %s"
 msgstr ""
 
-#: trayicon.py:109
+#: src/trayicon.py:109
 #, python-format
 msgid "WiFi %s Disconnected"
 msgstr ""
 
-#: trayicon.py:113 trayicon.py:131
+#: src/trayicon.py:113 src/trayicon.py:131
 #, python-format
 msgid "Disable Wifi %s"
 msgstr ""
 
-#: trayicon.py:119
+#: src/trayicon.py:119
 #, python-format
 msgid "WiFi %s Connected"
 msgstr ""
 
-#: trayicon.py:125
+#: src/trayicon.py:125
 #, python-format
 msgid "Disconnect from %s"
 msgstr ""
 
-#: trayicon.py:139
+#: src/trayicon.py:139
 msgid "Enable Networking"
 msgstr ""
 
-#: trayicon.py:143
+#: src/trayicon.py:143
 msgid "Disable Networking"
 msgstr ""
 
-#: trayicon.py:148
+#: src/trayicon.py:148
 msgid "Close Network Manager"
 msgstr ""
 
-#: trayicon.py:156
+#: src/trayicon.py:156
 msgid "Available Connections"
 msgstr ""
 
-#: trayicon.py:364
+#: src/trayicon.py:364
 msgid "Wi-Fi Network Authentication Required"
 msgstr ""
 
-#: trayicon.py:376
+#: src/trayicon.py:376
 #, python-brace-format
 msgid "{ssid_info[0]} Wi-Fi Network Authentication failed"
 msgstr ""
 
-#: trayicon.py:378
+#: src/trayicon.py:378
 #, python-brace-format
 msgid "Authentication required by {ssid_info[0]} Wi-Fi Network"
 msgstr ""

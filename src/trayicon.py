@@ -78,7 +78,7 @@ class trayIcon(object):
                     wired_item = Gtk.MenuItem(_("Wired %s Connected") % cardnum)
                     wired_item.set_sensitive(False)
                     self.menu.append(wired_item)
-                    disconnect_item = Gtk.ImageMenuItem("Disable")
+                    disconnect_item = Gtk.ImageMenuItem(_("Disable"))
                     disconnect_item.connect("activate", self.disconnectcard,
                                             netcard)
                     self.menu.append(disconnect_item)

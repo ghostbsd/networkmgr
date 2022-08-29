@@ -12,6 +12,8 @@ PROGRAM_VERSION = __VERSION__
 
 prefix = '/usr/local' if system() == 'FreeBSD' else sys.prefix
 
+# compiling trainslations
+os.system("./compile_translations")
 
 def datafilelist(installbase, sourcebase):
     datafileList = []
@@ -33,7 +35,7 @@ share_networkmgr = [
 data_files = [
     (f'{prefix}/etc/xdg/autostart', ['src/networkmgr.desktop']),
     (f'{prefix}/share/networkmgr', share_networkmgr),
-    (f'{prefix}/share/locale/zh_CN/LC_MESSAGES', ['src/locale/zh_CN/networkmgr.po'])
+    (f'{prefix}/share/locale/zh_CN/LC_MESSAGES', ['src/locale/zh_CN/networkmgr.mo']),
     (f'{prefix}/etc/sudoers.d', ['src/sudoers.d/networkmgr'])
 ]
 
