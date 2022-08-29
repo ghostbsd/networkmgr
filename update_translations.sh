@@ -1,4 +1,4 @@
-#!/bin/env sh
+#!/usr/bin/env sh
 
 xgettext src/trayicon.py -o src/locale/networkmgr.pot
 
