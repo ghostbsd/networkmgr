@@ -3,11 +3,16 @@
 import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GObject, GLib
+import gettext
 from time import sleep
 import threading
 import _thread
 from sys import path
 import locale
+
+gettext.bindtextdomain('networkmgr', '/usr/local/share/locale')
+gettext.textdomain('networkmgr')
+_ = gettext.gettext
 
 path.append("/usr/local/share/networkmgr")
 from net_api import (
@@ -59,7 +64,7 @@ class trayIcon(object):
     def nm_menu(self):
         self.menu = Gtk.Menu()
         e_title = Gtk.MenuItem()
-        e_title.set_label("Ethernet Network")
+        e_title.set_label(_("Ethernet Network"))
         e_title.set_sensitive(False)
         self.menu.append(e_title)
         self.menu.append(Gtk.SeparatorMenuItem())
@@ -70,10 +75,10 @@ class trayIcon(object):
             connection_state = cards[netcard]['state']["connection"]
             if "wlan" not in netcard:
                 if connection_state == "Connected":
-                    wired_item = Gtk.MenuItem("Wired %s Connected" % cardnum)
+                    wired_item = Gtk.MenuItem(_("Wired %s Connected") % cardnum)
                     wired_item.set_sensitive(False)
                     self.menu.append(wired_item)
-                    disconnect_item = Gtk.ImageMenuItem(f"Disable {netcard}")
+                    disconnect_item = Gtk.ImageMenuItem(_(f"Disable {netcard}"))
                     disconnect_item.connect("activate", self.disconnectcard,
                                             netcard)
                     self.menu.append(disconnect_item)
@@ -81,14 +86,14 @@ class trayIcon(object):
                     configure_item.connect("activate", self.configuration_window_open, netcard)
                     self.menu.append(configure_item)
                 elif connection_state == "Disconnected":
-                    notonline = Gtk.MenuItem("Wired %s Disconnected" % cardnum)
+                    notonline = Gtk.MenuItem(_("Wired %s Disconnected") % cardnum)
                     notonline.set_sensitive(False)
                     self.menu.append(notonline)
-                    wired_item = Gtk.MenuItem("Enable")
+                    wired_item = Gtk.MenuItem(_("Enable"))
                     wired_item.connect("activate", self.connectcard, netcard)
                     self.menu.append(wired_item)
                 else:
-                    disconnected = Gtk.MenuItem("Wired %s Unplug" % cardnum)
+                    disconnected = Gtk.MenuItem(_("Wired %s Unplug") % cardnum)
                     disconnected.set_sensitive(False)
                     self.menu.append(disconnected)
                 cardnum += 1
@@ -96,37 +101,37 @@ class trayIcon(object):
             elif "wlan" in netcard:
                 if connection_state == "Disabled":
                     wd_title = Gtk.MenuItem()
-                    wd_title.set_label("WiFi %s Disabled" % wifinum)
+                    wd_title.set_label(_("WiFi %s Disabled") % wifinum)
                     wd_title.set_sensitive(False)
                     self.menu.append(wd_title)
-                    enawifi = Gtk.MenuItem("Enable Wifi %s" % wifinum)
+                    enawifi = Gtk.MenuItem(_("Enable Wifi %s") % wifinum)
                     enawifi.connect("activate", self.enable_Wifi, netcard)
                     self.menu.append(enawifi)
                 elif connection_state == "Disconnected":
                     d_title = Gtk.MenuItem()
-                    d_title.set_label("WiFi %s Disconnected" % wifinum)
+                    d_title.set_label(_("WiFi %s Disconnected") % wifinum)
                     d_title.set_sensitive(False)
                     self.menu.append(d_title)
                     self.wifiListMenu(netcard, None, False, cards)
-                    diswifi = Gtk.MenuItem("Disable Wifi %s" % wifinum)
+                    diswifi = Gtk.MenuItem(_("Disable Wifi %s") % wifinum)
                     diswifi.connect("activate", self.disable_Wifi, netcard)
                     self.menu.append(diswifi)
                 else:
                     ssid = cards[netcard]['state']["ssid"]
                     bar = cards[netcard]['info'][ssid][4]
-                    wc_title = Gtk.MenuItem("WiFi %s Connected" % wifinum)
+                    wc_title = Gtk.MenuItem(_("WiFi %s Connected") % wifinum)
                     wc_title.set_sensitive(False)
                     self.menu.append(wc_title)
                     connection_item = Gtk.ImageMenuItem(ssid)
                     connection_item.set_image(self.open_wifi(bar))
                     connection_item.show()
-                    disconnect_item = Gtk.MenuItem("Disconnect from %s" % ssid)
+                    disconnect_item = Gtk.MenuItem(_("Disconnect from %s") % ssid)
                     disconnect_item.connect("activate", self.disconnect_wifi,
                                             netcard)
                     self.menu.append(connection_item)
                     self.menu.append(disconnect_item)
                     self.wifiListMenu(netcard, ssid, True, cards)
-                    diswifi = Gtk.MenuItem("Disable Wifi %s" % wifinum)
+                    diswifi = Gtk.MenuItem(_("Disable Wifi %s") % wifinum)
                     diswifi.connect("activate", self.disable_Wifi, netcard)
                     self.menu.append(diswifi)
                     configure_item = Gtk.ImageMenuItem(f"Configure {netcard}")
@@ -135,16 +140,16 @@ class trayIcon(object):
                 self.menu.append(Gtk.SeparatorMenuItem())
                 wifinum += 1
         if self.cardinfo['service'] is False:
-            open_item = Gtk.MenuItem("Enable Networking")
+            open_item = Gtk.MenuItem(_("Enable Networking"))
             open_item.connect("activate", self.openNetwork)
             self.menu.append(open_item)
         else:
-            close_item = Gtk.MenuItem("Disable Networking")
+            close_item = Gtk.MenuItem(_("Disable Networking"))
             close_item.connect("activate", self.closeNetwork)
             self.menu.append(close_item)
         # else:
         #     print('service netif status not supported')
-        close_manager = Gtk.MenuItem("Close Network Manager")
+        close_manager = Gtk.MenuItem(_("Close Network Manager"))
         close_manager.connect("activate", self.stop_manager)
         self.menu.append(close_manager)
         self.menu.show_all()
@@ -152,7 +157,7 @@ class trayIcon(object):
 
     def wifiListMenu(self, wificard, cssid, passes, cards):
         wiconncmenu = Gtk.Menu()
-        avconnmenu = Gtk.MenuItem("Available Connections")
+        avconnmenu = Gtk.MenuItem(_("Available Connections"))
         avconnmenu.set_submenu(wiconncmenu)
         for ssid in cards[wificard]['info']:
             ssid_info = cards[wificard]['info'][ssid]
@@ -363,7 +368,7 @@ class trayIcon(object):
 
     def Authentication(self, ssid_info, card, failed):
         self.window = Gtk.Window()
-        self.window.set_title("Wi-Fi Network Authentication Required")
+        self.window.set_title(_("Wi-Fi Network Authentication Required"))
         self.window.set_border_width(0)
         self.window.set_size_request(500, 200)
         box1 = Gtk.VBox(False, 0)
@@ -375,15 +380,15 @@ class trayIcon(object):
         box2.show()
         # Creating MBR or GPT drive
         if failed:
-            title = f"{ssid_info[0]} Wi-Fi Network Authentication failed"
+            title = _(f"{ssid_info[0]} Wi-Fi Network Authentication failed")
         else:
-            title = f"Authentication required by {ssid_info[0]} Wi-Fi Network"
+            title = _(f"Authentication required by {ssid_info[0]} Wi-Fi Network")
         label = Gtk.Label(f"<b><span size='large'>{title}</span></b>")
         label.set_use_markup(True)
-        pwd_label = Gtk.Label("Password:")
+        pwd_label = Gtk.Label(_("Password:"))
         self.password = Gtk.Entry()
         self.password.set_visibility(False)
-        check = Gtk.CheckButton("Show password")
+        check = Gtk.CheckButton(_("Show password"))
         check.connect("toggled", self.on_check)
         table = Gtk.Table(1, 2, True)
         table.attach(label, 0, 5, 0, 1)

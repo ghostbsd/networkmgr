@@ -31,6 +31,7 @@ nosetests.xml
 Pipfile
 Pipfile.lock
 venv/*
+venv*/*
 
 # Pycharm stuff
 .idea/*
