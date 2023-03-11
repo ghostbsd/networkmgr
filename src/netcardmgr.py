@@ -24,14 +24,16 @@ class netCardConfigWindow(Gtk.Window):
             self.ipInputAddressEntry.set_sensitive(False)
             self.ipInputMaskEntry.set_sensitive(False)
             self.ipInputGatewayEntry.set_sensitive(False)
-            self.dnsEntry.set_sensitive(False)
+            self.prymary_dnsEntry.set_sensitive(False)
+            self.secondary_dnsEntry.set_sensitive(False)
             self.searchEntry.set_sensitive(False)
             self.saveButton.set_sensitive(False)
         else:
             self.ipInputAddressEntry.set_sensitive(True)
             self.ipInputMaskEntry.set_sensitive(True)
             self.ipInputGatewayEntry.set_sensitive(True)
-            self.dnsEntry.set_sensitive(True)
+            self.prymary_dnsEntry.set_sensitive(True)
+            self.secondary_dnsEntry.set_sensitive(True)
             self.searchEntry.set_sensitive(True)
             self.saveButton.set_sensitive(True)
 
@@ -40,14 +42,14 @@ class netCardConfigWindow(Gtk.Window):
             self.ipInputAddressEntry6.set_sensitive(False)
             self.ipInputMaskEntry6.set_sensitive(False)
             self.ipInputGatewayEntry6.set_sensitive(False)
-            self.dnsEntry6.set_sensitive(False)
+            self.prymary_dnsEntry6.set_sensitive(False)
             self.searchEntry6.set_sensitive(False)
             self.saveButton.set_sensitive(False)
         else:
             self.ipInputAddressEntry6.set_sensitive(True)
             self.ipInputMaskEntry6.set_sensitive(True)
             self.ipInputGatewayEntry6.set_sensitive(True)
-            self.dnsEntry6.set_sensitive(True)
+            self.prymary_dnsEntry6.set_sensitive(True)
             self.searchEntry6.set_sensitive(True)
             self.saveButton.set_sensitive(True)
 
@@ -147,30 +149,35 @@ class netCardConfigWindow(Gtk.Window):
         ipEntryBox.pack_start(self.ipInputGatewayEntry, False, False, 0)
 
         # Add DNS Server Settings
-        dnsLabel = Gtk.Label(label="DNS Servers: ")
-        dnsLabel.set_margin_top(15)
-        dnsLabel.set_margin_end(58)
-        dnsLabel.set_margin_start(30)
+        prymary_dns_Label = Gtk.Label(label="Primary DNS Servers: ")
+        prymary_dns_Label.set_margin_top(15)
+        prymary_dns_Label.set_margin_end(58)
+        prymary_dns_Label.set_margin_start(30)
 
-        self.dnsEntry = Gtk.Entry()
-        self.dnsEntry.set_margin_end(30)
-        DNSList = [(key, value) for key, value in currentSettings.items() if key.startswith("DNS Server")]
-        print(DNSList)
-        i = 0
-        DNSString = ""
-        while i < len(DNSList):
-            DNSString = DNSString + DNSList[i][1]
-            if i + 1 < len(DNSList):
-                DNSString = DNSString + ","
-            i = i + 1
-        self.dnsEntry.set_text(DNSString)
+        secondary_dns_Label = Gtk.Label(label="Secondary DNS Servers: ")
+        secondary_dns_Label.set_margin_top(15)
+        secondary_dns_Label.set_margin_end(58)
+        secondary_dns_Label.set_margin_start(30)
 
-        dnsEntryBox = Gtk.Box(orientation=0, spacing=0)
-        dnsEntryBox.pack_start(dnsLabel, False, False, 0)
-        dnsEntryBox.pack_end(self.dnsEntry, True, True, 0)
+        self.prymary_dnsEntry = Gtk.Entry()
+        self.prymary_dnsEntry.set_margin_end(30)
+        self.prymary_dnsEntry.set_text(currentSettings["DNS Server 1"])
+
+        self.secondary_dnsEntry = Gtk.Entry()
+        self.secondary_dnsEntry.set_margin_end(30)
+        self.secondary_dnsEntry.set_text(currentSettings["DNS Server 2"])
+
+        dnsEntryBox1 = Gtk.Box(orientation=0, spacing=0)
+        dnsEntryBox1.pack_start(prymary_dns_Label, False, False, 0)
+
+        dnsEntryBox1.pack_end(self.prymary_dnsEntry, True, True, 0)
+
+        dnsEntryBox2 = Gtk.Box(orientation=0, spacing=0)
+        dnsEntryBox2.pack_start(secondary_dns_Label, False, False, 0)
+
+        dnsEntryBox2.pack_end(self.secondary_dnsEntry, True, True, 0)
 
         # Add Search Domain Settings
-
         searchLabel = Gtk.Label(label="Search domains: ")
         searchLabel.set_margin_top(15)
         searchLabel.set_margin_end(30)
@@ -189,7 +196,8 @@ class netCardConfigWindow(Gtk.Window):
             self.ipInputAddressEntry.set_sensitive(False)
             self.ipInputMaskEntry.set_sensitive(False)
             self.ipInputGatewayEntry.set_sensitive(False)
-            self.dnsEntry.set_sensitive(False)
+            self.prymary_dnsEntry.set_sensitive(False)
+            self.secondary_dnsEntry.set_sensitive(False)
             self.searchEntry.set_sensitive(False)
         # Build the grid, which will handle the physical layout of the UI elements.
         gridOne = Gtk.Grid()
@@ -201,8 +209,9 @@ class netCardConfigWindow(Gtk.Window):
         gridOne.attach(radioBox, 0, 1, 4, 1)
         gridOne.attach(ipInputBox, 0, 2, 4, 1)
         gridOne.attach(ipEntryBox, 0, 3, 4, 1)
-        gridOne.attach(dnsEntryBox, 0, 4, 4, 1)
-        gridOne.attach(searchBox, 0, 5, 4, 1)
+        gridOne.attach(dnsEntryBox1, 0, 4, 4, 1)
+        gridOne.attach(dnsEntryBox2, 0, 5, 4, 1)
+        gridOne.attach(searchBox, 0, 6, 4, 1)
 
         # Build Tab 2 Content
 
@@ -285,17 +294,22 @@ class netCardConfigWindow(Gtk.Window):
         ipEntryBox6.pack_start(self.ipInputGatewayEntry6, False, False, 0)
 
         # Add DNS Server Settings
-        dnsLabel6 = Gtk.Label(label="DNS Servers: ")
-        dnsLabel6.set_margin_top(15)
-        dnsLabel6.set_margin_end(58)
-        dnsLabel6.set_margin_start(30)
+        prymary_dns_Label6 = Gtk.Label(label="Primary DNS Servers: ")
+        prymary_dns_Label6.set_margin_top(15)
+        prymary_dns_Label6.set_margin_end(58)
+        prymary_dns_Label6.set_margin_start(30)
 
-        self.dnsEntry6 = Gtk.Entry()
-        self.dnsEntry6.set_margin_end(30)
+        secondary_dns_Label6 = Gtk.Label(label="Secondary DNS Servers: ")
+        secondary_dns_Label6.set_margin_top(15)
+        secondary_dns_Label6.set_margin_end(58)
+        secondary_dns_Label6.set_margin_start(30)
+
+        self.prymary_dnsEntry6 = Gtk.Entry()
+        self.prymary_dnsEntry6.set_margin_end(30)
 
         dnsEntryBox6 = Gtk.Box(orientation=0, spacing=0)
-        dnsEntryBox6.pack_start(dnsLabel6, False, False, 0)
-        dnsEntryBox6.pack_end(self.dnsEntry6, True, True, 0)
+        dnsEntryBox6.pack_start(prymary_dns_Label6, False, False, 0)
+        dnsEntryBox6.pack_end(self.prymary_dnsEntry6, True, True, 0)
 
         # Add Search Domain Settings
 
@@ -316,7 +330,7 @@ class netCardConfigWindow(Gtk.Window):
         self.ipInputAddressEntry6.set_sensitive(False)
         self.ipInputMaskEntry6.set_sensitive(False)
         self.ipInputGatewayEntry6.set_sensitive(False)
-        self.dnsEntry6.set_sensitive(False)
+        self.prymary_dnsEntry6.set_sensitive(False)
         self.searchEntry6.set_sensitive(False)
         # Build the grid, which will handle the physical layout of the UI elements.
         gridOne6 = Gtk.Grid()
@@ -330,6 +344,7 @@ class netCardConfigWindow(Gtk.Window):
         gridOne6.attach(ipEntryBox6, 0, 3, 4, 1)
         gridOne6.attach(dnsEntryBox6, 0, 4, 4, 1)
         gridOne6.attach(searchBox6, 0, 5, 4, 1)
+        gridOne6.set_sensitive(False)
 
         # Build Notebook
 
@@ -339,16 +354,16 @@ class netCardConfigWindow(Gtk.Window):
         nb.set_margin_top(10)
         nb.set_margin_bottom(10)
         nb.set_tab_pos(2)
-
+        # nb.set_sensitive(False)
         # Build Save & Cancel Buttons
 
-        self.saveButton = Gtk.Button(label="Save...")
+        self.saveButton = Gtk.Button(label="Save")
         self.saveButton.set_margin_bottom(10)
         self.saveButton.set_margin_start(10)
         self.saveButton.connect("clicked", self.commit_pending_changes)
         if currentSettings["Address Assignment Method"] == "DHCP":
             self.saveButton.set_sensitive(False)
-        cancelButton = Gtk.Button(label="Cancel...")
+        cancelButton = Gtk.Button(label="Cancel")
         cancelButton.set_margin_bottom(10)
         cancelButton.connect("clicked", self.discard_pending_changes)
         buttonsWindow = Gtk.Box(orientation=0, spacing=10)
@@ -361,11 +376,11 @@ class netCardConfigWindow(Gtk.Window):
 
         # Apply Tab 2 content and formatting to the notebook
         nb.append_page(gridOne6)
-        nb.set_tab_label_text(gridOne6, "IPv6 Settings")
+        nb.set_tab_label_text(gridOne6, "IPv6 Settings WIP")
         # Put all the widgets together into one window
         mainBox = Gtk.Box(orientation=1, spacing=0)
-        mainBox.pack_start(nb, False, False, 0)
-        mainBox.pack_start(buttonsWindow, False, False, 0)
+        mainBox.pack_start(nb, True, True, 0)
+        mainBox.pack_end(buttonsWindow, False, False, 0)
         self.add(mainBox)
 
         # Run any functions that need to execute once at window creation
@@ -375,7 +390,8 @@ class netCardConfigWindow(Gtk.Window):
     def enumerate_nics(self):
         validnics = list()
         confnotnics = ["lo", "fwe", "fwip", "tap", "plip", "pfsync", "pflog",
-                       "tun", "sl", "faith", "ppp", "bridge", "ixautomation"]
+                       "tun", "sl", "faith", "ppp", "bridge", "ixautomation",
+                       "wg"]
         confncard = 'ifconfig -l'
         confnics = Popen(confncard, shell=True, stdout=PIPE, close_fds=True, universal_newlines=True)
         confnetcard = confnics.stdout.readlines()[0].rstrip()
@@ -390,7 +406,7 @@ class netCardConfigWindow(Gtk.Window):
                       "It will not be added to the valid configurable nic list in the netCardConfigWindow.enumerate_nics method.")
             else:
                 validnics.append(confnic)
-        return(validnics)
+        return validnics
 
     # Used with the combo box to refresh the UI of tab 1 with active settings for the newly selected active interface.
     def cbox_config_refresh(self, widget):
@@ -478,6 +494,7 @@ class netCardConfigWindow(Gtk.Window):
                 SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("'", "")
                 SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("[", "")
                 SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("]", "")
+                SearchDomainMatchStrip = SearchDomainMatchStrip.replace('search', '').strip()
         else:
             RRConfGatewaySearch = open('/etc/rc.conf', 'r').read()
             RRConfGatewayResults = re.findall(r'defaultrouter="[0-9]+\.[0-9]+\.[0-9]+\.[0-9]"', RRConfGatewaySearch)
@@ -496,6 +513,7 @@ class netCardConfigWindow(Gtk.Window):
             SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("'", "")
             SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("[", "")
             SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("]", "")
+            SearchDomainMatchStrip = SearchDomainMatchStrip.replace('search', '').strip()
 
         # currentSettings = {}
         currentSettings["Active Interface"] = active_nic
@@ -506,10 +524,9 @@ class netCardConfigWindow(Gtk.Window):
         currentSettings["Default Gateway"] = aIntGatewayStrip
         # [currentSettings.append(str(DNSServer).replace("nameserver ", "")) for DNSServer in DNSMatch]
         currentSettings["Search Domain"] = SearchDomainMatchStrip
-        i = 1
-        while i <= len(DNSMatch):
-            currentSettings[f"DNS Server {i}"] = str(DNSMatch[(i - 1)]).replace("nameserver ", "")
-            i = i + 1
+
+        for num in range(len(DNSMatch)):
+            currentSettings[f"DNS Server {num + 1}"] = str(DNSMatch[(num)]).replace("nameserver", "").strip()
 
         print("Current settings are below:")
         print(f"{currentSettings}")
