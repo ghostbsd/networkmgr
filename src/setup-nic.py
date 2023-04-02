@@ -19,8 +19,8 @@ notnics_regex = "(enc|lo|fwe|fwip|tap|plip|pfsync|pflog|ipfw|tun|sl|faith|" \
     "ppp|bridge|wg|wlan)[0-9]+|vm-[a-z]+"
 
 # wifi_driver_regex is taken from devd.conf wifi-driver-regex
-wifi_driver_regex = "(ath|bwi|bwn|ipw|iwi|iwm|iwn|malo|mwl|otus|ral|rsu|" \
-    "rtwn|rum|run|uath|upgt|ural|urtw|wi|wpi|wtap|zyd)[0-9]+"
+wifi_driver_regex = "(ath|bwi|bwn|ipw|iwlwifi|iwi|iwm|iwn|malo|mwl|otus|" \
+    "ral|rsu|rtw|rtwn|rum|run|uath|upgt|ural|urtw|wpi|wtap|zyd)[0-9]+"
 
 if re.search(notnics_regex, nic):
     exit(0)
