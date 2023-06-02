@@ -153,18 +153,41 @@ def networkdictionary():
     cards = {}
     for card in nlist:
         if 'wlan' in card:
+           # 20230601 JES
+            # alternative way to get the signal level
+            sta = f"ifconfig {card} list sta | tail -1"
+            wifiplus = Popen(sta, shell=True, stdout=PIPE,
+                         universal_newlines=True)
+            qual = 0
+            percentage = -1
+            for line in wifiplus.stdout:
+                rssi = float(line[33:37].strip())
+                # with this formula, level is not
+                # maximum despite the computer is 
+                # almost touching the router
+                #qual = 2 * ( (rssi * (-1) ) + 100)
+                # this formula increase the percentage
+                # and the icon shows maximum level
+                qual = 2 * ( (rssi * (-1) ) + 113)
+                # 20230601 JES
+                # debug
+                #print("net_api.py> rssi:%s  qual:%s " % (str(rssi),str(qual) ) )
+
             scanv = f"ifconfig {card} list scan | grep -va BSSID"
             wifi = Popen(scanv, shell=True, stdout=PIPE,
                          universal_newlines=True)
             connectioninfo = {}
             for line in wifi.stdout:
-                # don't sort empty ssid
+               # don't sort empty ssid
                 # Window, MacOS and Linux does not show does
                 if line[:5] == "     ":
                     continue
                 ssid = line[:33].strip()
                 info = line[:83][33:].strip().split()
                 percentage = barpercent(info[3])
+                # 20230601 JES
+                # debug
+                #print("net_api.py> ssid:%s percentage:%s" % (ssid , percentage) )
                 # if ssid exist and percentage is higher keep it
                 # else add the new one if percentage is higher
                 if ssid in connectioninfo:
@@ -191,6 +214,17 @@ def networkdictionary():
                     "connection": "Connected",
                     "ssid": ssid,
                 }
+                # 20230601 JES
+                # if connected then percentage
+                # shoudn't be zero
+                # use the quality calculated before
+                #print("net_api.py>  percentage:%s" % percentage )
+                #print("net_api.py> connectioninfo: %s" % connectioninfo[ssid])
+                if connectioninfo[ssid][4] == 0:
+                    info[4] = qual
+                    connectioninfo[ssid] = info
+                    #print("net_api.py> ssid:%s percentage:%s" % (ssid, connectioninfo[ssid][4]) )
+
             seconddictionary = {
                 'state': connectionstat,
                 'info': connectioninfo

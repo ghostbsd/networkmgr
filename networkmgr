@@ -3,7 +3,7 @@
 from os.path import dirname
 from sys import path
 import signal
-path.append("/usr/local/share/networkmgr")
+#path.append("/usr/local/share/networkmgr")
 path.append(dirname(__file__) + "/src")
 from trayicon import trayIcon
 
