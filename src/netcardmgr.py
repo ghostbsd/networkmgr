@@ -3,39 +3,46 @@
 import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk
-from subprocess import Popen, PIPE, check_output
+from subprocess import check_output, run
 import os
 import re
-from time import sleep
-
+from net_api import (
+    start_static_network,
+    nics_list,
+    defaultcard,
+    restart_dhcp_network
+)
 rcconf = open('/etc/rc.conf', 'r').read()
 if os.path.exists('/etc/rc.conf.local'):
     rcconflocal = open('/etc/rc.conf.local', 'r').read()
 else:
     rcconflocal = "None"
 
+global currentSettings
 currentSettings = {}
 
 
 class netCardConfigWindow(Gtk.Window):
 
-    def edit_ipv4_setting(self, widget, value):
-        if value == "DHCP":
-            self.ipInputAddressEntry.set_sensitive(False)
-            self.ipInputMaskEntry.set_sensitive(False)
-            self.ipInputGatewayEntry.set_sensitive(False)
-            self.prymary_dnsEntry.set_sensitive(False)
-            self.secondary_dnsEntry.set_sensitive(False)
-            self.searchEntry.set_sensitive(False)
-            self.saveButton.set_sensitive(False)
-        else:
-            self.ipInputAddressEntry.set_sensitive(True)
-            self.ipInputMaskEntry.set_sensitive(True)
-            self.ipInputGatewayEntry.set_sensitive(True)
-            self.prymary_dnsEntry.set_sensitive(True)
-            self.secondary_dnsEntry.set_sensitive(True)
-            self.searchEntry.set_sensitive(True)
-            self.saveButton.set_sensitive(True)
+    def edit_ipv4_setting(self, widget):
+        if widget.get_active():
+            self.method = widget.get_label()
+            if self.method == "DHCP":
+                self.ipInputAddressEntry.set_sensitive(False)
+                self.ipInputMaskEntry.set_sensitive(False)
+                self.ipInputGatewayEntry.set_sensitive(False)
+                self.prymary_dnsEntry.set_sensitive(False)
+                self.secondary_dnsEntry.set_sensitive(False)
+            else:
+                self.ipInputAddressEntry.set_sensitive(True)
+                self.ipInputMaskEntry.set_sensitive(True)
+                self.ipInputGatewayEntry.set_sensitive(True)
+                self.prymary_dnsEntry.set_sensitive(True)
+                self.secondary_dnsEntry.set_sensitive(True)
+            if self.method == currentSettings["Assignment Method"]:
+                self.saveButton.set_sensitive(False)
+            else:
+                self.saveButton.set_sensitive(True)
 
     def edit_ipv6_setting(self, widget, value):
         if value == "SLAAC":
@@ -53,11 +60,12 @@ class netCardConfigWindow(Gtk.Window):
             self.searchEntry6.set_sensitive(True)
             self.saveButton.set_sensitive(True)
 
-    def __init__(self, defaultactiveint):
+    def __init__(self, selected_nic=None):
         # Build Default Window
         Gtk.Window.__init__(self, title="Network Interface Configuration")
         self.set_default_size(475, 400)
-
+        self.NICS = nics_list()
+        DEFAULT_NIC = selected_nic if selected_nic else defaultcard()
         # Build Tab 1 Content
 
         # Interface Drop Down Combo Box
@@ -69,19 +77,18 @@ class netCardConfigWindow(Gtk.Window):
 
         # Add interfaces to a ListStore
         store = Gtk.ListStore(str)
-        validinterfaces = self.enumerate_nics()
-        for validinterface in validinterfaces:
-            store.append([validinterface])
 
-        # Build the UI aspects of the ComboBox, passing the interface clicked in the trayicon
-        # as the interface that needs to be the active one when the combo box is drawn
-        activeComboBoxObjectIndex = validinterfaces.index(f"{defaultactiveint}")
+        for nic in self.NICS:
+            store.append([nic])
+
         interfaceComboBox.set_model(store)
         interfaceComboBox.set_margin_top(15)
         interfaceComboBox.set_margin_end(30)
-        interfaceComboBox.set_active(activeComboBoxObjectIndex)
-        self.cbox_config_refresh(interfaceComboBox)
-        interfaceComboBox.connect("changed", self.cbox_config_refresh)
+        if DEFAULT_NIC:
+            active_index = self.NICS.index(f"{DEFAULT_NIC}")
+            interfaceComboBox.set_active(active_index)
+        self.get_current_interface_settings(DEFAULT_NIC)
+        interfaceComboBox.connect("changed", self.cbox_config_refresh, self.NICS)
 
         # Build Label to sit in front of the ComboBox
         labelOne = Gtk.Label(label="Interface:")
@@ -94,17 +101,17 @@ class netCardConfigWindow(Gtk.Window):
         interfaceBox.pack_end(interfaceComboBox, True, True, 0)
 
         # Add radio button to toggle DHCP or not
-        rb_dhcp4 = Gtk.RadioButton.new_with_label(None, "DHCP")
-        rb_dhcp4.set_margin_top(15)
-        rb_dhcp4.connect("toggled", self.edit_ipv4_setting, "DHCP")
-        rb_manual4 = Gtk.RadioButton.new_with_label_from_widget(rb_dhcp4, "Manual")
-        rb_manual4.set_margin_top(15)
-        rb_manual4.connect("toggled", self.edit_ipv4_setting, "Manual")
-        if currentSettings["Address Assignment Method"] == "DHCP":
-            rb_dhcp4.set_active(True)
+        self.version = currentSettings["Assignment Method"]
+        self.rb_dhcp4 = Gtk.RadioButton.new_with_label(None, "DHCP")
+        self.rb_dhcp4.set_margin_top(15)
+        self.rb_manual4 = Gtk.RadioButton.new_with_label_from_widget(
+            self.rb_dhcp4, "Manual")
+        self.rb_manual4.set_margin_top(15)
+        if currentSettings["Assignment Method"] == "DHCP":
+            self.rb_dhcp4.set_active(True)
         else:
-            rb_manual4.set_active(True)
-        rb_manual4.join_group(rb_dhcp4)
+            self.rb_manual4.set_active(True)
+        self.rb_manual4.join_group(self.rb_dhcp4)
 
         radioButtonLabel = Gtk.Label(label="IPv4 Method:")
         radioButtonLabel.set_margin_top(15)
@@ -113,8 +120,8 @@ class netCardConfigWindow(Gtk.Window):
         radioBox = Gtk.Box(orientation=0, spacing=50)
         radioBox.set_homogeneous(False)
         radioBox.pack_start(radioButtonLabel, False, False, 0)
-        radioBox.pack_start(rb_dhcp4, True, False, 0)
-        radioBox.pack_end(rb_manual4, True, True, 0)
+        radioBox.pack_start(self.rb_dhcp4, True, False, 0)
+        radioBox.pack_end(self.rb_manual4, True, True, 0)
 
         # Add Manual Address Field
         ipInputAddressLabel = Gtk.Label(label="Address")
@@ -192,14 +199,18 @@ class netCardConfigWindow(Gtk.Window):
         searchBox = Gtk.Box(orientation=0, spacing=0)
         searchBox.pack_start(searchLabel, False, False, 0)
         searchBox.pack_end(self.searchEntry, True, True, 0)
-        if currentSettings["Address Assignment Method"] == "DHCP":
+
+        self.rb_dhcp4.connect("toggled", self.edit_ipv4_setting)
+        self.rb_manual4.connect("toggled", self.edit_ipv4_setting)
+
+        if currentSettings["Assignment Method"] == "DHCP":
             self.ipInputAddressEntry.set_sensitive(False)
             self.ipInputMaskEntry.set_sensitive(False)
             self.ipInputGatewayEntry.set_sensitive(False)
             self.prymary_dnsEntry.set_sensitive(False)
             self.secondary_dnsEntry.set_sensitive(False)
             self.searchEntry.set_sensitive(False)
-        # Build the grid, which will handle the physical layout of the UI elements.
+
         gridOne = Gtk.Grid()
         gridOne.set_column_homogeneous(True)
         gridOne.set_row_homogeneous(False)
@@ -224,17 +235,16 @@ class netCardConfigWindow(Gtk.Window):
 
         # Add interfaces to a ListStore
         store6 = Gtk.ListStore(str)
-        validinterfaces6 = self.enumerate_nics()
-        for validinterface6 in validinterfaces6:
+        for validinterface6 in self.NICS:
             store6.append([validinterface6])
 
-        # Build the UI aspects of the ComboBox, passing the interface clicked in the trayicon
-        # as the interface that needs to be the active one when the combo box is drawn
-        activeComboBoxObjectIndex6 = validinterfaces6.index(f"{defaultactiveint}")
         interfaceComboBox6.set_model(store)
         interfaceComboBox6.set_margin_top(15)
         interfaceComboBox6.set_margin_end(30)
-        interfaceComboBox6.set_active(activeComboBoxObjectIndex6)
+
+        if DEFAULT_NIC:
+            activeComboBoxObjectIndex6 = self.NICS.index(f"{DEFAULT_NIC}")
+            interfaceComboBox6.set_active(activeComboBoxObjectIndex6)
         interfaceComboBox6.connect("changed", self.cbox_config_refresh)
 
         # Build Label to sit in front of the ComboBox
@@ -251,7 +261,8 @@ class netCardConfigWindow(Gtk.Window):
         rb_slaac6 = Gtk.RadioButton.new_with_label(None, "SLAAC")
         rb_slaac6.set_margin_top(15)
         rb_slaac6.connect("toggled", self.edit_ipv6_setting, "SLAAC")
-        rb_manual6 = Gtk.RadioButton.new_with_label_from_widget(rb_slaac6, "Manual")
+        rb_manual6 = Gtk.RadioButton.new_with_label_from_widget(
+            rb_slaac6, "Manual")
         rb_manual6.set_margin_top(15)
         rb_manual6.join_group(rb_slaac6)
         rb_manual6.connect("toggled", self.edit_ipv6_setting, "Manual")
@@ -332,7 +343,7 @@ class netCardConfigWindow(Gtk.Window):
         self.ipInputGatewayEntry6.set_sensitive(False)
         self.prymary_dnsEntry6.set_sensitive(False)
         self.searchEntry6.set_sensitive(False)
-        # Build the grid, which will handle the physical layout of the UI elements.
+
         gridOne6 = Gtk.Grid()
         gridOne6.set_column_homogeneous(True)
         gridOne6.set_row_homogeneous(False)
@@ -361,7 +372,7 @@ class netCardConfigWindow(Gtk.Window):
         self.saveButton.set_margin_bottom(10)
         self.saveButton.set_margin_start(10)
         self.saveButton.connect("clicked", self.commit_pending_changes)
-        if currentSettings["Address Assignment Method"] == "DHCP":
+        if currentSettings["Assignment Method"] == "DHCP":
             self.saveButton.set_sensitive(False)
         cancelButton = Gtk.Button(label="Cancel")
         cancelButton.set_margin_bottom(10)
@@ -383,167 +394,151 @@ class netCardConfigWindow(Gtk.Window):
         mainBox.pack_end(buttonsWindow, False, False, 0)
         self.add(mainBox)
 
-        # Run any functions that need to execute once at window creation
-        self.cbox_config_refresh(interfaceComboBox)
-
-    # Returns a list of valid configurable interfaces.
-    def enumerate_nics(self):
-        validnics = list()
-        confnotnics = ["lo", "fwe", "fwip", "tap", "plip", "pfsync", "pflog",
-                       "tun", "sl", "faith", "ppp", "bridge", "ixautomation",
-                       "wg"]
-        confncard = 'ifconfig -l'
-        confnics = Popen(confncard, shell=True, stdout=PIPE, close_fds=True, universal_newlines=True)
-        confnetcard = confnics.stdout.readlines()[0].rstrip()
-        confnetcardarray = confnetcard.split(" ")
-        for confnic in confnetcardarray:
-            nicgeneralized = re.findall("[a-zA-Z]+", confnic)
-            stringnicgeneralized = str(nicgeneralized).replace("'", "")
-            stringnicgeneralized = stringnicgeneralized.replace("[", "")
-            stringnicgeneralized = stringnicgeneralized.replace("]", "")
-            if stringnicgeneralized in confnotnics:
-                print(f"{confnic} was generalized to {nicgeneralized} and was found in the notnics list! "
-                      "It will not be added to the valid configurable nic list in the netCardConfigWindow.enumerate_nics method.")
-            else:
-                validnics.append(confnic)
-        return validnics
-
-    # Used with the combo box to refresh the UI of tab 1 with active settings for the newly selected active interface.
-    def cbox_config_refresh(self, widget):
-        refreshedInterface = widget.get_active()
-        refreshedInterfaceName = self.enumerate_nics()[refreshedInterface]
+    # Used with the combo box to refresh the UI of tab 1 with active settings
+    # for the newly selected active interface.
+    def cbox_config_refresh(self, widget, nics):
         # actions here need to refresh the values on the first two tabs.
-        print(f"Refreshing settings to match current settings on {refreshedInterface}. "
-              f"Interface name is {refreshedInterfaceName}")
-        self.get_current_interface_settings(refreshedInterfaceName)
-        # self.display_current_interface_settings(widget)
+        self.get_current_interface_settings(nics[widget.get_active()])
+        self.update_interface_settings()
 
     def get_current_interface_settings(self, active_nic):
         # Need to accurately determine if a wlanN interface is using DHCP
-        aInt = str(active_nic)
 
-        DHCPStatus = os.path.exists(f"/var/db/dhclient.leases.{aInt}")
-        print(f"dhcpstatus return value = {DHCPStatus}")
-        if DHCPStatus is False:
-            RCConf = open("/etc/rc.conf", "r").read()
-            DHCPSearch = re.findall(f"^ifconfig_{aInt}=\".*DHCP", RCConf)
-            print(f"DHCPSearch is {DHCPSearch} and the length is {len(DHCPSearch)}")
-            if len(DHCPSearch) < 1:
-                DHCPStatusOutput = "Manual"
-            else:
-                DHCPStatusOutput = "DHCP"
+        rc_conf = open("/etc/rc.conf", "r").read()
+        DHCPSearch = re.findall(fr'^ifconfig_{active_nic}=".*DHCP', rc_conf, re.MULTILINE)
+        print(f"DHCPSearch is {DHCPSearch} and the length is {len(DHCPSearch)}")
+        if len(DHCPSearch) < 1:
+            DHCPStatusOutput = "Manual"
         else:
             DHCPStatusOutput = "DHCP"
 
-        print(f"DHCPStatusOutput = {DHCPStatusOutput}")
+        IPREGEX = r'[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'
 
-        ifconfigaInt = f"ifconfig -f inet:dotted {aInt}"
-        ifconfigaIntOutput = check_output(ifconfigaInt.split(" "))
-
-        aIntIP = re.findall(r'inet [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+', str(ifconfigaIntOutput))[0]
-        aIntIPStrip = str(aIntIP).replace("inet ", "")
-        aIntIPStrip = str(aIntIPStrip).replace("'", "")
-        aIntIPStrip = str(aIntIPStrip).replace("[", "")
-        aIntIPStrip = str(aIntIPStrip).replace("]", "")
-        aIntMask = re.findall(r'netmask [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+', str(ifconfigaIntOutput))[0]
-        aIntMaskStrip = str(aIntMask).replace("netmask ", "")
-        aIntMaskStrip = str(aIntMaskStrip).replace("'", "")
-        aIntMaskStrip = str(aIntMaskStrip).replace("[", "")
-        aIntMaskStrip = str(aIntMaskStrip).replace("]", "")
-        aIntBroadcast = re.findall(r'broadcast [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+', str(ifconfigaIntOutput))[0]
-        aIntBroadcastStrip = str(aIntBroadcast).replace("broadcast ", "")
-        aIntBroadcastStrip = str(aIntBroadcastStrip).replace("'", "")
-        aIntBroadcastStrip = str(aIntBroadcastStrip).replace("[", "")
-        aIntBroadcastStrip = str(aIntBroadcastStrip).replace("]", "")
-
+        ifcmd = f"ifconfig -f inet:dotted {active_nic}"
+        ifoutput = check_output(ifcmd.split(" "), universal_newlines=True)
+        re_ip = re.search(fr'inet {IPREGEX}', ifoutput)
+        if_ip = re_ip.group().replace("inet ", "").strip()
+        re_netmask = re.search(fr'netmask {IPREGEX}', ifoutput)
+        if_netmask = re_netmask.group().replace("netmask ", "").strip()
+        re_broadcast = re.search(fr'broadcast {IPREGEX}', ifoutput)
+        if_broadcast = re_broadcast.group().replace("broadcast ", "").strip()
         if (DHCPStatusOutput == "DHCP"):
-            print(f"{DHCPStatusOutput}")
-            DHClientFileTest = os.path.exists(f"/var/db/dhclient.leases.{aInt}")
-            if DHClientFileTest is False:
-                print(f"dhclientfiletest = {DHClientFileTest}")
-                # RenewDHCP = f"dhclient {aInt}"
-                # RenewDHCPOutput = subprocess.check_output(RenewDHCP.split(" "))
-                sleep(5)
-                DHClientFileTest = os.path.exists(f"/var/db/dhclient.leases.{aInt}")
-                if DHClientFileTest is False:
-                    print(f"DHCP is enabled, but we're unable to read the lease file a /var/db/dhclient.leases.{aInt}")
-                    aIntGatewayStrip = ""
+            dhclient_leases = f"/var/db/dhclient.leases.{active_nic}"
+
+            if os.path.exists(dhclient_leases) is False:
+                print("DHCP is enabled, but we're unable to read the lease "
+                      f"file a /var/db/dhclient.leases.{active_nic}")
+                gateway = ""
             else:
-                DHCPLeaseInfo = open(f"/var/db/dhclient.leases.{aInt}", "r").read()
-                aIntGateway = re.findall(r"option routers [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+;", DHCPLeaseInfo)[0]
-                aIntGatewayStrip = str(aIntGateway).replace("option routers ", "")
-                aIntGatewayStrip = str(aIntGatewayStrip).replace("'", "")
-                aIntGatewayStrip = str(aIntGatewayStrip).replace("[", "")
-                aIntGatewayStrip = str(aIntGatewayStrip).replace("]", "")
-                aIntGatewayStrip = str(aIntGatewayStrip).replace(";", "")
-
-                # aIntDHCP = f"resolvconf -l {aInt}"
-                # aIntDHCPResults = subprocess.check_output(aIntDHCP.split(" "))
-                # aIntDHCPResults = subprocess.run(aIntDHCP.split(" "),
-                #                                  capture_output=True,
-                #                                  text=True)
-                # DNSMatch = re.findall(r'nameserver [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+', str(aIntDHCPResults))
-                DefaultDNSServers = open('/etc/resolv.conf').read()
-                DNSMatch = re.findall(r'nameserver [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+', str(DefaultDNSServers))
-
-                SearchDomainMatch = re.findall('search [a-zA-Z.]*', str(DefaultDNSServers))
-                if len(SearchDomainMatch) < 1:
-                    RCConfDomainSearch = open('/etc/resolv.conf', 'r').read()
-                    SearchDomainMatch = re.findall('domain (.*)', RCConfDomainSearch)
-                SearchDomainMatchStrip = str(SearchDomainMatch).replace("domain ", "")
-                SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("'", "")
-                SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("[", "")
-                SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("]", "")
-                SearchDomainMatchStrip = SearchDomainMatchStrip.replace('search', '').strip()
+                dh_lease = open(dhclient_leases, "r").read()
+                re_gateway = re.search(fr"option routers {IPREGEX}", dh_lease)
+                gateway = re_gateway.group().replace("option routers ", "")
         else:
-            RRConfGatewaySearch = open('/etc/rc.conf', 'r').read()
-            RRConfGatewayResults = re.findall(r'defaultrouter="[0-9]+\.[0-9]+\.[0-9]+\.[0-9]"', RRConfGatewaySearch)
-            aIntGatewayStrip = str(RRConfGatewayResults).replace('defaultrouter="', "")
-            aIntGatewayStrip = str(aIntGatewayStrip).replace('"', "")
-            aIntGatewayStrip = str(aIntGatewayStrip).replace('[', "")
-            aIntGatewayStrip = str(aIntGatewayStrip).replace(']', "")
-            aIntGatewayStrip = str(aIntGatewayStrip).replace("'", "")
+            rc_conf = open('/etc/rc.conf', 'r').read()
+            re_gateway = re.search(fr'^defaultrouter="{IPREGEX}"', rc_conf, re.MULTILINE)
+            gateway = re_gateway.group().replace('"', "")
+            gateway = gateway.replace('defaultrouter=', "")
 
-            DefaultDNSServers = open('/etc/resolv.conf').read()
-            DNSMatch = re.findall(r'nameserver [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+', str(DefaultDNSServers))
+        if os.path.exists('/etc/resolv.conf'):
+            resolv_conf = open('/etc/resolv.conf').read()
+            nameservers = re.findall(fr'^nameserver {IPREGEX}', str(resolv_conf), re.MULTILINE)
+            print(nameservers)
 
-            RCConfDomainSearch = open('/etc/resolv.conf', 'r').read()
-            SearchDomainMatch = re.findall('domain (.*)', RCConfDomainSearch)
-            SearchDomainMatchStrip = str(SearchDomainMatch).replace("domain ", "")
-            SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("'", "")
-            SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("[", "")
-            SearchDomainMatchStrip = str(SearchDomainMatchStrip).replace("]", "")
-            SearchDomainMatchStrip = SearchDomainMatchStrip.replace('search', '').strip()
+            re_domain_search = re.findall('search [a-zA-Z.]*', str(resolv_conf))
+            if len(re_domain_search) < 1:
+                re_domain_search = re.findall('domain (.*)', resolv_conf)
+            domain_search = str(re_domain_search).replace("domain ", "")
+            domain_search = domain_search.replace("'", "")
+            domain_search = domain_search.replace("[", "")
+            domain_search = domain_search.replace("]", "")
+            domain_search = domain_search.replace('search', '').strip()
+        else:
+            domain_search = ''
+            nameservers = []
 
-        # currentSettings = {}
         currentSettings["Active Interface"] = active_nic
-        currentSettings["Address Assignment Method"] = DHCPStatusOutput
-        currentSettings["Interface IP"] = aIntIPStrip
-        currentSettings["Interface Subnet Mask"] = aIntMaskStrip
-        currentSettings["Broadcast Address"] = aIntBroadcastStrip
-        currentSettings["Default Gateway"] = aIntGatewayStrip
-        # [currentSettings.append(str(DNSServer).replace("nameserver ", "")) for DNSServer in DNSMatch]
-        currentSettings["Search Domain"] = SearchDomainMatchStrip
+        currentSettings["Assignment Method"] = DHCPStatusOutput
+        currentSettings["Interface IP"] = if_ip
+        currentSettings["Interface Subnet Mask"] = if_netmask
+        currentSettings["Broadcast Address"] = if_broadcast
+        currentSettings["Default Gateway"] = gateway
+        currentSettings["Search Domain"] = domain_search
 
-        for num in range(len(DNSMatch)):
-            currentSettings[f"DNS Server {num + 1}"] = str(DNSMatch[(num)]).replace("nameserver", "").strip()
+        for num in range(len(nameservers)):
+            currentSettings[
+                f"DNS Server {num + 1}"
+            ] = str(nameservers[(num)]).replace("nameserver", "").strip()
 
         print("Current settings are below:")
         print(f"{currentSettings}")
 
-    def display_current_interface_settings(self, widget):
-        print("display_current_interface_settings_go_here")
+    def update_interface_settings(self):
+        self.ipInputAddressEntry.set_text(currentSettings["Interface IP"])
+        self.ipInputMaskEntry.set_text(currentSettings["Interface Subnet Mask"])
+        self.ipInputGatewayEntry.set_text(currentSettings["Default Gateway"])
+        self.prymary_dnsEntry.set_text(currentSettings["DNS Server 1"])
+        self.secondary_dnsEntry.set_text(currentSettings["DNS Server 2"])
+        self.searchEntry.set_text(currentSettings["Search Domain"])
+        if currentSettings["Assignment Method"] == "DHCP":
+            self.rb_dhcp4.set_active(True)
+        else:
+            self.rb_manual4.set_active(True)
 
     def commit_pending_changes(self, widget):
-        print("commit_pending_changes_goes_here")
+        nic = currentSettings["Active Interface"]
+        inet = self.ipInputAddressEntry.get_text()
+        netmask = self.ipInputMaskEntry.get_text()
+        defaultrouter = self.ipInputGatewayEntry.get_text()
+        if self.method == 'Manual':
+            ifconfig_nic = f'ifconfig_{nic}="inet {inet} netmask {netmask}"\n'
+            self.update_rc_conf(ifconfig_nic)
+            defaultrouter_line = f'defaultrouter="{defaultrouter}"\n'
+            self.update_rc_conf(defaultrouter_line)
+
+            resolv_conf = open('/etc/resolv.conf', 'w')
+            resolv_conf.writelines('# Generated by NetworkMgr\n')
+            search = self.searchEntry.get_text()
+            search_line = f'search {search}\n'
+            resolv_conf.writelines(search_line)
+            dns1 = self.prymary_dnsEntry.get_text()
+            nameserver1_line = f'nameserver {dns1}\n'
+            resolv_conf.writelines(nameserver1_line)
+            dns2 = self.secondary_dnsEntry.get_text()
+            nameserver2_line = f'nameserver {dns2}\n'
+            resolv_conf.writelines(nameserver2_line)
+            resolv_conf.close()
+            start_static_network(nic, inet, netmask)
+        else:
+            ifconfig_nic = f'ifconfig_{nic}="DHCP"\n'
+            self.update_rc_conf(ifconfig_nic)
+
+            rc_conf = open('/etc/rc.conf', 'r').read()
+            for nic_search in self.NICS:
+                if re.search(f'^ifconfig_{nic_search}="inet', rc_conf, re.MULTILINE):
+                    break
+            else:
+                defaultrouter_line = f'defaultrouter="{defaultrouter}"\n'
+                self.remove_rc_conf_line(defaultrouter_line)
+            restart_dhcp_network(nic)
 
     def discard_pending_changes(self, widget):
-        print("discard_pending_changes_goes_here")
         self.destroy()
 
+    def update_rc_conf(self, line):
+        run(f'sysrc {line}', shell=True)
 
-def openNetCardConfigwindow(default_int):
-    win = netCardConfigWindow(default_int)
-    win.connect("destroy", Gtk.main_quit)
-    win.show_all()
-    Gtk.main()
+    def remove_rc_conf_line(self, line):
+        with open('/etc/rc.conf', "r+") as rc_conf:
+            lines = rc_conf.readlines()
+            rc_conf.seek(0)
+            idx = lines.index(line)
+            lines.pop(idx)
+            rc_conf.truncate()
+            rc_conf.writelines(lines)
+
+
+# def openNetCardConfigwindow(default_int):
+win = netCardConfigWindow('wlan0')
+win.connect("destroy", Gtk.main_quit)
+win.show_all()
+Gtk.main()

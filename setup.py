@@ -7,13 +7,14 @@ from platform import system
 from setuptools import setup
 from subprocess import run
 
-__VERSION__ = '6.2'
+__VERSION__ = '6.3'
 PROGRAM_VERSION = __VERSION__
 
 prefix = '/usr/local' if system() == 'FreeBSD' else sys.prefix
 
 # compiling translations
 os.system("sh compile_translations.sh")
+
 
 def datafilelist(installbase, sourcebase):
     datafileList = []
