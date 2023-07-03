@@ -10,7 +10,7 @@ if len(args) != 2:
     exit()
 nic = args[1]
 
-cmd = ["kenv", "rc_system"]
+cmd = ["kenv", "-q", "rc_system"]
 rc_system = Popen(cmd, stdout=PIPE, universal_newlines=True).stdout.read()
 openrc = True if 'openrc' in rc_system else False
 
