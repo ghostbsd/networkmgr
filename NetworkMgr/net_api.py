@@ -1,11 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
-from subprocess import Popen, PIPE, run
-from sys import path
-import os
+from subprocess import Popen, PIPE, run, check_output
 import re
 from time import sleep
-path.append("/usr/local/share/networkmgr")
 
 
 def card_online(netcard):
@@ -194,64 +191,67 @@ def switch_default(nic):
         ).stdout.read()
         if 'status: active' in nic_info or 'status: associated' in nic_info:
             if 'inet ' in nic_info or 'inet6' in nic_info:
-                os.system(f'service dhclient restart {card}')
+                run(f'service dhclient restart {card}', shell=True)
                 break
     return
 
 
 def stopallnetwork():
-    os.system('service netif stop')
+    run('service netif stop', shell=True)
 
 
 def startallnetwork():
-    os.system('service netif start')
+    run('service netif start', shell=True)
 
 
 def stopnetworkcard(netcard):
-    os.system(f'service netif stop {netcard}')
+    run(f'service netif stop {netcard}', shell=True)
     switch_default(netcard)
 
 
-def restart_dhcp_network(netcard):
-    os.system(f'service netif restart {netcard}')
+def restart_card_network(netcard):
+    run(f'service netif restart {netcard}', shell=True)
+
+
+def restart_rounting_and_dhcp(netcard):
+    run('service routing restart', shell=True)
     sleep(1)
-    # os.system('service routing restart')
-    # os.system(f'service dhclient restart {netcard}')
+    run(f'service dhclient restart {netcard}', shell=True)
 
 
 def start_static_network(netcard, inet, netmask):
-    os.system(f'ifconfig {netcard} inet {inet} netmask {netmask}')
+    run(f'ifconfig {netcard} inet {inet} netmask {netmask}', shell=True)
     sleep(1)
-    os.system('service routing restart')
+    run('service routing restart', shell=True)
 
 
 def startnetworkcard(netcard):
-    os.system(f'service netif start {netcard}')
+    run(f'service netif start {netcard}', shell=True)
     sleep(1)
-    os.system('service routing restart')
-    os.system(f'service dhclient start {netcard}')
+    run('service routing restart', shell=True)
+    run(f'service dhclient start {netcard}', shell=True)
 
 
 def wifiDisconnection(wificard):
-    os.system(f'ifconfig {wificard} down')
-    os.system(f"ifconfig {wificard} ssid 'none'")
-    os.system(f'ifconfig {wificard} up')
+    run(f'ifconfig {wificard} down', shell=True)
+    run(f"ifconfig {wificard} ssid 'none'", shell=True)
+    run(f'ifconfig {wificard} up', shell=True)
 
 
 def disableWifi(wificard):
-    os.system(f'ifconfig {wificard} down')
+    run(f'ifconfig {wificard} down', shell=True)
 
 
 def enableWifi(wificard):
-    os.system(f'ifconfig {wificard} up')
-    os.system(f'ifconfig {wificard} up scan')
+    run(f'ifconfig {wificard} up', shell=True)
+    run(f'ifconfig {wificard} up scan', shell=True)
 
 
 def connectToSsid(name, wificard):
-    os.system('killall wpa_supplicant')
+    run('killall wpa_supplicant', shell=True)
     # service
     sleep(0.5)
-    os.system(f"ifconfig {wificard} ssid '{name}'")
+    run(f"ifconfig {wificard} ssid '{name}'", shell=True)
     sleep(0.5)
     wpa_supplicant = run(
         f'wpa_supplicant -B -i {wificard} -c /etc/wpa_supplicant.conf',
@@ -288,7 +288,7 @@ def delete_ssid_wpa_supplicant_config(ssid):
     wpa_supplicant_conf.close()
 
 
-def wlan_status(card):
+def nic_status(card):
     out = Popen(
         f'ifconfig {card} | grep status:',
         shell=True, stdout=PIPE,
@@ -298,4 +298,20 @@ def wlan_status(card):
 
 
 def start_dhcp(wificard):
-    os.system(f'dhclient {wificard}')
+    run(f'dhclient {wificard}', shell=True)
+
+
+def wait_inet(card):
+    IPREGEX = r'[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'
+    status = 'associated' if 'wlan' in card else 'active'
+    while nic_status(card) != status:
+        sleep(0.1)
+        print(nic_status(card))
+    while True:
+        ifcmd = f"ifconfig -f inet:dotted {card}"
+        ifoutput = check_output(ifcmd.split(" "), universal_newlines=True)
+        print(ifoutput)
+        re_ip = re.search(fr'inet {IPREGEX}', ifoutput)
+        if re_ip and '0.0.0.0' not in re_ip.group():
+            print(re_ip)
+            break

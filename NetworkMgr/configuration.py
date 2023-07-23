@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 import gi
 gi.require_version('Gtk', '3.0')
@@ -6,11 +6,13 @@ from gi.repository import Gtk
 from subprocess import check_output, run
 import os
 import re
-from net_api import (
-    start_static_network,
-    nics_list,
+from NetworkMgr.net_api import (
     defaultcard,
-    restart_dhcp_network
+    nics_list,
+    restart_card_network,
+    restart_rounting_and_dhcp,
+    start_static_network,
+    wait_inet
 )
 rcconf = open('/etc/rc.conf', 'r').read()
 if os.path.exists('/etc/rc.conf.local'):
@@ -62,7 +64,7 @@ class netCardConfigWindow(Gtk.Window):
 
     def __init__(self, selected_nic=None):
         # Build Default Window
-        Gtk.Window.__init__(self, title="Network Interface Configuration")
+        Gtk.Window.__init__(self, title="Network Configuration")
         self.set_default_size(475, 400)
         self.NICS = nics_list()
         DEFAULT_NIC = selected_nic if selected_nic else defaultcard()
@@ -372,8 +374,7 @@ class netCardConfigWindow(Gtk.Window):
         self.saveButton.set_margin_bottom(10)
         self.saveButton.set_margin_start(10)
         self.saveButton.connect("clicked", self.commit_pending_changes)
-        if currentSettings["Assignment Method"] == "DHCP":
-            self.saveButton.set_sensitive(False)
+        self.saveButton.set_sensitive(False)
         cancelButton = Gtk.Button(label="Cancel")
         cancelButton.set_margin_bottom(10)
         cancelButton.connect("clicked", self.discard_pending_changes)
@@ -393,6 +394,7 @@ class netCardConfigWindow(Gtk.Window):
         mainBox.pack_start(nb, True, True, 0)
         mainBox.pack_end(buttonsWindow, False, False, 0)
         self.add(mainBox)
+        self.show_all()
 
     # Used with the combo box to refresh the UI of tab 1 with active settings
     # for the newly selected active interface.
@@ -417,11 +419,16 @@ class netCardConfigWindow(Gtk.Window):
         ifcmd = f"ifconfig -f inet:dotted {active_nic}"
         ifoutput = check_output(ifcmd.split(" "), universal_newlines=True)
         re_ip = re.search(fr'inet {IPREGEX}', ifoutput)
-        if_ip = re_ip.group().replace("inet ", "").strip()
-        re_netmask = re.search(fr'netmask {IPREGEX}', ifoutput)
-        if_netmask = re_netmask.group().replace("netmask ", "").strip()
-        re_broadcast = re.search(fr'broadcast {IPREGEX}', ifoutput)
-        if_broadcast = re_broadcast.group().replace("broadcast ", "").strip()
+        if re_ip:
+            if_ip = re_ip.group().replace("inet ", "").strip()
+            re_netmask = re.search(fr'netmask {IPREGEX}', ifoutput)
+            if_netmask = re_netmask.group().replace("netmask ", "").strip()
+            re_broadcast = re.search(fr'broadcast {IPREGEX}', ifoutput)
+            if_broadcast = re_broadcast.group().replace("broadcast ", "").strip()
+        else:
+            if_ip = ""
+            if_netmask = ""
+            if_broadcast = ""
         if (DHCPStatusOutput == "DHCP"):
             dhclient_leases = f"/var/db/dhclient.leases.{active_nic}"
 
@@ -436,8 +443,11 @@ class netCardConfigWindow(Gtk.Window):
         else:
             rc_conf = open('/etc/rc.conf', 'r').read()
             re_gateway = re.search(fr'^defaultrouter="{IPREGEX}"', rc_conf, re.MULTILINE)
-            gateway = re_gateway.group().replace('"', "")
-            gateway = gateway.replace('defaultrouter=', "")
+            if re_gateway:
+                gateway = re_gateway.group().replace('"', "")
+                gateway = gateway.replace('defaultrouter=', "")
+            else:
+                gateway = ""
 
         if os.path.exists('/etc/resolv.conf'):
             resolv_conf = open('/etc/resolv.conf').read()
@@ -468,6 +478,11 @@ class netCardConfigWindow(Gtk.Window):
             currentSettings[
                 f"DNS Server {num + 1}"
             ] = str(nameservers[(num)]).replace("nameserver", "").strip()
+        # if DNS Server 1 and 2 are missing create them with empty string
+        if "DNS Server 1" not in currentSettings:
+            currentSettings["DNS Server 1"] = ""
+        if "DNS Server 2" not in currentSettings:
+            currentSettings["DNS Server 2"] = ""
 
         print("Current settings are below:")
         print(f"{currentSettings}")
@@ -490,36 +505,48 @@ class netCardConfigWindow(Gtk.Window):
         netmask = self.ipInputMaskEntry.get_text()
         defaultrouter = self.ipInputGatewayEntry.get_text()
         if self.method == 'Manual':
-            ifconfig_nic = f'ifconfig_{nic}="inet {inet} netmask {netmask}"\n'
+            if 'wlan' in nic:
+                ifconfig_nic = f'ifconfig_{nic}="WPA inet {inet} netmask {netmask}"\n'
+            else:
+                ifconfig_nic = f'ifconfig_{nic}="inet {inet} netmask {netmask}"\n'
             self.update_rc_conf(ifconfig_nic)
             defaultrouter_line = f'defaultrouter="{defaultrouter}"\n'
             self.update_rc_conf(defaultrouter_line)
-
+            start_static_network(nic, inet, netmask)
             resolv_conf = open('/etc/resolv.conf', 'w')
             resolv_conf.writelines('# Generated by NetworkMgr\n')
             search = self.searchEntry.get_text()
-            search_line = f'search {search}\n'
-            resolv_conf.writelines(search_line)
+            if search:
+                search_line = f'search {search}\n'
+                resolv_conf.writelines(search_line)
             dns1 = self.prymary_dnsEntry.get_text()
             nameserver1_line = f'nameserver {dns1}\n'
             resolv_conf.writelines(nameserver1_line)
             dns2 = self.secondary_dnsEntry.get_text()
-            nameserver2_line = f'nameserver {dns2}\n'
-            resolv_conf.writelines(nameserver2_line)
+            if dns2:
+                nameserver2_line = f'nameserver {dns2}\n'
+                resolv_conf.writelines(nameserver2_line)
             resolv_conf.close()
-            start_static_network(nic, inet, netmask)
         else:
-            ifconfig_nic = f'ifconfig_{nic}="DHCP"\n'
+            if 'wlan' in nic:
+                ifconfig_nic = f'ifconfig_{nic}="WPA DHCP"\n'
+            else:
+                ifconfig_nic = f'ifconfig_{nic}="DHCP"\n'
             self.update_rc_conf(ifconfig_nic)
 
             rc_conf = open('/etc/rc.conf', 'r').read()
             for nic_search in self.NICS:
-                if re.search(f'^ifconfig_{nic_search}="inet', rc_conf, re.MULTILINE):
+                if re.search(f'^ifconfig_{nic_search}=".*inet', rc_conf, re.MULTILINE):
                     break
             else:
                 defaultrouter_line = f'defaultrouter="{defaultrouter}"\n'
                 self.remove_rc_conf_line(defaultrouter_line)
-            restart_dhcp_network(nic)
+            restart_card_network(nic)
+            self.hide()
+            wait_inet(nic)
+            restart_rounting_and_dhcp(nic)
+
+        self.destroy()
 
     def discard_pending_changes(self, widget):
         self.destroy()
@@ -537,8 +564,13 @@ class netCardConfigWindow(Gtk.Window):
             rc_conf.writelines(lines)
 
 
-# def openNetCardConfigwindow(default_int):
-win = netCardConfigWindow('wlan0')
-win.connect("destroy", Gtk.main_quit)
-win.show_all()
-Gtk.main()
+def network_card_configuration(default_int):
+    win = netCardConfigWindow(default_int)
+    win.connect("destroy", Gtk.main_quit)
+    Gtk.main()
+
+
+def network_card_configuration_window():
+    win = netCardConfigWindow()
+    win.connect("destroy", Gtk.main_quit)
+    Gtk.main()

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 import os
@@ -26,17 +26,20 @@ def datafilelist(installbase, sourcebase):
     return datafileList
 
 
-share_networkmgr = [
+networkmgr_share = [
     'src/auto-switch.py',
-    'src/net_api.py',
-    'src/setup-nic.py',
-    'src/trayicon.py',
-    'src/netcardmgr.py'
+    'src/setup-nic.py'
+]
+
+networkmgr_module = [
+    'NetworkMgr/net_api',
+    'NetworkMgr/trayicon',
+    'NetworkMgr/configuration'
 ]
 
 data_files = [
     (f'{prefix}/etc/xdg/autostart', ['src/networkmgr.desktop']),
-    (f'{prefix}/share/networkmgr', share_networkmgr),
+    (f'{prefix}/share/networkmgr', networkmgr_share),
     (f'{prefix}/share/locale/zh_CN/LC_MESSAGES', ['src/locale/zh_CN/networkmgr.mo']),
     (f'{prefix}/share/locale/ru/LC_MESSAGES', ['src/locale/ru/networkmgr.mo']),
     (f'{prefix}/etc/sudoers.d', ['src/sudoers.d/networkmgr'])
@@ -59,7 +62,8 @@ setup(
     package_dir={'': '.'},
     data_files=data_files,
     install_requires=['setuptools'],
-    scripts=['networkmgr']
+    py_modules=networkmgr_module,
+    scripts=['networkmgr', 'networkmgr_configuration']
 )
 
 run('gtk-update-icon-cache -f /usr/local/share/icons/hicolor', shell=True)

@@ -1,21 +1,14 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 import gi
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, GObject, GLib
 import gettext
-from time import sleep
 import threading
 import _thread
-from sys import path
 import locale
-
-gettext.bindtextdomain('networkmgr', '/usr/local/share/locale')
-gettext.textdomain('networkmgr')
-_ = gettext.gettext
-
-path.append("/usr/local/share/networkmgr")
-from net_api import (
+from time import sleep
+from gi.repository import Gtk, GObject, GLib
+from NetworkMgr.net_api import (
     stopnetworkcard,
     startnetworkcard,
     wifiDisconnection,
@@ -27,9 +20,14 @@ from net_api import (
     connectionStatus,
     networkdictionary,
     delete_ssid_wpa_supplicant_config,
-    wlan_status
+    nic_status
 )
-from netcardmgr import openNetCardConfigwindow
+from NetworkMgr.configuration import network_card_configuration
+
+
+gettext.bindtextdomain('networkmgr', '/usr/local/share/locale')
+gettext.textdomain('networkmgr')
+_ = gettext.gettext
 
 encoding = locale.getpreferredencoding()
 threadBreak = False
@@ -192,7 +190,7 @@ class trayIcon(object):
         self.menu.append(avconnmenu)
 
     def configuration_window_open(self, widget, interface):
-        openNetCardConfigwindow(interface)
+        network_card_configuration(interface)
 
     def menu_click_open(self, widget, ssid, wificard):
         if f'"{ssid}"' in open("/etc/wpa_supplicant.conf").read():
@@ -348,7 +346,7 @@ class trayIcon(object):
             GLib.idle_add(self.restart_authentication, ssid_info, card)
         else:
             for _ in list(range(60)):
-                if wlan_status(card) == 'associated':
+                if nic_status(card) == 'associated':
                     self.updateinfo()
                     break
                 sleep(1)
