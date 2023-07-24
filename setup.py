@@ -32,9 +32,10 @@ networkmgr_share = [
 ]
 
 networkmgr_module = [
-    'NetworkMgr/net_api',
-    'NetworkMgr/trayicon',
     'NetworkMgr/configuration'
+    'NetworkMgr/net_api',
+    'NetworkMgr/query'
+    'NetworkMgr/trayicon',
 ]
 
 data_files = [
