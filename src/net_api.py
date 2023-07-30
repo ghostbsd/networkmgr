@@ -160,12 +160,12 @@ def networkdictionary():
                 # append left over
                 info.append(line[83:].strip())
                 connectioninfo[ssid] = info
-            if ifWlanDisable(card) is True:
+            if ifWlanDisable(card):
                 connectionstat = {
                     "connection": "Disabled",
                     "ssid": None,
                 }
-            elif ifStatue(card) is False:
+            elif not ifStatue(card):
                 connectionstat = {
                     "connection": "Disconnected",
                     "ssid": None,
@@ -181,9 +181,9 @@ def networkdictionary():
                 'info': connectioninfo
             }
         else:
-            if card_online(card) is True:
+            if card_online(card):
                 connectionstat = {"connection": "Connected"}
-            elif ifcardconnected(card) is True:
+            elif ifcardconnected(card):
                 connectionstat = {"connection": "Disconnected"}
             else:
                 connectionstat = {"connection": "Unplug"}
@@ -197,7 +197,7 @@ def connectionStatus(card):
     if card is None:
         netstate = "Network card is not enabled"
     elif 'wlan' in card:
-        if ifWlanDisable(card) is False and ifStatue(card) is True:
+        if not ifWlanDisable(card) and ifStatue(card):
             cmd1 = "ifconfig %s | grep ssid" % card
             cmd2 = "ifconfig %s | grep 'inet '" % card
             out1 = Popen(cmd1, shell=True, stdout=PIPE,

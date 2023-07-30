@@ -120,7 +120,7 @@ class trayIcon(object):
                     wc_title.set_sensitive(False)
                     self.menu.append(wc_title)
                     connection_item = Gtk.ImageMenuItem(ssid)
-                    connection_item.set_image(self.open_wifi(bar))
+                    connection_item.set_image(self.wifi_signal_icon(bar))
                     connection_item.show()
                     disconnect_item = Gtk.MenuItem(_("Disconnect from %s") % ssid)
                     disconnect_item.connect("activate", self.disconnect_wifi,
@@ -135,7 +135,7 @@ class trayIcon(object):
                 wifinum += 1
 
         if openrc:
-            if self.cardinfo['service'] is False:
+            if not self.cardinfo['service']:
                 label = _("Enable Networking")
                 action = self.openNetwork
             else:
@@ -154,7 +154,7 @@ class trayIcon(object):
 
     def ssid_menu_item(self, caps, ssid, ssid_info):
         menu_item = Gtk.ImageMenuItem(ssid)
-        if caps == 'E' or caps == 'ES':
+        if caps in ('E', 'ES'):
             is_secure = False
             click_action = self.menu_click_open
             ssid_type = ssid
@@ -162,7 +162,7 @@ class trayIcon(object):
             is_secure = True
             click_action = self.menu_click_lock
             ssid_type = ssid_info
-        menu_item.set_image(self.open_wifi(sn, is_secure))
+        menu_item.set_image(self.wifi_signal_icon(sn, is_secure))
         menu_item.connect("activate", click_action, ssid_type, wificard)
         menu_item.show()
         return menu_item
@@ -240,7 +240,7 @@ class trayIcon(object):
             icon_name = f"nm-signal-00{suffix}"
         return icon_name
 
-    def open_wifi(self, bar, is_secure=False):
+    def wifi_signal_icon(self, bar, is_secure=False):
         img = Gtk.Image()
         suffix = ""
         if is_secure:
@@ -306,7 +306,7 @@ class trayIcon(object):
         self.statusIcon.set_from_icon_name(icon_name)
 
     def trayStatus(self, defaultdev):
-        self.statusIcon.set_tooltip_text("%s" % connectionStatus(defaultdev))
+        self.statusIcon.set_tooltip_text(connectionStatus(defaultdev))
 
     def tray(self):
         self.if_running = False
@@ -332,7 +332,7 @@ class trayIcon(object):
             delete_ssid_wpa_supplicant_config(ssid)
             GLib.idle_add(self.restart_authentication, ssid_info, card)
         else:
-            for _ in list(range(60)):
+            for _ in range(60):
                 if wlan_status(card) == 'associated':
                     self.updateinfo()
                     break
