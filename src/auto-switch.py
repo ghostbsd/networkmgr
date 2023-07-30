@@ -12,7 +12,7 @@ nic = args[1]
 
 cmd = ["kenv", "-q", "rc_system"]
 rc_system = Popen(cmd, stdout=PIPE, universal_newlines=True).stdout.read()
-openrc = True if 'openrc' in rc_system else False
+openrc = 'openrc' in rc_system
 
 cmd = 'netstat -rn | grep default'
 defautl_nic = Popen(cmd, stdout=PIPE, shell=True, universal_newlines=True).stdout.read()
@@ -29,7 +29,7 @@ active_status = (
     'status: active' in nic_ifconfig,
     'status: associated' in nic_ifconfig
 )
-if any(active_status) is False:
+if not any(active_status):
     if openrc:
         os.system(f'service dhcpcd.{nic} stop')
     else:
@@ -63,10 +63,15 @@ for current_nic in nic_list:
         universal_newlines=True
     )
     nic_ifconfig = output.stdout.read()
-    if 'status: active' in nic_ifconfig or 'status: associated' in nic_ifconfig:
-        if 'inet ' in nic_ifconfig or 'inet6' in nic_ifconfig:
-            if openrc:
-                os.system(f'service dhcpcd.{current_nic} restart')
-            else:
-                os.system(f'service dhclient restart {current_nic}')
-            break
+    status_types = [
+        'active',
+        'associated',
+    ]
+    found_status = re.search(f"status: ({'|'.join(status_types)})", nic_ifconfig)
+    found_inet = re.search("inet(\s|6)", nic_ifconfig)
+    if found_status and found_inet:
+        if openrc:
+            os.system(f'service dhcpcd.{current_nic} restart')
+        else:
+            os.system(f'service dhclient restart {current_nic}')
+        break

@@ -52,10 +52,7 @@ else:
 def card_online(netcard):
     lan = Popen('ifconfig ' + netcard, shell=True, stdout=PIPE,
                 universal_newlines=True)
-    if 'inet ' in lan.stdout.read():
-        return True
-    else:
-        return False
+    return 'inet ' in lan.stdout.read()
 
 
 def defaultcard():
@@ -71,20 +68,14 @@ def defaultcard():
 def ifWlanDisable(wificard):
     cmd = "ifconfig %s list scan" % wificard
     nics = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
-    if "" == nics.stdout.read():
-        return True
-    else:
-        return False
+    return not nics.stdout.read()
 
 
 def ifStatue(wificard):
     cmd = "ifconfig %s" % wificard
     wl = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
     wlout = wl.stdout.read()
-    if "associated" in wlout:
-        return True
-    else:
-        return False
+    return "associated" in wlout
 
 
 def get_ssid(wificard):
@@ -116,10 +107,7 @@ def nics_list():
 def ifcardconnected(netcard):
     wifi = Popen('ifconfig ' + netcard, shell=True, stdout=PIPE,
                  universal_newlines=True)
-    if 'status: active' in wifi.stdout.read():
-        return True
-    else:
-        return False
+    return 'status: active' in wifi.stdout.read()
 
 
 def barpercent(sn):
@@ -129,17 +117,14 @@ def barpercent(sn):
 
 
 def network_service_state():
-    if openrc is True:
+    if openrc:
         status = Popen(
             f'{rc}service {network} status',
             shell=True,
             stdout=PIPE,
             universal_newlines=True
         )
-        if 'status: started' in status.stdout.read():
-            return True
-        else:
-            return False
+        return 'status: started' in status.stdout.read()
     else:
         return False
 
@@ -264,7 +249,7 @@ def startallnetwork():
 
 
 def stopnetworkcard(netcard):
-    if openrc is True:
+    if openrc:
         os.system(f'ifconfig {netcard} down')
     else:
         os.system(f'service netif stop {netcard}')
@@ -272,7 +257,7 @@ def stopnetworkcard(netcard):
 
 
 def startnetworkcard(netcard):
-    if openrc is True:
+    if openrc:
         os.system(f'ifconfig {netcard} up')
         os.system(f'{rc}service dhcpcd.{netcard} restart')
     else:
@@ -307,9 +292,7 @@ def connectToSsid(name, wificard):
         f'wpa_supplicant -B -i {wificard} -c /etc/wpa_supplicant.conf',
         shell=True
     )
-    if wpa_supplicant.returncode != 0:
-        return False
-    return True
+    return wpa_supplicant.returncode == 0
 
 
 def subnetHexToDec(ifconfigstring):
@@ -347,7 +330,7 @@ def wlan_status(card):
 
 
 def start_dhcp(wificard):
-    if openrc is True:
+    if openrc:
         os.system(f'dhcpcd -x {wificard}')
         os.system(f'dhcpcd {wificard}')
     else:
