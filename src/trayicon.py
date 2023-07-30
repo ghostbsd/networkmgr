@@ -136,13 +136,14 @@ class trayIcon(object):
 
         if openrc is True:
             if self.cardinfo['service'] is False:
-                open_item = Gtk.MenuItem(_("Enable Networking"))
-                open_item.connect("activate", self.openNetwork)
-                self.menu.append(open_item)
+                label = _("Enable Networking")
+                action = self.openNetwork
             else:
-                close_item = Gtk.MenuItem(_("Disable Networking"))
-                close_item.connect("activate", self.closeNetwork)
-                self.menu.append(close_item)
+                label = _("Disable Networking")
+                action = self.closeNetwork
+            item = Gtk.MenuItem(label)
+            item.connect("activate", action)
+            self.menu.append(item)
         else:
             print('service netif status not supported')
         close_manager = Gtk.MenuItem(_("Close Network Manager"))
@@ -150,6 +151,21 @@ class trayIcon(object):
         self.menu.append(close_manager)
         self.menu.show_all()
         return self.menu
+
+    def ssid_menu_item(self, caps, ssid, ssid_info):
+        menu_item = Gtk.ImageMenuItem(ssid)
+        if caps == 'E' or caps == 'ES':
+            is_secure = False
+            click_action = self.menu_click_open
+            ssid_type = ssid
+        else:
+            is_secure = True
+            click_action = self.menu_click_lock
+            ssid_type = ssid_info
+        menu_item.set_image(self.open_wifi(sn, is_secure))
+        menu_item.connect("activate", click_action, ssid_type, wificard)
+        menu_item.show()
+        return menu_item
 
     def wifiListMenu(self, wificard, cssid, passes, cards):
         wiconncmenu = Gtk.Menu()
@@ -162,28 +178,10 @@ class trayIcon(object):
             caps = cards[wificard]['info'][ssid][6]
             if passes is True:
                 if cssid != ssid:
-                    menu_item = Gtk.ImageMenuItem(ssid)
-                    if caps == 'E' or caps == 'ES':
-                        menu_item.set_image(self.open_wifi(sn))
-                        menu_item.connect("activate", self.menu_click_open,
-                                          ssid, wificard)
-                    else:
-                        menu_item.set_image(self.secure_wifi(sn))
-                        menu_item.connect("activate", self.menu_click_lock,
-                                          ssid_info, wificard)
-                    menu_item.show()
+                    menu_item = self.ssid_menu_item(caps, ssid, ssid_info)
                     wiconncmenu.append(menu_item)
             else:
-                menu_item = Gtk.ImageMenuItem(ssid)
-                if caps == 'E' or caps == 'ES':
-                    menu_item.set_image(self.open_wifi(sn))
-                    menu_item.connect("activate", self.menu_click_open,
-                                      ssid, wificard)
-                else:
-                    menu_item.set_image(self.secure_wifi(sn))
-                    menu_item.connect("activate", self.menu_click_lock,
-                                      ssid_info, wificard)
-                menu_item.show()
+                menu_item = self.ssid_menu_item(caps, ssid, ssid_info)
                 wiconncmenu.append(menu_item)
         self.menu.append(avconnmenu)
 
@@ -229,33 +227,26 @@ class trayIcon(object):
         startallnetwork()
         self.updateinfo()
 
-    def open_wifi(self, bar):
-        img = Gtk.Image()
+    def signal_icon_name(self, bar, suffix):
         if bar > 75:
-            img.set_from_icon_name("nm-signal-100", Gtk.IconSize.MENU)
+            icon_name = f"nm-signal-100{suffix}"
         elif bar > 50:
-            img.set_from_icon_name("nm-signal-75", Gtk.IconSize.MENU)
+            icon_name = f"nm-signal-75{suffix}"
         elif bar > 25:
-            img.set_from_icon_name("nm-signal-50", Gtk.IconSize.MENU)
+            icon_name = f"nm-signal-50{suffix}"
         elif bar > 5:
-            img.set_from_icon_name("nm-signal-25", Gtk.IconSize.MENU)
+            icon_name = f"nm-signal-25{suffix}"
         else:
-            img.set_from_icon_name("nm-signal-00", Gtk.IconSize.MENU)
-        img.show()
-        return img
+            icon_name = f"nm-signal-00{suffix}"
+        return icon_name
 
-    def secure_wifi(self, bar):
+    def open_wifi(self, bar, is_secure=False):
         img = Gtk.Image()
-        if bar > 75:
-            img.set_from_icon_name("nm-signal-100-secure", Gtk.IconSize.MENU)
-        elif bar > 50:
-            img.set_from_icon_name("nm-signal-75-secure", Gtk.IconSize.MENU)
-        elif bar > 25:
-            img.set_from_icon_name("nm-signal-50-secure", Gtk.IconSize.MENU)
-        elif bar > 5:
-            img.set_from_icon_name("nm-signal-25-secure", Gtk.IconSize.MENU)
-        else:
-            img.set_from_icon_name("nm-signal-00-secure", Gtk.IconSize.MENU)
+        suffix = ""
+        if is_secure:
+            suffix = "-secure"
+        icon_name = self.signal_icon_name(bar, suffix)
+        img.set_from_icon_name(icon_name, Gtk.IconSize.MENU)
         img.show()
         return img
 
@@ -295,23 +286,24 @@ class trayIcon(object):
 
     def updatetrayicon(self, defaultdev, card_type):
         if card_type is None:
-            self.statusIcon.set_from_icon_name('nm-no-connection')
+            icon_name = 'nm-no-connection'
         elif card_type == 'wire':
-            self.statusIcon.set_from_icon_name('nm-device-wired')
+            icon_name = 'nm-device-wired'
         else:
             wifi_state = self.default_wifi_state(defaultdev)
             if wifi_state is None:
-                self.statusIcon.set_from_icon_name('nm-no-connection')
+                icon_name = 'nm-no-connection'
             elif wifi_state > 80:
-                self.statusIcon.set_from_icon_name('nm-signal-100')
+                icon_name = 'nm-signal-100'
             elif wifi_state > 60:
-                self.statusIcon.set_from_icon_name('nm-signal-75')
+                icon_name = 'nm-signal-75'
             elif wifi_state > 40:
-                self.statusIcon.set_from_icon_name('nm-signal-50')
+                icon_name = 'nm-signal-50'
             elif wifi_state > 20:
-                self.statusIcon.set_from_icon_name('nm-signal-25')
+                icon_name = 'nm-signal-25'
             else:
-                self.statusIcon.set_from_icon_name('nm-signal-00')
+                icon_name = 'nm-signal-00'
+        self.statusIcon.set_from_icon_name(icon_name)
 
     def trayStatus(self, defaultdev):
         self.statusIcon.set_tooltip_text("%s" % connectionStatus(defaultdev))

@@ -160,7 +160,7 @@ def networkdictionary():
             for line in wifi.stdout:
                 # don't sort empty ssid
                 # Window, MacOS and Linux does not show does
-                if line[:5] == "     ":
+                if line.startswith(" " * 5):
                     continue
                 ssid = line[:33].strip()
                 info = line[:83][33:].strip().split()
@@ -315,8 +315,7 @@ def connectToSsid(name, wificard):
 def subnetHexToDec(ifconfigstring):
     snethex = re.search('0x.{8}', ifconfigstring).group(0)[2:]
     snethexlist = re.findall('..', snethex)
-    snetdeclist = [int(li, 16) for li in snethexlist]
-    snetdec = ".".join(str(li) for li in snetdeclist)
+    snetdec = ".".join(str(int(li, 16)) for li in snethexlist)
     outputline = ifconfigstring.replace(re.search('0x.{8}', ifconfigstring).group(0), snetdec)
     return outputline
 
