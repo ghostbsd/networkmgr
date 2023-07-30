@@ -3,7 +3,9 @@
 from subprocess import Popen, PIPE
 import os
 import re
+import shutil
 from time import sleep
+from pathlib import Path
 
 ncard = 'ifconfig -l'
 nics = Popen(ncard, shell=True, stdout=PIPE, close_fds=True,
@@ -56,6 +58,9 @@ restart_network = f'{rc}service {network} restart'
 class autoConfigure():
 
     def __init__(self):
+        etc = Path(os.sep, 'etc')
+        rcconf_path = etc / 'rc.conf'
+        wpa_supplicant = etc / 'wpa_supplicant.conf'
         for line in netcard.split():
             card = line.rstrip()
         # VLAN tags in ifconfig are delimited by period
@@ -66,9 +71,8 @@ class autoConfigure():
                 if f'ifconfig_{card}=' in (rcconf or rcconflocal):
                     print("Your wired network card is already configured.")
                 else:
-                    rc = open('/etc/rc.conf', 'a')
-                    rc.writelines(f'ifconfig_{card}="DHCP"\n')
-                    rc.close()
+                    with rcconf_path.open('a') as rc:
+                        rc.writelines(f'ifconfig_{card}="DHCP"\n')
                     sleep(1)
                     os.system(restart_network)
                     sleep(1)
@@ -81,24 +85,17 @@ class autoConfigure():
             for wlanNum in range(0, 9):
                 if f'wlan{wlanNum}' not in (rcconf + rcconflocal):
                     break
+            if not wpa_supplicant.exists():
+                wpa_supplicant.touch()
+            shutil.chown(wpa_supplicant, user='root', group='wheel')
+            wpa_supplicant.chmod(0o765)
+
             if f'wlans_{card}=' in (rcconf + rcconflocal):
                 print("Your wifi network card is already configured.")
-                if not os.path.exists('/etc/wpa_supplicant.conf'):
-                    open('/etc/wpa_supplicant.conf', 'a').close()
-                    os.system('chown root:wheel /etc/wpa_supplicant.conf')
-                    os.system('chmod 765 /etc/wpa_supplicant.conf')
-                else:
-                    os.system('chown root:wheel /etc/wpa_supplicant.conf')
-                    os.system('chmod 765 /etc/wpa_supplicant.conf')
             else:
-                rc = open('/etc/rc.conf', 'a')
-                rc.writelines(f'wlans_{card}="wlan{wlanNum}"\n')
-                rc.writelines(f'ifconfig_wlan{wlanNum}="WPA DHCP"\n')
-                rc.close()
-                if not os.path.exists('/etc/wpa_supplicant.conf'):
-                    open('/etc/wpa_supplicant.conf', 'a').close()
-                    os.system('chown root:wheel /etc/wpa_supplicant.conf')
-                    os.system('chmod 765 /etc/wpa_supplicant.conf')
+                with rcconf_path.open('a') as rc:
+                    rc.writelines(f'wlans_{card}="wlan{wlanNum}"\n')
+                    rc.writelines(f'ifconfig_wlan{wlanNum}="WPA DHCP"\n')
                 sleep(1)
                 os.system(restart_network)
                 sleep(1)
