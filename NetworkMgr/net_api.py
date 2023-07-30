@@ -8,10 +8,7 @@ from time import sleep
 def card_online(netcard):
     lan = Popen('ifconfig ' + netcard, shell=True, stdout=PIPE,
                 universal_newlines=True)
-    if 'inet ' in lan.stdout.read():
-        return True
-    else:
-        return False
+    return 'inet ' in lan.stdout.read()
 
 
 def defaultcard():
@@ -27,20 +24,14 @@ def defaultcard():
 def ifWlanDisable(wificard):
     cmd = "ifconfig %s list scan" % wificard
     nics = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
-    if "" == nics.stdout.read():
-        return True
-    else:
-        return False
+    return not nics.stdout.read()
 
 
 def ifStatue(wificard):
     cmd = "ifconfig %s" % wificard
     wl = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
     wlout = wl.stdout.read()
-    if "associated" in wlout:
-        return True
-    else:
-        return False
+    return "associated" in wlout
 
 
 def get_ssid(wificard):
@@ -72,10 +63,7 @@ def nics_list():
 def ifcardconnected(netcard):
     wifi = Popen('ifconfig ' + netcard, shell=True, stdout=PIPE,
                  universal_newlines=True)
-    if 'status: active' in wifi.stdout.read():
-        return True
-    else:
-        return False
+    return 'status: active' in wifi.stdout.read()
 
 
 def barpercent(sn):
@@ -257,9 +245,7 @@ def connectToSsid(name, wificard):
         f'wpa_supplicant -B -i {wificard} -c /etc/wpa_supplicant.conf',
         shell=True
     )
-    if wpa_supplicant.returncode != 0:
-        return False
-    return True
+    return wpa_supplicant.returncode == 0
 
 
 def subnetHexToDec(ifconfigstring):

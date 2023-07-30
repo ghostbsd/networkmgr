@@ -177,7 +177,7 @@ class trayIcon(object):
             ssid = cards[wificard]['info'][ssid][0]
             sn = cards[wificard]['info'][ssid][4]
             caps = cards[wificard]['info'][ssid][6]
-            if passes is True:
+            if passes:
                 if cssid != ssid:
                     menu_item = self.ssid_menu_item(caps, ssid, ssid_info, sn, wificard)
                     wiconncmenu.append(menu_item)
@@ -255,7 +255,7 @@ class trayIcon(object):
         return img
 
     def updateinfo(self):
-        if self.if_running is False:
+        if not self.if_running:
             self.if_running = True
             self.cardinfo = networkdictionary()
             defaultcard = self.cardinfo['default']
@@ -332,7 +332,7 @@ class trayIcon(object):
         self.window.hide()
 
     def try_to_connect_to_ssid(self, ssid, ssid_info, card):
-        if connectToSsid(ssid, card) is False:
+        if not connectToSsid(ssid, card):
             delete_ssid_wpa_supplicant_config(ssid)
             GLib.idle_add(self.restart_authentication, ssid_info, card)
         else:
@@ -350,10 +350,7 @@ class trayIcon(object):
         self.Authentication(ssid_info, card, True)
 
     def on_check(self, widget):
-        if widget.get_active():
-            self.password.set_visibility(True)
-        else:
-            self.password.set_visibility(False)
+        self.password.set_visibility(widget.get_active())
 
     def Authentication(self, ssid_info, card, failed):
         self.window = Gtk.Window()
