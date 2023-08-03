@@ -152,7 +152,7 @@ class trayIcon(object):
         self.menu.show_all()
         return self.menu
 
-    def ssid_menu_item(self, caps, ssid, ssid_info):
+    def ssid_menu_item(self, sn, caps, ssid, ssid_info, wificard):
         menu_item = Gtk.ImageMenuItem(ssid)
         if caps in ('E', 'ES'):
             is_secure = False
@@ -178,10 +178,10 @@ class trayIcon(object):
             caps = cards[wificard]['info'][ssid][6]
             if passes:
                 if cssid != ssid:
-                    menu_item = self.ssid_menu_item(caps, ssid, ssid_info)
+                    menu_item = self.ssid_menu_item(sn, caps, ssid, ssid_info, wificard)
                     wiconncmenu.append(menu_item)
             else:
-                menu_item = self.ssid_menu_item(caps, ssid, ssid_info)
+                menu_item = self.ssid_menu_item(sn, caps, ssid, ssid_info, wificard)
                 wiconncmenu.append(menu_item)
         self.menu.append(avconnmenu)
 
