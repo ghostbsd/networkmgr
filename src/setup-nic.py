@@ -9,7 +9,7 @@ from pathlib import Path
 
 def file_content(paths):
     buffers = []
-    for path in paths
+    for path in paths:
         with path.open('r') as file:
             buffers.append(file.read())
     return "".join(buffers)
