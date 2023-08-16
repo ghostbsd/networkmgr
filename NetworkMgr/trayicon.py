@@ -121,7 +121,7 @@ class trayIcon(object):
                     wc_title.set_sensitive(False)
                     self.menu.append(wc_title)
                     connection_item = Gtk.ImageMenuItem(ssid)
-                    connection_item.set_image(self.open_wifi(bar))
+                    connection_item.set_image(self.wifi_signal_icon(bar))
                     connection_item.show()
                     disconnect_item = Gtk.MenuItem(_("Disconnect from %s") % ssid)
                     disconnect_item.connect("activate", self.disconnect_wifi,
@@ -153,9 +153,9 @@ class trayIcon(object):
         self.menu.show_all()
         return self.menu
 
-    def ssid_menu_item(self, caps, ssid, ssid_info, sn, wificard):
+    def ssid_menu_item(self, sn, caps, ssid, ssid_info, wificard):
         menu_item = Gtk.ImageMenuItem(ssid)
-        if caps == 'E' or caps == 'ES':
+        if caps in ('E', 'ES'):
             is_secure = False
             click_action = self.menu_click_open
             ssid_type = ssid
@@ -163,7 +163,7 @@ class trayIcon(object):
             is_secure = True
             click_action = self.menu_click_lock
             ssid_type = ssid_info
-        menu_item.set_image(self.open_wifi(sn, is_secure))
+        menu_item.set_image(self.wifi_signal_icon(sn, is_secure))
         menu_item.connect("activate", click_action, ssid_type, wificard)
         menu_item.show()
         return menu_item
@@ -179,10 +179,10 @@ class trayIcon(object):
             caps = cards[wificard]['info'][ssid][6]
             if passes:
                 if cssid != ssid:
-                    menu_item = self.ssid_menu_item(caps, ssid, ssid_info, sn, wificard)
+                    menu_item = self.ssid_menu_item(sn, caps, ssid, ssid_info, wificard)
                     wiconncmenu.append(menu_item)
             else:
-                menu_item = self.ssid_menu_item(caps, ssid, ssid_info, sn, wificard)
+                menu_item = self.ssid_menu_item(sn, caps, ssid, ssid_info, wificard)
                 wiconncmenu.append(menu_item)
         self.menu.append(avconnmenu)
 
@@ -244,7 +244,7 @@ class trayIcon(object):
             icon_name = f"nm-signal-00{suffix}"
         return icon_name
 
-    def open_wifi(self, bar, is_secure=False):
+    def wifi_signal_icon(self, bar, is_secure=False):
         img = Gtk.Image()
         suffix = ""
         if is_secure:
@@ -310,7 +310,7 @@ class trayIcon(object):
         self.statusIcon.set_from_icon_name(icon_name)
 
     def trayStatus(self, defaultdev):
-        self.statusIcon.set_tooltip_text("%s" % connectionStatus(defaultdev))
+        self.statusIcon.set_tooltip_text(connectionStatus(defaultdev))
 
     def tray(self):
         self.if_running = False
