@@ -31,13 +31,6 @@ networkmgr_share = [
     'src/setup-nic.py'
 ]
 
-networkmgr_module = [
-    'NetworkMgr/configuration'
-    'NetworkMgr/net_api',
-    'NetworkMgr/query'
-    'NetworkMgr/trayicon',
-]
-
 data_files = [
     (f'{prefix}/etc/xdg/autostart', ['src/networkmgr.desktop']),
     (f'{prefix}/share/networkmgr', networkmgr_share),
@@ -54,16 +47,16 @@ if os.path.exists('/etc/devd-openrc'):
 data_files.extend(datafilelist(f'{prefix}/share/icons/hicolor', 'src/icons'))
 
 setup(
-    name="networkmgr",
+    name="NetworkMgr",
     version=PROGRAM_VERSION,
-    description="Networkmgr is a tool to manage FreeBSD/GHostBSD network",
+    description="NetworkMgr is a tool to manage FreeBSD/GhostBSD network",
     license='BSD',
     author='Eric Turgeon',
     url='https://github/GhostBSD/networkmgr/',
     package_dir={'': '.'},
     data_files=data_files,
     install_requires=['setuptools'],
-    py_modules=networkmgr_module,
+    packages=['NetworkMgr'],
     scripts=['networkmgr', 'networkmgr_configuration']
 )
 
