@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 import os
@@ -7,13 +7,14 @@ from platform import system
 from setuptools import setup
 from subprocess import run
 
-__VERSION__ = '6.2'
+__VERSION__ = '6.3'
 PROGRAM_VERSION = __VERSION__
 
 prefix = '/usr/local' if system() == 'FreeBSD' else sys.prefix
 
 # compiling translations
 os.system("sh compile_translations.sh")
+
 
 def datafilelist(installbase, sourcebase):
     datafileList = []
@@ -25,16 +26,14 @@ def datafilelist(installbase, sourcebase):
     return datafileList
 
 
-share_networkmgr = [
+networkmgr_share = [
     'src/auto-switch.py',
-    'src/net_api.py',
-    'src/setup-nic.py',
-    'src/trayicon.py'
+    'src/setup-nic.py'
 ]
 
 data_files = [
     (f'{prefix}/etc/xdg/autostart', ['src/networkmgr.desktop']),
-    (f'{prefix}/share/networkmgr', share_networkmgr),
+    (f'{prefix}/share/networkmgr', networkmgr_share),
     (f'{prefix}/share/locale/zh_CN/LC_MESSAGES', ['src/locale/zh_CN/networkmgr.mo']),
     (f'{prefix}/share/locale/ru/LC_MESSAGES', ['src/locale/ru/networkmgr.mo']),
     (f'{prefix}/etc/sudoers.d', ['src/sudoers.d/networkmgr'])
@@ -48,16 +47,17 @@ if os.path.exists('/etc/devd-openrc'):
 data_files.extend(datafilelist(f'{prefix}/share/icons/hicolor', 'src/icons'))
 
 setup(
-    name="networkmgr",
+    name="NetworkMgr",
     version=PROGRAM_VERSION,
-    description="Networkmgr is a tool to manage FreeBSD/GHostBSD network",
+    description="NetworkMgr is a tool to manage FreeBSD/GhostBSD network",
     license='BSD',
     author='Eric Turgeon',
     url='https://github/GhostBSD/networkmgr/',
     package_dir={'': '.'},
     data_files=data_files,
     install_requires=['setuptools'],
-    scripts=['networkmgr', 'src/netcardmgr']
+    packages=['NetworkMgr'],
+    scripts=['networkmgr', 'networkmgr_configuration']
 )
 
 run('gtk-update-icon-cache -f /usr/local/share/icons/hicolor', shell=True)

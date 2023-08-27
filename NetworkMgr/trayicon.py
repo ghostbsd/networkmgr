@@ -1,21 +1,14 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 import gi
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, GObject, GLib
 import gettext
-from time import sleep
 import threading
 import _thread
-from sys import path
 import locale
-
-gettext.bindtextdomain('networkmgr', '/usr/local/share/locale')
-gettext.textdomain('networkmgr')
-_ = gettext.gettext
-
-path.append("/usr/local/share/networkmgr")
-from net_api import (
+from time import sleep
+from gi.repository import Gtk, GObject, GLib
+from NetworkMgr.net_api import (
     stopnetworkcard,
     startnetworkcard,
     wifiDisconnection,
@@ -26,10 +19,15 @@ from net_api import (
     enableWifi,
     connectionStatus,
     networkdictionary,
-    openrc,
     delete_ssid_wpa_supplicant_config,
-    wlan_status
+    nic_status
 )
+from NetworkMgr.configuration import network_card_configuration
+
+
+gettext.bindtextdomain('networkmgr', '/usr/local/share/locale')
+gettext.textdomain('networkmgr')
+_ = gettext.gettext
 
 encoding = locale.getpreferredencoding()
 threadBreak = False
@@ -78,10 +76,13 @@ class trayIcon(object):
                     wired_item = Gtk.MenuItem(_("Wired %s Connected") % cardnum)
                     wired_item.set_sensitive(False)
                     self.menu.append(wired_item)
-                    disconnect_item = Gtk.ImageMenuItem(_("Disable"))
+                    disconnect_item = Gtk.ImageMenuItem(_(f"Disable {netcard}"))
                     disconnect_item.connect("activate", self.disconnectcard,
                                             netcard)
                     self.menu.append(disconnect_item)
+                    configure_item = Gtk.ImageMenuItem(f"Configure {netcard}")
+                    configure_item.connect("activate", self.configuration_window_open, netcard)
+                    self.menu.append(configure_item)
                 elif connection_state == "Disconnected":
                     notonline = Gtk.MenuItem(_("Wired %s Disconnected") % cardnum)
                     notonline.set_sensitive(False)
@@ -131,21 +132,21 @@ class trayIcon(object):
                     diswifi = Gtk.MenuItem(_("Disable Wifi %s") % wifinum)
                     diswifi.connect("activate", self.disable_Wifi, netcard)
                     self.menu.append(diswifi)
+                    configure_item = Gtk.ImageMenuItem(f"Configure {netcard}")
+                    configure_item.connect("activate", self.configuration_window_open, netcard)
+                    self.menu.append(configure_item)
                 self.menu.append(Gtk.SeparatorMenuItem())
                 wifinum += 1
-
-        if openrc:
-            if not self.cardinfo['service']:
-                label = _("Enable Networking")
-                action = self.openNetwork
-            else:
-                label = _("Disable Networking")
-                action = self.closeNetwork
-            item = Gtk.MenuItem(label)
-            item.connect("activate", action)
-            self.menu.append(item)
+        if self.cardinfo['service'] is False:
+            open_item = Gtk.MenuItem(_("Enable Networking"))
+            open_item.connect("activate", self.openNetwork)
+            self.menu.append(open_item)
         else:
-            print('service netif status not supported')
+            close_item = Gtk.MenuItem(_("Disable Networking"))
+            close_item.connect("activate", self.closeNetwork)
+            self.menu.append(close_item)
+        # else:
+        #     print('service netif status not supported')
         close_manager = Gtk.MenuItem(_("Close Network Manager"))
         close_manager.connect("activate", self.stop_manager)
         self.menu.append(close_manager)
@@ -184,6 +185,9 @@ class trayIcon(object):
                 menu_item = self.ssid_menu_item(sn, caps, ssid, ssid_info, wificard)
                 wiconncmenu.append(menu_item)
         self.menu.append(avconnmenu)
+
+    def configuration_window_open(self, widget, interface):
+        network_card_configuration(interface)
 
     def menu_click_open(self, widget, ssid, wificard):
         if f'"{ssid}"' in open("/etc/wpa_supplicant.conf").read():
@@ -332,8 +336,8 @@ class trayIcon(object):
             delete_ssid_wpa_supplicant_config(ssid)
             GLib.idle_add(self.restart_authentication, ssid_info, card)
         else:
-            for _ in range(60):
-                if wlan_status(card) == 'associated':
+            for _ in list(range(60)):
+                if nic_status(card) == 'associated':
                     self.updateinfo()
                     break
                 sleep(1)

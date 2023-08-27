@@ -1,52 +1,8 @@
-#!/usr/bin/env python3
-"""
-Copyright (c) 2014-2019, GhostBSD. All rights reserved.
+#!/usr/bin/env python
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions
-are met:
-
-1. Redistribution's of source code must retain the above copyright
-   notice, this list of conditions and the following disclaimer.
-
-2. Redistribution's in binary form must reproduce the above
-   copyright notice,this list of conditions and the following
-   disclaimer in the documentation and/or other materials provided
-   with the distribution.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
-FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
-COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES(INCLUDING,
-BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
-ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-POSSIBILITY OF SUCH DAMAGE.
-"""
-
-from subprocess import Popen, PIPE, run
-from sys import path
-import os
+from subprocess import Popen, PIPE, run, check_output
 import re
 from time import sleep
-path.append("/usr/local/share/networkmgr")
-
-
-cmd = "kenv | grep rc_system"
-rc_system = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
-
-if 'openrc' in rc_system.stdout.read():
-    openrc = True
-    rc = 'rc-'
-    network = 'network'
-else:
-    openrc = False
-    rc = ''
-    network = 'netif'
 
 
 def card_online(netcard):
@@ -96,7 +52,7 @@ def nics_list():
     notnics_regex = r"(enc|lo|fwe|fwip|tap|plip|pfsync|pflog|ipfw|tun|sl|" \
         r"faith|ppp|bridge|wg)[0-9]+(\s*)|vm-[a-z]+(\s*)"
     nics = Popen(
-        'ifconfig -l ether',
+        'ifconfig -l',
         shell=True,
         stdout=PIPE,
         universal_newlines=True
@@ -117,16 +73,7 @@ def barpercent(sn):
 
 
 def network_service_state():
-    if openrc:
-        status = Popen(
-            f'{rc}service {network} status',
-            shell=True,
-            stdout=PIPE,
-            universal_newlines=True
-        )
-        return 'status: started' in status.stdout.read()
-    else:
-        return False
+    return False
 
 
 def networkdictionary():
@@ -232,61 +179,67 @@ def switch_default(nic):
         ).stdout.read()
         if 'status: active' in nic_info or 'status: associated' in nic_info:
             if 'inet ' in nic_info or 'inet6' in nic_info:
-                if openrc:
-                    os.system(f'service dhcpcd.{card} restart')
-                else:
-                    os.system(f'service dhclient restart {card}')
+                run(f'service dhclient restart {card}', shell=True)
                 break
     return
 
 
 def stopallnetwork():
-    os.system(f'{rc}service {network} stop')
+    run('service netif stop', shell=True)
 
 
 def startallnetwork():
-    os.system(f'{rc}service {network} start')
+    run('service netif start', shell=True)
 
 
 def stopnetworkcard(netcard):
-    if openrc:
-        os.system(f'ifconfig {netcard} down')
-    else:
-        os.system(f'service netif stop {netcard}')
-        switch_default(netcard)
+    run(f'service netif stop {netcard}', shell=True)
+    switch_default(netcard)
+
+
+def restart_card_network(netcard):
+    run(f'service netif restart {netcard}', shell=True)
+
+
+def restart_rounting_and_dhcp(netcard):
+    run('service routing restart', shell=True)
+    sleep(1)
+    run(f'service dhclient restart {netcard}', shell=True)
+
+
+def start_static_network(netcard, inet, netmask):
+    run(f'ifconfig {netcard} inet {inet} netmask {netmask}', shell=True)
+    sleep(1)
+    run('service routing restart', shell=True)
 
 
 def startnetworkcard(netcard):
-    if openrc:
-        os.system(f'ifconfig {netcard} up')
-        os.system(f'{rc}service dhcpcd.{netcard} restart')
-    else:
-        os.system(f'service netif start {netcard}')
-        sleep(1)
-        os.system('service routing restart')
-        os.system(f'service dhclient start {netcard}')
+    run(f'service netif start {netcard}', shell=True)
+    sleep(1)
+    run('service routing restart', shell=True)
+    run(f'service dhclient start {netcard}', shell=True)
 
 
 def wifiDisconnection(wificard):
-    os.system(f'ifconfig {wificard} down')
-    os.system(f"ifconfig {wificard} ssid 'none'")
-    os.system(f'ifconfig {wificard} up')
+    run(f'ifconfig {wificard} down', shell=True)
+    run(f"ifconfig {wificard} ssid 'none'", shell=True)
+    run(f'ifconfig {wificard} up', shell=True)
 
 
 def disableWifi(wificard):
-    os.system(f'ifconfig {wificard} down')
+    run(f'ifconfig {wificard} down', shell=True)
 
 
 def enableWifi(wificard):
-    os.system(f'ifconfig {wificard} up')
-    os.system(f'ifconfig {wificard} up scan')
+    run(f'ifconfig {wificard} up', shell=True)
+    run(f'ifconfig {wificard} up scan', shell=True)
 
 
 def connectToSsid(name, wificard):
-    os.system('killall wpa_supplicant')
+    run('killall wpa_supplicant', shell=True)
     # service
     sleep(0.5)
-    os.system(f"ifconfig {wificard} ssid '{name}'")
+    run(f"ifconfig {wificard} ssid '{name}'", shell=True)
     sleep(0.5)
     wpa_supplicant = run(
         f'wpa_supplicant -B -i {wificard} -c /etc/wpa_supplicant.conf',
@@ -320,7 +273,7 @@ def delete_ssid_wpa_supplicant_config(ssid):
     wpa_supplicant_conf.close()
 
 
-def wlan_status(card):
+def nic_status(card):
     out = Popen(
         f'ifconfig {card} | grep status:',
         shell=True, stdout=PIPE,
@@ -330,8 +283,20 @@ def wlan_status(card):
 
 
 def start_dhcp(wificard):
-    if openrc:
-        os.system(f'dhcpcd -x {wificard}')
-        os.system(f'dhcpcd {wificard}')
-    else:
-        os.system(f'dhclient {wificard}')
+    run(f'dhclient {wificard}', shell=True)
+
+
+def wait_inet(card):
+    IPREGEX = r'[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'
+    status = 'associated' if 'wlan' in card else 'active'
+    while nic_status(card) != status:
+        sleep(0.1)
+        print(nic_status(card))
+    while True:
+        ifcmd = f"ifconfig -f inet:dotted {card}"
+        ifoutput = check_output(ifcmd.split(" "), universal_newlines=True)
+        print(ifoutput)
+        re_ip = re.search(fr'inet {IPREGEX}', ifoutput)
+        if re_ip and '0.0.0.0' not in re_ip.group():
+            print(re_ip)
+            break

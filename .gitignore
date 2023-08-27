@@ -36,9 +36,6 @@ venv*/*
 # Pycharm stuff
 .idea/*
 
-# VSCode
-.vscode/*
-
 # Translations
 *.mo
 
@@ -46,5 +43,10 @@ venv*/*
 .mr.developer.cfg
 .project
 .pydevproject
+
+# Editor Configuration Files
+.vscode
+
 # python core dump
 python*.core
+
