@@ -76,7 +76,7 @@ msgstr "Отключиться от %s"
 
 #: src/trayicon.py:139
 msgid "Enable Networking"
-msgstr "Включть сеть"
+msgstr "Включить сеть"
 
 #: src/trayicon.py:143
 msgid "Disable Networking"
