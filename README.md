@@ -1,20 +1,20 @@
-## NetworkMgr
+# NetworkMgr
 
-A Python GTK3 network manager for FreeBSD, GhostBSD, and DragonFlyBSD. 
+A network manager based on Python and GTK3 for FreeBSD, GhostBSD, and DragonFlyBSD. 
 
 ![alt text](https://image.ibb.co/bWha3R/Screenshot_at_2017_11_24_20_57_33.png)
 
-NetworkMgr supports FreeBSD rc(8) and openrc(8) supported. 
+NetworkMgr supports FreeBSD rc(8) and openrc(8). 
 
-### Installation
+## Installation
 
-#### On FreeBSD
+### On FreeBSD
 
-See https://www.freshports.org/net-mgmt/networkmgr/#add
+See https://www.freshports.org/net-mgmt/networkmgr/#add for instructions on installing NetworkMgr.
 
 #### Install using Python
 
-Packages to be installed before NetworkMgr:
+Packages that have to be installed before installing NetworkMgr:
 
 `pkg install sudo py38-setuptools py38-gobject3 gtk-update-icon-cache hicolor-icon-theme`
 
@@ -28,18 +28,16 @@ Download NetworkMgr, or clone this repository:
 
 Then: 
 
-`cd networkmgr`
-
-`python3.8 setup.py install`
+`cd networkmgr` and `python3.8 setup.py install`
 
 Users of NetworkMgr must be members of the _wheel_ group. To add a user: 
 
 `pw groupmod wheel -m username`
 
-### Starting 
+## Starting NetworkMgr
 
-If the desktop environment supports XDG: log out, or restart the computer. NetworkMgr should start automatically at login time.
+If the desktop environment supports XDG then you can simply log out, or restart the computer. NetworkMgr should start automatically at login time.
 
-### For Development dicussion 
+## For Development dicussion 
 
 You can join us at [#networkmgr](irc://irc.libera.chat:6697/networkmgr) on irc.libera.chat:6697
