@@ -42,7 +42,7 @@ msgstr "Aktivieren"
 #: src/trayicon.py:93
 #, python-format
 msgid "Wired %s Unplug"
-msgstr "Kabel von %s getrennt"
+msgstr "Kabel von %s abgesteckt"
 
 #: src/trayicon.py:101
 #, python-format
