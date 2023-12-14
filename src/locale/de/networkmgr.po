@@ -80,7 +80,7 @@ msgstr "Netzwerk aktivieren"
 
 #: src/trayicon.py:143
 msgid "Disable Networking"
-msgstr "Netzwerk deaktivieren"
+msgstr "Netzwerkverbindungen deaktivieren"
 
 #: src/trayicon.py:148
 msgid "Close Network Manager"
