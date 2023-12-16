@@ -1,0 +1,113 @@
+# Language locale/de_DE translations for NetworkMgr package.
+# Copyright (C) 2023 THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# Joshua Hoffmann <joshua@joshua-hoffmann.eu>, 2023.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2023-12-14 17:25+0000\n"
+"PO-Revision-Date: 2023-12-14 17:25+0000\n"
+"Last-Translator: Joshua Hoffmann <joshua@joshua-hoffmann.eu>\n"
+"Language-Team: Language locale/de\n"
+"Language: locale/de/LC_MESSAGES/networkmgr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: src/trayicon.py:67
+msgid "Ethernet Network"
+msgstr "Ethernet-Netzwerk"
+
+#: src/trayicon.py:78
+#, python-format
+msgid "Wired %s Connected"
+msgstr "Kabel an %s angeschlossen"
+
+#: src/trayicon.py:81
+msgid "Disable"
+msgstr "Deaktivieren"
+
+#: src/trayicon.py:86
+#, python-format
+msgid "Wired %s Disconnected"
+msgstr "Kabel von %s getrennt"
+
+#: src/trayicon.py:89
+msgid "Enable"
+msgstr "Aktivieren"
+
+#: src/trayicon.py:93
+#, python-format
+msgid "Wired %s Unplug"
+msgstr "Kabel von %s abgesteckt"
+
+#: src/trayicon.py:101
+#, python-format
+msgid "WiFi %s Disabled"
+msgstr "WLAN %s deaktiviert"
+
+#: src/trayicon.py:104
+#, python-format
+msgid "Enable Wifi %s"
+msgstr "WLAN %s aktivieren"
+
+#: src/trayicon.py:109
+#, python-format
+msgid "WiFi %s Disconnected"
+msgstr "WLAN %s getrennt"
+
+#: src/trayicon.py:113 src/trayicon.py:131
+#, python-format
+msgid "Disable Wifi %s"
+msgstr "WLAN %s deaktivieren"
+
+#: src/trayicon.py:119
+#, python-format
+msgid "WiFi %s Connected"
+msgstr "WLAN %s verbunden"
+
+#: src/trayicon.py:125
+#, python-format
+msgid "Disconnect from %s"
+msgstr "%s trennen"
+
+#: src/trayicon.py:139
+msgid "Enable Networking"
+msgstr "Netzwerk aktivieren"
+
+#: src/trayicon.py:143
+msgid "Disable Networking"
+msgstr "Netzwerkverbindungen deaktivieren"
+
+#: src/trayicon.py:148
+msgid "Close Network Manager"
+msgstr "Network Manager schließen"
+
+#: src/trayicon.py:156
+msgid "Available Connections"
+msgstr "Verfügbare Verbindungen"
+
+#: src/trayicon.py:364
+msgid "Wi-Fi Network Authentication Required"
+msgstr "WLAN erfordert Legitimierung"
+
+#: src/trayicon.py:376
+#, python-brace-format
+msgid "{ssid_info[0]} Wi-Fi Network Authentication failed"
+msgstr "Legitimierung für WLAN {ssid_info[0]} fehlgeschlagen"
+
+#: src/trayicon.py:378
+#, python-brace-format
+msgid "Authentication required by {ssid_info[0]} Wi-Fi Network"
+msgstr "Legitimierung für WLAN {ssid_info[0]} erforderlich"
+
+#: src/trayicon.py:381
+msgid "Password:"
+msgstr "Passwort:"
+
+#: src/trayicon.py:384
+msgid "Show password"
+msgstr "Passwort anzeigen"
