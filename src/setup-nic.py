@@ -5,6 +5,7 @@ import re
 import shutil
 import sys
 from pathlib import Path
+from subprocess import Popen, PIPE
 
 
 def file_content(paths):
@@ -21,25 +22,25 @@ if len(args) != 2:
 nic = args[1]
 
 etc = Path(os.sep, "etc")
-rcconf = etc / "rc.conf"
-rcconflocal = etc / "rc.conf.local"
+rc_conf = etc / "rc.conf"
+rc_conf_local = etc / "rc.conf.local"
 wpa_supplicant = etc / "wpa_supplicant.conf"
 
-rcconf_paths = [rcconf]
+rc_conf_paths = [rc_conf]
 
-if rcconflocal.exists():
-    rcconf_paths.append(rcconflocal)
+if rc_conf_local.exists():
+    rc_conf_paths.append(rc_conf_local)
 
-rcconf_content = file_content(rcconf_paths)
+rc_conf_content = file_content(rc_conf_paths)
 
-notnics_regex = "(enc|lo|fwe|fwip|tap|plip|pfsync|pflog|ipfw|tun|sl|faith|" \
+not_nics_regex = "(enc|lo|fwe|fwip|tap|plip|pfsync|pflog|ipfw|tun|sl|faith|" \
     "ppp|bridge|wg|wlan)[0-9]+|vm-[a-z]+"
 
 # wifi_driver_regex is taken from devd.conf wifi-driver-regex
-wifi_driver_regex = "(ath|bwi|bwn|ipw|iwlwifi|iwi|iwm|iwn|malo|mwl|otus|" \
+wifi_driver_regex = "(ath|ath[0-9]+k|bwi|bwn|ipw|iwlwifi|iwi|iwm|iwn|malo|mwl|mt79|otus|" \
     "ral|rsu|rtw|rtwn|rum|run|uath|upgt|ural|urtw|wpi|wtap|zyd)[0-9]+"
 
-if re.search(notnics_regex, nic):
+if re.search(not_nics_regex, nic):
     exit(0)
 
 if re.search(wifi_driver_regex, nic):
@@ -48,14 +49,22 @@ if re.search(wifi_driver_regex, nic):
         shutil.chown(wpa_supplicant, user="root", group="wheel")
         wpa_supplicant.chmod(0o765)
     for wlanNum in range(0, 9):
-        if f'wlan{wlanNum}' not in rcconf_content:
-            break
-    if f'wlans_{nic}=' not in rcconf_content:
-        with rcconf.open('a') as rc:
-            rc.writelines(f'wlans_{nic}="wlan{wlanNum}"\n')
-            rc.writelines(f'ifconfig_wlan{wlanNum}="WPA DHCP"\n')
+        if f'wlan{wlanNum}' not in rc_conf_content:
+            if f'wlans_{nic}=' not in rc_conf_content:
+                with rc_conf.open('a') as rc:
+                    rc.writelines(f'wlans_{nic}="wlan{wlanNum}"\n')
+                    rc.writelines(f'ifconfig_wlan{wlanNum}="WPA DHCP"\n')
+    Popen(f'/etc/pccard_ether {nic} startchildren', shell=True)
+
 else:
-    if f'ifconfig_{nic}=' not in rcconf_content:
-        with rcconf.open('a') as rc:
+    if f'ifconfig_{nic}=' not in rc_conf_content:
+        with rc_conf.open('a') as rc:
             rc.writelines(f'ifconfig_{nic}="DHCP"\n')
-os.system(f'/etc/pccard_ether {nic} startchildren')
+            Popen('/etc/pccard_ether {nic} startchildren', shell=True)
+    else:
+        Popen(
+            f'service netif start {nic} ; '
+            f'service dhclient start {nic} ; '
+            f'service routing restart',
+            shell=True
+        )
