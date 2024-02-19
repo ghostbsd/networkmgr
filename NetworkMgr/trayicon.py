@@ -12,6 +12,7 @@ from NetworkMgr.net_api import (
     stopnetworkcard,
     startnetworkcard,
     wifiDisconnection,
+    restart_all_nics,
     stopallnetwork,
     startallnetwork,
     connectToSsid,
@@ -137,16 +138,10 @@ class trayIcon(object):
                     self.menu.append(configure_item)
                 self.menu.append(Gtk.SeparatorMenuItem())
                 wifinum += 1
-        if self.cardinfo['service'] is False:
-            open_item = Gtk.MenuItem(_("Enable Networking"))
-            open_item.connect("activate", self.openNetwork)
-            self.menu.append(open_item)
-        else:
-            close_item = Gtk.MenuItem(_("Disable Networking"))
-            close_item.connect("activate", self.closeNetwork)
-            self.menu.append(close_item)
-        # else:
-        #     print('service netif status not supported')
+
+        open_item = Gtk.MenuItem(_("Restart Networking"))
+        open_item.connect("activate", restart_all_nics)
+        self.menu.append(open_item)
         close_manager = Gtk.MenuItem(_("Close Network Manager"))
         close_manager.connect("activate", self.stop_manager)
         self.menu.append(close_manager)

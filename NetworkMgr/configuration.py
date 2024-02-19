@@ -9,7 +9,7 @@ from NetworkMgr.net_api import (
     defaultcard,
     nics_list,
     restart_card_network,
-    restart_rounting_and_dhcp,
+    restart_routing_and_dhcp,
     start_static_network,
     wait_inet
 )
@@ -477,7 +477,7 @@ class netCardConfigWindow(Gtk.Window):
             # sometimes the inet address isn't available immediately after dhcp is enabled.
             start_static_network(nic, inet, netmask)
             wait_inet(nic)
-            restart_rounting_and_dhcp(nic)
+            restart_routing_and_dhcp(nic)
 
         self.destroy()
 
