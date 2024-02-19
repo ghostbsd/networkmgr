@@ -49,7 +49,7 @@ def get_ssid(wificard):
 
 
 def nics_list():
-    notnics_regex = r"(enc|lo|fwe|fwip|tap|plip|pfsync|pflog|ipfw|tun|sl|" \
+    not_nics_regex = r"(enc|lo|fwe|fwip|tap|plip|pfsync|pflog|ipfw|tun|sl|" \
         r"faith|ppp|bridge|wg)[0-9]+(\s*)|vm-[a-z]+(\s*)"
     nics = Popen(
         'ifconfig -l',
@@ -57,7 +57,7 @@ def nics_list():
         stdout=PIPE,
         universal_newlines=True
     ).stdout.read().strip()
-    return sorted(re.sub(notnics_regex, '', nics).strip().split())
+    return sorted(re.sub(not_nics_regex, '', nics).strip().split())
 
 
 def ifcardconnected(netcard):
@@ -184,6 +184,10 @@ def switch_default(nic):
     return
 
 
+def restart_all_nics(widget):
+    run('service netif restart', shell=True)
+
+
 def stopallnetwork():
     run('service netif stop', shell=True)
 
@@ -201,7 +205,7 @@ def restart_card_network(netcard):
     run(f'service netif restart {netcard}', shell=True)
 
 
-def restart_rounting_and_dhcp(netcard):
+def restart_routing_and_dhcp(netcard):
     run('service routing restart', shell=True)
     sleep(1)
     run(f'service dhclient restart {netcard}', shell=True)

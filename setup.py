@@ -28,6 +28,7 @@ def datafilelist(installbase, sourcebase):
 
 networkmgr_share = [
     'src/auto-switch.py',
+    'src/link-up.py',
     'src/setup-nic.py'
 ]
 
