@@ -474,6 +474,8 @@ class netCardConfigWindow(Gtk.Window):
                 defaultrouter_line = f'defaultrouter="{defaultrouter}"\n'
                 self.remove_rc_conf_line(defaultrouter_line)
             restart_card_network(nic)
+            # sometimes the inet address isn't available immediately after dhcp is enabled.
+            start_static_network(nic, inet, netmask)
             wait_inet(nic)
             restart_rounting_and_dhcp(nic)
 

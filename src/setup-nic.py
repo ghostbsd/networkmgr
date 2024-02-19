@@ -54,17 +54,12 @@ if re.search(wifi_driver_regex, nic):
                 with rc_conf.open('a') as rc:
                     rc.writelines(f'wlans_{nic}="wlan{wlanNum}"\n')
                     rc.writelines(f'ifconfig_wlan{wlanNum}="WPA DHCP"\n')
-    Popen(f'/etc/pccard_ether {nic} startchildren', shell=True)
-
+                    break
 else:
     if f'ifconfig_{nic}=' not in rc_conf_content:
         with rc_conf.open('a') as rc:
             rc.writelines(f'ifconfig_{nic}="DHCP"\n')
-            Popen('/etc/pccard_ether {nic} startchildren', shell=True)
-    else:
-        Popen(
-            f'service netif start {nic} ; '
-            f'service dhclient start {nic} ; '
-            f'service routing restart',
-            shell=True
-        )
+    with open(f'/tmp/network-{nic}', 'w') as network:
+        network.writelines(f'attached')
+
+Popen(f'/etc/pccard_ether {nic} startchildren', shell=True)
