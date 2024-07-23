@@ -153,13 +153,12 @@ def connectionStatus(card: str, network_info: dict) -> str:
             inet_info = out2.stdout.read().strip()
             ssid = network_info['cards'][card]['state']["ssid"]
             percentage = network_info['cards'][card]['info'][ssid][4]
-            netstate = f"{ssid_info} - Signal Strength: {percentage} % \n{subnetHexToDec(inet_info)}"
+            netstate = f"Signal Strength: {percentage}% \n{ssid_info} \n{subnetHexToDec(inet_info)}"
         else:
             netstate = "WiFi %s not connected" % card
     else:
         cmd = "ifconfig %s | grep 'inet '" % card
-        out = Popen(cmd, shell=True, stdout=PIPE,
-                    universal_newlines=True)
+        out = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
         line = out.stdout.read().strip()
         netstate = subnetHexToDec(line)
     return netstate
