@@ -140,20 +140,20 @@ def networkdictionary():
     return maindictionary
 
 
-def connectionStatus(card):
+def connectionStatus(card: str, network_info: dict) -> str:
     if card is None:
         netstate = "Network card is not enabled"
     elif 'wlan' in card:
         if not ifWlanDisable(card) and ifStatue(card):
             cmd1 = "ifconfig %s | grep ssid" % card
             cmd2 = "ifconfig %s | grep 'inet '" % card
-            out1 = Popen(cmd1, shell=True, stdout=PIPE,
-                         universal_newlines=True)
-            out2 = Popen(cmd2, shell=True, stdout=PIPE,
-                         universal_newlines=True)
-            line1 = out1.stdout.read().strip()
-            line2 = out2.stdout.read().strip()
-            netstate = line1 + '\n' + subnetHexToDec(line2)
+            out1 = Popen(cmd1, shell=True, stdout=PIPE, universal_newlines=True)
+            out2 = Popen(cmd2, shell=True, stdout=PIPE, universal_newlines=True)
+            ssid_info = out1.stdout.read().strip()
+            inet_info = out2.stdout.read().strip()
+            ssid = network_info['cards'][card]['state']["ssid"]
+            percentage = network_info['cards'][card]['info'][ssid][4]
+            netstate = f"{ssid_info} - Signal Strength: {percentage} % \n{subnetHexToDec(inet_info)}"
         else:
             netstate = "WiFi %s not connected" % card
     else:
