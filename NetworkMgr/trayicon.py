@@ -41,6 +41,8 @@ class trayIcon(object):
         Gtk.main_quit()
 
     def __init__(self):
+        self.if_running = False
+        self.cardinfo = None
         self.statusIcon = Gtk.StatusIcon()
         self.statusIcon.set_visible(True)
         self.statusIcon.connect("activate", self.leftclick)
@@ -305,7 +307,7 @@ class trayIcon(object):
         self.statusIcon.set_from_icon_name(icon_name)
 
     def trayStatus(self, defaultdev):
-        self.statusIcon.set_tooltip_text(connectionStatus(defaultdev))
+        self.statusIcon.set_tooltip_text(connectionStatus(defaultdev, self.cardinfo))
 
     def tray(self):
         self.if_running = False
