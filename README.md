@@ -16,7 +16,7 @@ See https://www.freshports.org/net-mgmt/networkmgr/#add for instructions on inst
 
 Packages that have to be installed before installing NetworkMgr:
 
-`pkg install sudo py38-setuptools py38-gobject3 gtk-update-icon-cache hicolor-icon-theme`
+`pkg install sudo py311-setuptools py311-gobject3 gtk-update-icon-cache hicolor-icon-theme`
 
 If NetworkMgr was previously installed using a package, remove it:  
 
