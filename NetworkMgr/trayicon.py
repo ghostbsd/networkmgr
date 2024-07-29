@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 
-import gi
-
-gi.require_version('Gtk', '3.0')
-import gettext
-import threading
 import _thread
+import gettext
 import locale
+import threading
 from time import sleep
+
 from gi.repository import Gtk, GObject, GLib
+
+from NetworkMgr.configuration import network_card_configuration
 from NetworkMgr.net_api import (
     stop_network_card,
     start_network_card,
@@ -24,7 +24,6 @@ from NetworkMgr.net_api import (
     delete_ssid_wpa_supplicant_config,
     nic_status
 )
-from NetworkMgr.configuration import network_card_configuration
 
 gettext.bindtextdomain('networkmgr', '/usr/local/share/locale')
 gettext.textdomain('networkmgr')

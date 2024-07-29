@@ -1,13 +1,11 @@
 #!/usr/bin/env python
 
-import gi
 import os
 import re
+from subprocess import run
 
-import gi
-
-gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GLib
+
 from NetworkMgr.net_api import (
     default_card,
     nics_list,
@@ -17,7 +15,6 @@ from NetworkMgr.net_api import (
     wait_inet
 )
 from NetworkMgr.query import get_interface_settings
-from subprocess import run
 
 rcconf = open('/etc/rc.conf', 'r').read()
 if os.path.exists('/etc/rc.conf.local'):
