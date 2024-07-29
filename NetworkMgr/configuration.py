@@ -103,7 +103,7 @@ class NetCardConfigWindow(Gtk.Window):
         label_one.set_margin_start(30)
 
         # Add both objects to a single box, which will then be added to the grid
-        interface_box = Gtk.Box(orientation=0, spacing=100)
+        interface_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=100)
         interface_box.pack_start(label_one, False, False, 0)
         interface_box.pack_end(interface_combo_box, True, True, 0)
 
@@ -124,7 +124,7 @@ class NetCardConfigWindow(Gtk.Window):
         radio_button_label.set_margin_top(15)
         radio_button_label.set_margin_start(30)
 
-        radio_box = Gtk.Box(orientation=0, spacing=50)
+        radio_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=50)
         radio_box.set_homogeneous(False)
         radio_box.pack_start(radio_button_label, False, False, 0)
         radio_box.pack_start(self.rb_dhcp4, True, False, 0)
@@ -154,13 +154,13 @@ class NetCardConfigWindow(Gtk.Window):
         self.ipInputGatewayEntry.set_text(self.currentSettings["Default Gateway"])
         self.ipInputGatewayEntry.connect("key-release-event", self.entry_trigger_save_button)
 
-        ip_input_box = Gtk.Box(orientation=0, spacing=0)
+        ip_input_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         ip_input_box.set_homogeneous(True)
         ip_input_box.pack_start(ip_input_address_label, False, False, 0)
         ip_input_box.pack_start(ip_input_mask_label, False, False, 0)
         ip_input_box.pack_start(ip_input_gateway_label, False, False, 0)
 
-        ip_entry_box = Gtk.Box(orientation=0, spacing=30)
+        ip_entry_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=30)
         ip_entry_box.pack_start(self.ipInputAddressEntry, False, False, 0)
         ip_entry_box.pack_start(self.ipInputMaskEntry, False, False, 0)
         ip_entry_box.pack_start(self.ipInputGatewayEntry, False, False, 0)
@@ -186,12 +186,12 @@ class NetCardConfigWindow(Gtk.Window):
         self.secondary_dns_entry.set_text(self.currentSettings["DNS Server 2"])
         self.secondary_dns_entry.connect("key-release-event", self.entry_trigger_save_button)
 
-        dns_entry_box1 = Gtk.Box(orientation=0, spacing=0)
+        dns_entry_box1 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         dns_entry_box1.pack_start(primary_dns_label, False, False, 0)
 
         dns_entry_box1.pack_end(self.primary_dns_entry, True, True, 0)
 
-        dns_entry_box2 = Gtk.Box(orientation=0, spacing=0)
+        dns_entry_box2 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         dns_entry_box2.pack_start(secondary_dns_label, False, False, 0)
 
         dns_entry_box2.pack_end(self.secondary_dns_entry, True, True, 0)
@@ -209,7 +209,7 @@ class NetCardConfigWindow(Gtk.Window):
         self.searchEntry.set_text(self.currentSettings["Search Domain"])
         self.searchEntry.connect("key-release-event", self.entry_trigger_save_button)
 
-        search_box = Gtk.Box(orientation=0, spacing=0)
+        search_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         search_box.pack_start(search_label, False, False, 0)
         search_box.pack_end(self.searchEntry, True, True, 0)
 
@@ -266,7 +266,7 @@ class NetCardConfigWindow(Gtk.Window):
         label_one6.set_margin_start(30)
 
         # Add both objects to a single box, which will then be added to the grid
-        interface_box6 = Gtk.Box(orientation=0, spacing=100)
+        interface_box6 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=100)
         interface_box6.pack_start(label_one6, False, False, 0)
         interface_box6.pack_end(interface_combo_box6, True, True, 0)
 
@@ -284,7 +284,7 @@ class NetCardConfigWindow(Gtk.Window):
         radio_button_label6.set_margin_top(15)
         radio_button_label6.set_margin_start(30)
 
-        radio_box6 = Gtk.Box(orientation=0, spacing=50)
+        radio_box6 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=50)
         radio_box6.set_homogeneous(False)
         radio_box6.pack_start(radio_button_label6, False, False, 0)
         radio_box6.pack_start(rb_slaac6, True, False, 0)
@@ -309,13 +309,13 @@ class NetCardConfigWindow(Gtk.Window):
         self.ip_input_gateway_entry6.set_margin_end(15)
         self.ip_input_gateway_entry6.connect("key-release-event", self.entry_trigger_save_button)
 
-        ip_input_box6 = Gtk.Box(orientation=0, spacing=0)
+        ip_input_box6 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         ip_input_box6.set_homogeneous(True)
         ip_input_box6.pack_start(ip_input_address_label6, False, False, 0)
         ip_input_box6.pack_start(ip_input_mask_label6, False, False, 0)
         ip_input_box6.pack_start(ip_input_gateway_label6, False, False, 0)
 
-        ip_entry_box6 = Gtk.Box(orientation=0, spacing=30)
+        ip_entry_box6 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=30)
         ip_entry_box6.pack_start(self.ip_input_address_entry6, False, False, 0)
         ip_entry_box6.pack_start(self.ip_input_mask_entry6, False, False, 0)
         ip_entry_box6.pack_start(self.ip_input_gateway_entry6, False, False, 0)
@@ -335,7 +335,7 @@ class NetCardConfigWindow(Gtk.Window):
         self.primary_dns_entry6.set_margin_end(30)
         self.primary_dns_entry6.connect("key-release-event", self.entry_trigger_save_button)
 
-        dns_entry_box6 = Gtk.Box(orientation=0, spacing=0)
+        dns_entry_box6 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         dns_entry_box6.pack_start(primary_dns_label6, False, False, 0)
         dns_entry_box6.pack_end(self.primary_dns_entry6, True, True, 0)
 
@@ -352,7 +352,7 @@ class NetCardConfigWindow(Gtk.Window):
         self.search_entry6.set_margin_bottom(30)
         self.search_entry6.connect("key-release-event", self.entry_trigger_save_button)
 
-        search_box6 = Gtk.Box(orientation=0, spacing=0)
+        search_box6 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         search_box6.pack_start(search_label6, False, False, 0)
         search_box6.pack_end(self.search_entry6, True, True, 0)
 
@@ -394,7 +394,7 @@ class NetCardConfigWindow(Gtk.Window):
         cancel_button = Gtk.Button(label="Cancel")
         cancel_button.set_margin_bottom(10)
         cancel_button.connect("clicked", self.discard_pending_changes)
-        buttons_window = Gtk.Box(orientation=0, spacing=10)
+        buttons_window = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         buttons_window.pack_start(self.saveButton, False, False, 0)
         buttons_window.pack_start(cancel_button, False, False, 0)
 
@@ -406,7 +406,7 @@ class NetCardConfigWindow(Gtk.Window):
         nb.append_page(grid_one6)
         nb.set_tab_label_text(grid_one6, "IPv6 Settings WIP")
         # Put all the widgets together into one window
-        main_box = Gtk.Box(orientation=1, spacing=0)
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         main_box.pack_start(nb, True, True, 0)
         main_box.pack_end(buttons_window, False, False, 0)
         self.add(main_box)
