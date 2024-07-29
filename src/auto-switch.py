@@ -3,9 +3,9 @@
 auto-switch - is used to automatically switches the default interface go down.
 """
 
-import sys
 import os
 import re
+import sys
 from subprocess import Popen, PIPE
 
 args = sys.argv
@@ -14,7 +14,7 @@ if len(args) != 2:
 nic = args[1]
 
 not_nics_regex = r"(enc|lo|fwe|fwip|tap|plip|pfsync|pflog|ipfw|tun|sl|faith|wlan" \
-                    r"ppp|bridge|wg)[0-9]+(\s*)|vm-[a-z]+(\s*)"
+                 r"ppp|bridge|wg)[0-9]+(\s*)|vm-[a-z]+(\s*)"
 
 default_nic = Popen(
     'netstat -rn | grep default',

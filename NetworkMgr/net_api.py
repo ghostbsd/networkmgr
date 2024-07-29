@@ -1,17 +1,16 @@
 #!/usr/bin/env python
 
-from subprocess import Popen, PIPE, run, check_output
 import re
+from subprocess import Popen, PIPE, run, check_output
 from time import sleep
 
 
-def card_online(netcard):
-    lan = Popen('ifconfig ' + netcard, shell=True, stdout=PIPE,
-                universal_newlines=True)
+def card_online(net_card):
+    lan = Popen('ifconfig ' + net_card, shell=True, stdout=PIPE, universal_newlines=True)
     return 'inet ' in lan.stdout.read()
 
 
-def defaultcard():
+def default_card():
     cmd = "netstat -rn | grep default"
     nics = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
     device = nics.stdout.readlines()
@@ -21,25 +20,24 @@ def defaultcard():
         return list(filter(None, device[0].rstrip().split()))[3]
 
 
-def ifWlanDisable(wificard):
-    cmd = "ifconfig %s list scan" % wificard
+def if_wlan_disable(wifi_card):
+    cmd = "ifconfig %s list scan" % wifi_card
     nics = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
     return not nics.stdout.read()
 
 
-def ifStatue(wificard):
-    cmd = "ifconfig %s" % wificard
+def if_statue(wifi_card):
+    cmd = "ifconfig %s" % wifi_card
     wl = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
     wlout = wl.stdout.read()
     return "associated" in wlout
 
 
-def get_ssid(wificard):
-    wlan = Popen('ifconfig %s | grep ssid' % wificard,
-                 shell=True, stdout=PIPE, universal_newlines=True)
+def get_ssid(wifi_card):
+    wlan = Popen('ifconfig %s | grep ssid' % wifi_card, shell=True, stdout=PIPE, universal_newlines=True)
     # If there are quotation marks in the string, use that as a separator,
     # otherwise use the default whitespace. This is to handle ssid strings
-    # with spaces in them. These ssid strings will be double quoted by ifconfig
+    # with spaces in them. These ssid strings will be double-quoted by ifconfig
     temp = wlan.stdout.readlines()[0].rstrip()
     if '"' in temp:
         out = temp.split('"')[1]
@@ -60,15 +58,14 @@ def nics_list():
     return sorted(re.sub(not_nics_regex, '', nics).strip().split())
 
 
-def ifcardconnected(netcard):
-    wifi = Popen('ifconfig ' + netcard, shell=True, stdout=PIPE,
-                 universal_newlines=True)
+def if_card_connected(net_card):
+    wifi = Popen('ifconfig ' + net_card, shell=True, stdout=PIPE, universal_newlines=True)
     return 'status: active' in wifi.stdout.read()
 
 
-def barpercent(sn):
-    sig = int(sn.partition(':')[0])
-    noise = int(sn.partition(':')[2])
+def calculate_signal_strength_percentage(signal):
+    sig = int(signal.partition(':')[0])
+    noise = int(signal.partition(':')[2])
     return int((sig - noise) * 4)
 
 
@@ -76,75 +73,74 @@ def network_service_state():
     return False
 
 
-def networkdictionary():
+def network_dictionary():
     nlist = nics_list()
-    maindictionary = {
+    main_dictionary = {
         'service': network_service_state(),
-        'default': defaultcard()
+        'default': default_card()
     }
     cards = {}
     for card in nlist:
         if 'wlan' in card:
             scanv = f"ifconfig {card} list scan | grep -va BSSID"
-            wifi = Popen(scanv, shell=True, stdout=PIPE,
-                         universal_newlines=True)
-            connectioninfo = {}
+            wifi = Popen(scanv, shell=True, stdout=PIPE, universal_newlines=True)
+            connection_info = {}
             for line in wifi.stdout:
                 # don't sort empty ssid
-                # Window, MacOS and Linux does not show does
+                # Window, macOS and Linux does not show does
                 if line.startswith(" " * 5):
                     continue
                 ssid = line[:33].strip()
                 info = line[:83][33:].strip().split()
-                percentage = barpercent(info[3])
+                percentage = calculate_signal_strength_percentage(info[3])
                 # if ssid exist and percentage is higher keep it
                 # else add the new one if percentage is higher
-                if ssid in connectioninfo:
-                    if connectioninfo[ssid][4] > percentage:
+                if ssid in connection_info:
+                    if connection_info[ssid][4] > percentage:
                         continue
                 info[3] = percentage
                 info.insert(0, ssid)
                 # append left over
                 info.append(line[83:].strip())
-                connectioninfo[ssid] = info
-            if ifWlanDisable(card):
-                connectionstat = {
+                connection_info[ssid] = info
+            if if_wlan_disable(card):
+                connection_stat = {
                     "connection": "Disabled",
                     "ssid": None,
                 }
-            elif not ifStatue(card):
-                connectionstat = {
+            elif not if_statue(card):
+                connection_stat = {
                     "connection": "Disconnected",
                     "ssid": None,
                 }
             else:
                 ssid = get_ssid(card)
-                connectionstat = {
+                connection_stat = {
                     "connection": "Connected",
                     "ssid": ssid,
                 }
-            seconddictionary = {
-                'state': connectionstat,
-                'info': connectioninfo
+            second_dictionary = {
+                'state': connection_stat,
+                'info': connection_info
             }
         else:
             if card_online(card):
-                connectionstat = {"connection": "Connected"}
-            elif ifcardconnected(card):
-                connectionstat = {"connection": "Disconnected"}
+                connection_stat = {"connection": "Connected"}
+            elif if_card_connected(card):
+                connection_stat = {"connection": "Disconnected"}
             else:
-                connectionstat = {"connection": "Unplug"}
-            seconddictionary = {'state': connectionstat, 'info': None}
-        cards[card] = seconddictionary
-    maindictionary['cards'] = cards
-    return maindictionary
+                connection_stat = {"connection": "Unplug"}
+            second_dictionary = {'state': connection_stat, 'info': None}
+        cards[card] = second_dictionary
+    main_dictionary['cards'] = cards
+    return main_dictionary
 
 
-def connectionStatus(card: str, network_info: dict) -> str:
+def connection_status(card: str, network_info: dict) -> str:
     if card is None:
-        netstate = "Network card is not enabled"
+        net_state = "Network card is not enabled"
     elif 'wlan' in card:
-        if not ifWlanDisable(card) and ifStatue(card):
+        if not if_wlan_disable(card) and if_statue(card):
             cmd1 = "ifconfig %s | grep ssid" % card
             cmd2 = "ifconfig %s | grep 'inet '" % card
             out1 = Popen(cmd1, shell=True, stdout=PIPE, universal_newlines=True)
@@ -153,15 +149,15 @@ def connectionStatus(card: str, network_info: dict) -> str:
             inet_info = out2.stdout.read().strip()
             ssid = network_info['cards'][card]['state']["ssid"]
             percentage = network_info['cards'][card]['info'][ssid][4]
-            netstate = f"Signal Strength: {percentage}% \n{ssid_info} \n{subnetHexToDec(inet_info)}"
+            net_state = f"Signal Strength: {percentage}% \n{ssid_info} \n{subnet_hex_to_dec(inet_info)}"
         else:
-            netstate = "WiFi %s not connected" % card
+            net_state = "WiFi %s not connected" % card
     else:
         cmd = "ifconfig %s | grep 'inet '" % card
         out = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
         line = out.stdout.read().strip()
-        netstate = subnetHexToDec(line)
-    return netstate
+        net_state = subnet_hex_to_dec(line)
+    return net_state
 
 
 def switch_default(nic):
@@ -191,71 +187,71 @@ def stopallnetwork():
     run('service netif stop', shell=True)
 
 
-def startallnetwork():
+def start_all_network():
     run('service netif start', shell=True)
 
 
-def stopnetworkcard(netcard):
-    run(f'service netif stop {netcard}', shell=True)
-    switch_default(netcard)
-
-
-def restart_card_network(netcard):
-    run(f'service netif restart {netcard}', shell=True)
-
-
-def restart_routing_and_dhcp(netcard):
-    run('service routing restart', shell=True)
-    sleep(1)
-    run(f'service dhclient restart {netcard}', shell=True)
-
-
-def start_static_network(netcard, inet, netmask):
-    run(f'ifconfig {netcard} inet {inet} netmask {netmask}', shell=True)
+def start_network_card(net_card):
+    run(f'service netif start {net_card}', shell=True)
     sleep(1)
     run('service routing restart', shell=True)
+    run(f'service dhclient start {net_card}', shell=True)
 
 
-def startnetworkcard(netcard):
-    run(f'service netif start {netcard}', shell=True)
+def stop_network_card(net_card):
+    run(f'service netif stop {net_card}', shell=True)
+    switch_default(net_card)
+
+
+def restart_card_network(net_card):
+    run(f'service netif restart {net_card}', shell=True)
+
+
+def restart_routing_and_dhcp(net_card):
+    run('service routing restart', shell=True)
+    sleep(1)
+    run(f'service dhclient restart {net_card}', shell=True)
+
+
+def start_static_network(net_card, inet, netmask):
+    run(f'ifconfig {net_card} inet {inet} netmask {netmask}', shell=True)
     sleep(1)
     run('service routing restart', shell=True)
-    run(f'service dhclient start {netcard}', shell=True)
 
 
-def wifiDisconnection(wificard):
-    run(f'ifconfig {wificard} down', shell=True)
-    run(f"ifconfig {wificard} ssid 'none'", shell=True)
-    run(f'ifconfig {wificard} up', shell=True)
+def wifi_disconnection(wifi_card):
+    run(f'ifconfig {wifi_card} down', shell=True)
+    run(f"ifconfig {wifi_card} ssid 'none'", shell=True)
+    run(f'ifconfig {wifi_card} up', shell=True)
 
 
-def disableWifi(wificard):
-    run(f'ifconfig {wificard} down', shell=True)
+def disable_wifi(wifi_card):
+    run(f'ifconfig {wifi_card} down', shell=True)
 
 
-def enableWifi(wificard):
-    run(f'ifconfig {wificard} up', shell=True)
-    run(f'ifconfig {wificard} up scan', shell=True)
+def enable_wifi(wifi_card):
+    run(f'ifconfig {wifi_card} up', shell=True)
+    run(f'ifconfig {wifi_card} up scan', shell=True)
 
 
-def connectToSsid(name, wificard):
+def connect_to_ssid(name, wifi_card):
     run('killall wpa_supplicant', shell=True)
     # service
     sleep(0.5)
-    run(f"ifconfig {wificard} ssid '{name}'", shell=True)
+    run(f"ifconfig {wifi_card} ssid '{name}'", shell=True)
     sleep(0.5)
     wpa_supplicant = run(
-        f'wpa_supplicant -B -i {wificard} -c /etc/wpa_supplicant.conf',
+        f'wpa_supplicant -B -i {wifi_card} -c /etc/wpa_supplicant.conf',
         shell=True
     )
     return wpa_supplicant.returncode == 0
 
 
-def subnetHexToDec(ifconfigstring):
-    snethex = re.search('0x.{8}', ifconfigstring).group(0)[2:]
+def subnet_hex_to_dec(ifconfig_string):
+    snethex = re.search('0x.{8}', ifconfig_string).group(0)[2:]
     snethexlist = re.findall('..', snethex)
     snetdec = ".".join(str(int(li, 16)) for li in snethexlist)
-    outputline = ifconfigstring.replace(re.search('0x.{8}', ifconfigstring).group(0), snetdec)
+    outputline = ifconfig_string.replace(re.search('0x.{8}', ifconfig_string).group(0), snetdec)
     return outputline
 
 
@@ -285,21 +281,21 @@ def nic_status(card):
     return out.stdout.read().split(':')[1].strip()
 
 
-def start_dhcp(wificard):
-    run(f'dhclient {wificard}', shell=True)
+def start_dhcp(wifi_card):
+    run(f'dhclient {wifi_card}', shell=True)
 
 
 def wait_inet(card):
-    IPREGEX = r'[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'
+    ip_regex = r'[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'
     status = 'associated' if 'wlan' in card else 'active'
     while nic_status(card) != status:
         sleep(0.1)
         print(nic_status(card))
     while True:
         ifcmd = f"ifconfig -f inet:dotted {card}"
-        ifoutput = check_output(ifcmd.split(" "), universal_newlines=True)
-        print(ifoutput)
-        re_ip = re.search(fr'inet {IPREGEX}', ifoutput)
+        if_output = check_output(ifcmd.split(" "), universal_newlines=True)
+        print(if_output)
+        re_ip = re.search(fr'inet {ip_regex}', if_output)
         if re_ip and '0.0.0.0' not in re_ip.group():
             print(re_ip)
             break

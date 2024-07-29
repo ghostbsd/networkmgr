@@ -4,8 +4,9 @@
 import os
 import sys
 from platform import system
-from setuptools import setup
 from subprocess import run
+
+from setuptools import setup
 
 __VERSION__ = '6.5'
 PROGRAM_VERSION = __VERSION__
@@ -16,14 +17,14 @@ prefix = '/usr/local' if system() == 'FreeBSD' else sys.prefix
 os.system("sh compile_translations.sh")
 
 
-def datafilelist(installbase, sourcebase):
-    datafileList = []
-    for root, subFolders, files in os.walk(sourcebase):
-        fileList = []
+def get_data_files(install_base, source_base):
+    data_files_list = []
+    for root, subFolders, files in os.walk(source_base):
+        file_list = []
         for f in files:
-            fileList.append(os.path.join(root, f))
-        datafileList.append((root.replace(sourcebase, installbase), fileList))
-    return datafileList
+            file_list.append(os.path.join(root, f))
+        data_files_list.append((root.replace(source_base, install_base), file_list))
+    return data_files_list
 
 
 networkmgr_share = [
@@ -45,7 +46,7 @@ if os.path.exists('/etc/devd'):
 if os.path.exists('/etc/devd-openrc'):
     data_files.append((f'{prefix}/etc/devd-openrc', ['src/networkmgr.conf']))
 
-data_files.extend(datafilelist(f'{prefix}/share/icons/hicolor', 'src/icons'))
+data_files.extend(get_data_files(f'{prefix}/share/icons/hicolor', 'src/icons'))
 
 setup(
     name="NetworkMgr",

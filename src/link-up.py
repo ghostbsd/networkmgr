@@ -3,7 +3,7 @@
 import os
 import re
 import sys
-from subprocess import Popen, PIPE, run
+from subprocess import Popen, PIPE
 
 args = sys.argv
 if len(args) != 2:

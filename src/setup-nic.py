@@ -5,7 +5,7 @@ import re
 import shutil
 import sys
 from pathlib import Path
-from subprocess import Popen, PIPE
+from subprocess import Popen
 
 
 def file_content(paths):
