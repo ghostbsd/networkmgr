@@ -40,6 +40,7 @@ class TrayIcon(object):
         Gtk.main_quit()
 
     def __init__(self):
+        self.thr = None
         self.password = None
         self.menu = None
         self.window = None
