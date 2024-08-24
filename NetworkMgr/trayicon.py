@@ -212,12 +212,12 @@ class TrayIcon(object):
         enable_wifi(wifi_card)
         self.update_info()
 
-    def connectcard(self, widget, netcard):
-        start_network_card(netcard)
+    def connectcard(self, widget, net_card):
+        start_network_card(net_card)
         self.update_info()
 
-    def disconnectcard(self, widget, netcard):
-        stop_network_card(netcard)
+    def disconnectcard(self, widget, net_card):
+        stop_network_card(net_card)
         self.update_info()
 
     def close_network(self, widget):
