@@ -186,30 +186,30 @@ class TrayIcon(object):
     def configuration_window_open(self, widget, interface):
         network_card_configuration(interface)
 
-    def menu_click_open(self, widget, ssid, wificard):
+    def menu_click_open(self, widget, ssid, wifi_card):
         if f'"{ssid}"' in open("/etc/wpa_supplicant.conf").read():
-            connect_to_ssid(ssid, wificard)
+            connect_to_ssid(ssid, wifi_card)
         else:
-            self.open_wpa_supplicant(ssid, wificard)
+            self.open_wpa_supplicant(ssid, wifi_card)
         self.update_info()
 
-    def menu_click_lock(self, widget, ssid_info, wificard):
+    def menu_click_lock(self, widget, ssid_info, wifi_card):
         if f'"{ssid_info[0]}"' in open('/etc/wpa_supplicant.conf').read():
-            connect_to_ssid(ssid_info[0], wificard)
+            connect_to_ssid(ssid_info[0], wifi_card)
         else:
-            self.authentication(ssid_info, wificard, False)
+            self.authentication(ssid_info, wifi_card, False)
         self.update_info()
 
-    def disconnect_wifi(self, widget, wificard):
-        wifi_disconnection(wificard)
+    def disconnect_wifi(self, widget, wifi_card):
+        wifi_disconnection(wifi_card)
         self.update_info()
 
-    def disable_wifi(self, widget, wificard):
-        disable_wifi(wificard)
+    def disable_wifi(self, widget, wifi_card):
+        disable_wifi(wifi_card)
         self.update_info()
 
-    def enable_wifi(self, widget, wificard):
-        enable_wifi(wificard)
+    def enable_wifi(self, widget, wifi_card):
+        enable_wifi(wifi_card)
         self.update_info()
 
     def connectcard(self, widget, netcard):
