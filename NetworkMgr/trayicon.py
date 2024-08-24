@@ -82,7 +82,7 @@ class TrayIcon(object):
                     wired_item.set_sensitive(False)
                     self.menu.append(wired_item)
                     disconnect_item = Gtk.ImageMenuItem(_(f"Disable {net_card}"))
-                    disconnect_item.connect("activate", self.disconnectcard, net_card)
+                    disconnect_item.connect("activate", self.disconnect_card, net_card)
                     self.menu.append(disconnect_item)
                     configure_item = Gtk.ImageMenuItem(f"Configure {net_card}")
                     configure_item.connect("activate", self.configuration_window_open, net_card)
@@ -92,7 +92,7 @@ class TrayIcon(object):
                     not_online.set_sensitive(False)
                     self.menu.append(not_online)
                     wired_item = Gtk.MenuItem(_("Enable"))
-                    wired_item.connect("activate", self.connectcard, net_card)
+                    wired_item.connect("activate", self.connect_card, net_card)
                     self.menu.append(wired_item)
                 else:
                     disconnected = Gtk.MenuItem(_("Wired %s Unplug") % card_num)
@@ -212,11 +212,11 @@ class TrayIcon(object):
         enable_wifi(wifi_card)
         self.update_info()
 
-    def connectcard(self, widget, net_card):
+    def connect_card(self, widget, net_card):
         start_network_card(net_card)
         self.update_info()
 
-    def disconnectcard(self, widget, net_card):
+    def disconnect_card(self, widget, net_card):
         stop_network_card(net_card)
         self.update_info()
 
@@ -255,43 +255,43 @@ class TrayIcon(object):
         if not self.if_running:
             self.if_running = True
             self.card_info = network_dictionary()
-            defaultcard = self.card_info['default']
-            default_type = self.network_type(defaultcard)
-            GLib.idle_add(self.update_tray, defaultcard, default_type)
+            default_card = self.card_info['default']
+            default_type = self.network_type(default_card)
+            GLib.idle_add(self.update_tray, default_card, default_type)
             self.if_running = False
 
-    def update_tray(self, defaultdev, default_type):
-        self.update_tray_icon(defaultdev, default_type)
-        self.tray_status(defaultdev)
+    def update_tray(self, default_dev, default_type):
+        self.update_tray_icon(default_dev, default_type)
+        self.tray_status(default_dev)
 
     def update_tray_loop(self):
         while True:
             self.update_info()
             sleep(20)
 
-    def network_type(self, defaultdev):
-        if defaultdev is None:
+    def network_type(self, default_dev):
+        if default_dev is None:
             return None
-        elif 'wlan' in defaultdev:
+        elif 'wlan' in default_dev:
             return 'wifi'
         else:
             return 'wire'
 
-    def default_wifi_state(self, defaultdev):
-        info = self.card_info['cards'][defaultdev]
+    def default_wifi_state(self, default_dev):
+        info = self.card_info['cards'][default_dev]
         if info['state']["connection"] == "Connected":
             ssid = info['state']["ssid"]
             return info['info'][ssid][4]
         else:
             return None
 
-    def update_tray_icon(self, defaultdev, card_type):
+    def update_tray_icon(self, default_dev, card_type):
         if card_type is None:
             icon_name = 'nm-no-connection'
         elif card_type == 'wire':
             icon_name = 'nm-device-wired'
         else:
-            wifi_state = self.default_wifi_state(defaultdev)
+            wifi_state = self.default_wifi_state(default_dev)
             if wifi_state is None:
                 icon_name = 'nm-no-connection'
             elif wifi_state > 80:
@@ -306,8 +306,8 @@ class TrayIcon(object):
                 icon_name = 'nm-signal-00'
         self.statusIcon.set_from_icon_name(icon_name)
 
-    def tray_status(self, defaultdev):
-        self.statusIcon.set_tooltip_text(connection_status(defaultdev, self.card_info))
+    def tray_status(self, default_dev):
+        self.statusIcon.set_tooltip_text(connection_status(default_dev, self.card_info))
 
     def tray(self):
         self.if_running = False
