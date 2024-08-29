@@ -3,6 +3,7 @@
 import os
 import re
 from subprocess import run
+from typing import Union
 
 from gi.repository import Gtk, GLib
 
@@ -25,7 +26,18 @@ else:
 
 class NetCardConfigWindow(Gtk.Window):
 
-    def edit_ipv4_setting(self, widget):
+    def edit_ipv4_setting(self, widget: Gtk.RadioButton) -> None:
+        """
+        Toggles the sensitivity of IPv4 settings fields based on the selected method.
+
+        This method is triggered when the user selects either "DHCP" or "Manual" for IPv4 settings.
+        - If "DHCP" is selected, the manual configuration fields (address, mask, gateway, DNS servers) are disabled,
+        and the save button is also disabled if the method matches the current settings.
+        - If "Manual" is selected, the manual configuration fields are enabled, and the save button is enabled if the
+        method differs from the current settings.
+
+        :param widget: The Gtk.RadioButton widget that triggered this method.
+        """
         if widget.get_active():
             self.method = widget.get_label()
             if self.method == "DHCP":
@@ -45,7 +57,19 @@ class NetCardConfigWindow(Gtk.Window):
             else:
                 self.saveButton.set_sensitive(True)
 
-    def edit_ipv6_setting(self, widget, value):
+    def edit_ipv6_setting(self, widget: Gtk.RadioButton, value: str) -> None:
+        """
+        Toggles the sensitivity of IPv6 settings fields based on the selected method.
+
+        This method is triggered when the user selects either "SLAAC" or "Manual" for IPv6 settings.
+        - If "SLAAC" is selected, the manual configuration fields (address, mask, gateway, DNS servers)
+        are disabled, and the save button is also disabled.
+        - If "Manual" is selected, the manual configuration fields are enabled, and the save button is
+        enabled.
+
+        :param widget: The Gtk.RadioButton widget that triggered this method (not used in the function).
+        :param value: The method selected ("SLAAC" or "Manual").
+        """
         if value == "SLAAC":
             self.ip_input_address_entry6.set_sensitive(False)
             self.ip_input_mask_entry6.set_sensitive(False)
@@ -410,12 +434,29 @@ class NetCardConfigWindow(Gtk.Window):
 
     # Used with the combo box to refresh the UI of tab 1 with active settings
     # for the newly selected active interface.
-    def cbox_config_refresh(self, widget, nics):
-        # actions here need to refresh the values on the first two tabs.
+    def cbox_config_refresh(self, widget: Gtk.ComboBox, nics: list[str]) -> None:
+        """
+        Refreshes the UI to display the settings for the newly selected network interface.
+
+        This method is triggered when the user selects a different network interface from the combo box.
+        It updates the current settings and refreshes the UI to reflect the new interface's configuration.
+
+        :param widget: The Gtk.ComboBox widget that triggered this method.
+        :param nics: A list of network interface names.
+        """
         self.currentSettings = get_interface_settings(nics[widget.get_active()])
         self.update_interface_settings()
 
-    def update_interface_settings(self):
+    def update_interface_settings(self) -> None:
+        """
+        Updates the UI with the current network interface settings.
+
+        This method sets the text and sensitivity of the various UI elements (such as entries and radio buttons)
+        to reflect the settings of the currently selected network interface. It updates the address, subnet mask,
+        gateway, DNS servers, and search domain fields according to the current settings.
+
+        It also adjusts the state of the radio buttons to indicate whether the current method is DHCP or Manual.
+        """
         self.ipInputAddressEntry.set_text(self.currentSettings["Interface IP"])
         self.ipInputMaskEntry.set_text(self.currentSettings["Interface Subnet Mask"])
         self.ipInputGatewayEntry.set_text(self.currentSettings["Default Gateway"])
@@ -427,45 +468,80 @@ class NetCardConfigWindow(Gtk.Window):
         else:
             self.rb_manual4.set_active(True)
 
-    def commit_pending_changes(self, widget):
+    def commit_pending_changes(self, widget: Gtk.Button) -> None:
+        """
+        Commits the pending changes and initiates the system update process.
+
+        This method is triggered when the user clicks the "Save" button. It hides the current window and
+        schedules the system update to apply the changes made to the network settings.
+
+        :param widget: The Gtk.Button widget that triggered this method (the "Save" button).
+        """
         self.hide_window()
         GLib.idle_add(self.update_system)
 
-    def update_system(self):
+    def update_system(self) -> None:
+        """
+        Applies the network configuration changes and updates the system settings.
+
+        This method is called after committing pending changes. It performs the following actions based on the
+        current network settings:
+
+        - If the method is "Manual":
+            - Updates the network interface configuration in `/etc/rc.conf`.
+            - Updates the default router and DNS settings in `/etc/resolv.conf`.
+            - Restarts the network interface with the new settings.
+
+        - If the method is "DHCP":
+            - Updates the network interface configuration in `/etc/rc.conf` to use DHCP.
+            - Restarts the network interface to apply the DHCP settings.
+
+        After updating the configuration, it ensures that the network interface gets a valid IP address and
+        routing information by calling `wait_inet()` and `restart_routing_and_dhcp()`.
+
+        This method closes the window after the update is complete.
+
+        :raises Exception: If any subprocess call or file operation fails.
+        """
         nic = self.currentSettings["Active Interface"]
         inet = self.ipInputAddressEntry.get_text()
         netmask = self.ipInputMaskEntry.get_text()
         default_router = self.ipInputGatewayEntry.get_text()
+
         if self.method == 'Manual':
+            # Prepare and update manual configuration
             if 'wlan' in nic:
                 ifconfig_nic = f'ifconfig_{nic}="WPA inet {inet} netmask {netmask}"\n'
             else:
                 ifconfig_nic = f'ifconfig_{nic}="inet {inet} netmask {netmask}"\n'
             self.update_rc_conf(ifconfig_nic)
+
             default_router_line = f'default_router="{default_router}"\n'
             self.update_rc_conf(default_router_line)
+
             start_static_network(nic, inet, netmask)
-            resolv_conf = open('/etc/resolv.conf', 'w')
-            resolv_conf.writelines('# Generated by NetworkMgr\n')
-            search = self.searchEntry.get_text()
-            if search:
-                search_line = f'search {search}\n'
-                resolv_conf.writelines(search_line)
-            dns1 = self.primary_dns_entry.get_text()
-            nameserver1_line = f'nameserver {dns1}\n'
-            resolv_conf.writelines(nameserver1_line)
-            dns2 = self.secondary_dns_entry.get_text()
-            if dns2:
-                nameserver2_line = f'nameserver {dns2}\n'
-                resolv_conf.writelines(nameserver2_line)
-            resolv_conf.close()
+
+            # Update DNS settings
+            with open('/etc/resolv.conf', 'w') as resolv_conf:
+                resolv_conf.writelines('# Generated by NetworkMgr\n')
+                search = self.searchEntry.get_text()
+                if search:
+                    search_line = f'search {search}\n'
+                    resolv_conf.writelines(search_line)
+                dns1 = self.primary_dns_entry.get_text()
+                resolv_conf.writelines(f'nameserver {dns1}\n')
+                dns2 = self.secondary_dns_entry.get_text()
+                if dns2:
+                    resolv_conf.writelines(f'nameserver {dns2}\n')
         else:
+            # Prepare and update DHCP configuration
             if 'wlan' in nic:
                 ifconfig_nic = f'ifconfig_{nic}="WPA DHCP"\n'
             else:
                 ifconfig_nic = f'ifconfig_{nic}="DHCP"\n'
             self.update_rc_conf(ifconfig_nic)
 
+            # Remove old static routes if any
             rc_conf = open('/etc/rc.conf', 'r').read()
             for nic_search in self.NICS:
                 if re.search(f'^ifconfig_{nic_search}=".*inet', rc_conf, re.MULTILINE):
@@ -473,6 +549,8 @@ class NetCardConfigWindow(Gtk.Window):
             else:
                 default_router_line = f'default_router="{default_router}"\n'
                 self.remove_rc_conf_line(default_router_line)
+
+            # Restart network and DHCP services
             restart_card_network(nic)
             # sometimes the inet address isn't available immediately after dhcp is enabled.
             start_static_network(nic, inet, netmask)
@@ -488,20 +566,43 @@ class NetCardConfigWindow(Gtk.Window):
     def discard_pending_changes(self, widget):
         self.destroy()
 
-    def update_rc_conf(self, line):
+
+    def update_rc_conf(self, line: str) -> None:
+        """
+        Updates the /etc/rc.conf file with the given line.
+
+        This method executes the `sysrc` command to apply the configuration changes specified by the provided line.
+
+        :param line: The line to be added to /etc/rc.conf. It should be a properly formatted configuration line.
+        """
         run(f'sysrc {line}', shell=True)
 
-    def remove_rc_conf_line(self, line):
+    def remove_rc_conf_line(self, line: str) -> None:
+        """
+        Removes a specific line from the /etc/rc.conf file.
+
+        This method reads the /etc/rc.conf file, removes the line that matches the provided line,
+        and then writes the remaining lines back to the file.
+
+        :param line: The line to be removed from /etc/rc.conf. It should be a properly formatted configuration line.
+        """
         with open('/etc/rc.conf', "r+") as rc_conf:
             lines = rc_conf.readlines()
             rc_conf.seek(0)
-            idx = lines.index(line)
-            lines.pop(idx)
-            rc_conf.truncate()
-            rc_conf.writelines(lines)
+            if line in lines:
+                lines.remove(line)
+                rc_conf.truncate()
+                rc_conf.writelines(lines)
 
 
-def network_card_configuration(default_int):
+def network_card_configuration(default_int: Union[str, None] = None) -> None:
+    """
+    Initializes and displays the network card configuration window with the given default network interface.
+
+    If a default interface is provided, the window will pre-select this interface. Otherwise, it will show the configuration options for the default network card.
+
+    :param default_int: The default network interface to pre-select in the window. If None, no default interface is selected.
+    """
     win = NetCardConfigWindow(default_int)
     win.connect("destroy", Gtk.main_quit)
     win.show_all()
@@ -509,7 +610,12 @@ def network_card_configuration(default_int):
     Gtk.main()
 
 
-def network_card_configuration_window():
+def network_card_configuration_window() -> None:
+    """
+    Initializes and displays the network card configuration window without any pre-selected network interface.
+
+    This function will show the configuration options for the default network card and allow the user to select and configure network interfaces.
+    """
     win = NetCardConfigWindow()
     win.connect("destroy", Gtk.main_quit)
     win.show_all()
