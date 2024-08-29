@@ -14,7 +14,7 @@ from NetworkMgr.net_api import (
     start_network_card,
     wifi_disconnection,
     restart_all_nics,
-    stopallnetwork,
+    stop_all_network,
     start_all_network,
     connect_to_ssid,
     disable_wifi,
@@ -222,7 +222,7 @@ class TrayIcon(object):
         self.update_info()
 
     def close_network(self, widget):
-        stopallnetwork()
+        stop_all_network()
         self.update_info()
 
     def open_network(self, widget):
