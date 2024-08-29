@@ -3,7 +3,7 @@
 import re
 from subprocess import Popen, PIPE, run, check_output
 from time import sleep
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 
 def card_online(net_card: str) -> bool:
@@ -133,67 +133,105 @@ def network_service_state():
     return False
 
 
-def network_dictionary():
+def network_dictionary() -> Dict[str, Any]:
+    """
+    Generate a dictionary with network card information and states.
+
+    Returns:
+        A dictionary containing the network service state, default network card,
+        and a dictionary of network cards with their state and connection information.
+    """
     nlist = nics_list()
     main_dictionary = {
         'service': network_service_state(),
-        'default': default_card()
+        'default': default_card(),
+        'cards': {}
     }
-    cards = {}
+
     for card in nlist:
         if 'wlan' in card:
-            scanv = f"ifconfig {card} list scan | grep -va BSSID"
-            wifi = Popen(scanv, shell=True, stdout=PIPE, universal_newlines=True)
-            connection_info = {}
-            for line in wifi.stdout:
-                # don't sort empty ssid
-                # Window, macOS and Linux does not show does
-                if line.startswith(" " * 5):
-                    continue
-                ssid = line[:33].strip()
-                info = line[:83][33:].strip().split()
-                percentage = calculate_signal_strength_percentage(info[3])
-                # if ssid exist and percentage is higher keep it
-                # else add the new one if percentage is higher
-                if ssid in connection_info:
-                    if connection_info[ssid][4] > percentage:
-                        continue
-                info[3] = percentage
-                info.insert(0, ssid)
-                # append left over
-                info.append(line[83:].strip())
-                connection_info[ssid] = info
-            if if_wlan_disable(card):
-                connection_stat = {
-                    "connection": "Disabled",
-                    "ssid": None,
-                }
-            elif not if_statue(card):
-                connection_stat = {
-                    "connection": "Disconnected",
-                    "ssid": None,
-                }
-            else:
-                ssid = get_ssid(card)
-                connection_stat = {
-                    "connection": "Connected",
-                    "ssid": ssid,
-                }
-            second_dictionary = {
-                'state': connection_stat,
-                'info': connection_info
-            }
+            connection_info = get_wifi_info(card)
+            connection_stat = get_wlan_connection_status(card)
         else:
-            if card_online(card):
-                connection_stat = {"connection": "Connected"}
-            elif if_card_connected(card):
-                connection_stat = {"connection": "Disconnected"}
-            else:
-                connection_stat = {"connection": "Unplug"}
-            second_dictionary = {'state': connection_stat, 'info': None}
-        cards[card] = second_dictionary
-    main_dictionary['cards'] = cards
+            connection_info = None
+            connection_stat = get_ethernet_connection_status(card)
+
+        main_dictionary['cards'][card] = {
+            'state': connection_stat,
+            'info': connection_info
+        }
+
     return main_dictionary
+
+
+def get_wifi_info(card: str) -> Dict[str, List[str]]:
+    """
+    Retrieve Wi-Fi connection information for the specified wireless card.
+
+    Args:
+        card (str): The name of the wireless network card.
+
+    Returns:
+        Dict[str, List[str]]: A dictionary where each key is an SSID and the value is a list of related connection details.
+    """
+    scanv = f"ifconfig {card} list scan | grep -va BSSID"
+    wifi = Popen(scanv, shell=True, stdout=PIPE, universal_newlines=True)
+    connection_info: Dict[str, List[str]] = {}
+
+    for line in wifi.stdout:
+        if line.startswith(" " * 5):
+            continue
+        ssid = line[:33].strip()
+        info: list[str] = line[:83][33:].strip().split()
+        percentage = calculate_signal_strength_percentage(info[3])
+
+        if ssid in connection_info and int(connection_info[ssid][4]) > percentage:
+            continue
+
+        info[3] = str(percentage)
+        info.insert(0, ssid)
+        info.append(line[83:].strip())
+        connection_info[ssid] = info
+
+    return connection_info
+
+
+def get_wlan_connection_status(card: str) -> Dict[str, Optional[str]]:
+    """
+    Retrieve the connection status for a wireless network card.
+
+    Args:
+        card (str): The name of the wireless network card.
+
+    Returns:
+        Dict[str, Optional[str]]: A dictionary containing the connection status ('Connected',
+                                'Disconnected', or 'Disabled') and the SSID if connected.
+    """
+    if if_wlan_disable(card):
+        return {"connection": "Disabled", "ssid": None}
+    elif not if_statue(card):
+        return {"connection": "Disconnected", "ssid": None}
+    else:
+        return {"connection": "Connected", "ssid": get_ssid(card)}
+
+
+def get_ethernet_connection_status(card: str) -> Dict[str, str]:
+    """
+    Retrieve the connection status for an Ethernet network card.
+
+    Args:
+        card (str): The name of the Ethernet network card.
+
+    Returns:
+        Dict[str, str]: A dictionary containing the connection status ('Connected', 'Disconnected', or 'Unplug').
+    """
+    if card_online(card):
+        return {"connection": "Connected"}
+    elif if_card_connected(card):
+        return {"connection": "Disconnected"}
+    else:
+        return {"connection": "Unplug"}
+
 
 
 def connection_status(card: str, network_info: dict) -> str:
