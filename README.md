@@ -38,6 +38,12 @@ Users of NetworkMgr must be members of the _wheel_ group. To add a user:
 
 If the desktop environment supports XDG then you can simply log out, or restart the computer. NetworkMgr should start automatically at login time.
 
+## Managing Translations
+To create a translation file.
+```shell
+./setup.py create_translation --locale=fr
+```
+
 ## For Development discussion 
 
 You can join us at [#networkmgr](irc://irc.libera.chat:6697/networkmgr) on irc.libera.chat:6697
