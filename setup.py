@@ -4,16 +4,14 @@
 import os
 import sys
 from platform import system
-from setuptools import setup
 from subprocess import run
+
+from setuptools import setup, Command, glob
 
 __VERSION__ = '6.5'
 PROGRAM_VERSION = __VERSION__
 
 prefix = '/usr/local' if system() == 'FreeBSD' else sys.prefix
-
-# compiling translations
-os.system("sh compile_translations.sh")
 
 
 def datafilelist(installbase, sourcebase):
@@ -24,6 +22,64 @@ def datafilelist(installbase, sourcebase):
             fileList.append(os.path.join(root, f))
         datafileList.append((root.replace(sourcebase, installbase), fileList))
     return datafileList
+
+class UpdateTranslationsCommand(Command):
+    """Custom command to extract messages and update .po files."""
+
+    description = 'Extract messages to .pot and update .po'
+    user_options = []  # No custom options
+
+    def initialize_options(self):
+        pass
+
+    def finalize_options(self):
+        pass
+
+    def run(self):
+        # Define paths
+        pot_file = 'po/networkmgr.pot'
+        po_files = glob.glob('po/*.po')
+        # Step 1: Extract messages to .pot file
+        print("Extracting messages to .pot file...")
+        os.system(f'xgettext --from-code=UTF-8 -L Python -o {pot_file} networkmgr/*.py networkmgr')
+        # Step 2: Update .po files with the new .pot file
+        print("Updating .po files with new translations...")
+        for po_file in po_files:
+            print(f"Updating {po_file}...")
+            os.system(f'msgmerge -U {po_file} {pot_file}')
+        print("Translation update complete.")
+
+class CreateTranslationCommand(Command):
+    """Custom command to create a new .po file for a specific language."""
+    locale = None
+    description = 'Create a new .po file for the specified language'
+    user_options = [
+        ('locale=', 'l', 'Locale code for the new translation (e.g., fr, es)')
+    ]
+
+    def initialize_options(self):
+        self.locale = None  # Initialize the locale option to None
+
+    def finalize_options(self):
+        if self.locale is None:
+            raise Exception("You must specify the locale code (e.g., --locale=fr)")
+
+    def run(self):
+        # Define paths
+        pot_file = 'po/networkmgr.pot'
+        po_dir = 'po'
+        po_file = os.path.join(po_dir, f'{self.locale}.po')
+        # Check if the .pot file exists
+        if not os.path.exists(pot_file):
+            print("Extracting messages to .pot file...")
+            os.system(f'xgettext --from-code=UTF-8 -L Python -o {pot_file} networkmgr/*.py networkmgr')
+        # Create the new .po file
+        if not os.path.exists(po_file):
+            print(f"Creating new {po_file} for locale '{self.locale}'...")
+            os.makedirs(po_dir, exist_ok=True)
+            os.system(f'msginit --locale={self.locale} --input={pot_file} --output-file={po_file}')
+        else:
+            print(f"PO file for locale '{self.locale}' already exists: {po_file}")
 
 
 networkmgr_share = [
@@ -58,7 +114,11 @@ setup(
     data_files=data_files,
     install_requires=['setuptools'],
     packages=['NetworkMgr'],
-    scripts=['networkmgr', 'networkmgr_configuration']
+    scripts=['networkmgr', 'networkmgr_configuration'],
+    cmdclass={
+        'create_translation': CreateTranslationCommand,
+        'update_translations': UpdateTranslationsCommand,
+    }
 )
 
 run('gtk-update-icon-cache -f /usr/local/share/icons/hicolor', shell=True)

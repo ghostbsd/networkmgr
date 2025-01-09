@@ -39,7 +39,7 @@ def get_ssid(wificard):
                  shell=True, stdout=PIPE, universal_newlines=True)
     # If there are quotation marks in the string, use that as a separator,
     # otherwise use the default whitespace. This is to handle ssid strings
-    # with spaces in them. These ssid strings will be double quoted by ifconfig
+    # with spaces in them. These ssid strings will be double-quoted by ifconfig
     temp = wlan.stdout.readlines()[0].rstrip()
     if '"' in temp:
         out = temp.split('"')[1]
