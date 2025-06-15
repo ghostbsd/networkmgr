@@ -63,7 +63,7 @@ msgstr "WiFi %s 已断开连接"
 #: src/trayicon.py:113 src/trayicon.py:131
 #, python-format
 msgid "Disable Wifi %s"
-msgstr "关闭 Wifi %s"
+msgstr "关闭 WiFi %s"
 
 #: src/trayicon.py:119
 #, python-format
