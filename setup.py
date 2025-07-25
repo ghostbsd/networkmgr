@@ -8,7 +8,7 @@ from subprocess import run
 
 from setuptools import setup, Command, glob
 
-__VERSION__ = '6.5'
+__VERSION__ = '6.6'
 PROGRAM_VERSION = __VERSION__
 
 prefix = '/usr/local' if system() == 'FreeBSD' else sys.prefix
