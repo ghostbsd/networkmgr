@@ -59,7 +59,5 @@ else:
     if f'ifconfig_{nic}=' not in rc_conf_content:
         with rc_conf.open('a') as rc:
             rc.writelines(f'ifconfig_{nic}="DHCP"\n')
-    with open(f'/tmp/network-{nic}', 'w') as network:
-        network.writelines(f'attached')
 
 Popen(f'/etc/pccard_ether {nic} startchildren', shell=True)
