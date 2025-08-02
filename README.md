@@ -43,7 +43,7 @@ To create a translation file.
 ```shell
 ./setup.py create_translation --locale=fr
 ```
-
-## For Development discussion 
-
-You can join us at [#networkmgr](irc://irc.libera.chat:6697/networkmgr) on irc.libera.chat:6697
+To update all translation files
+```shell
+./setup.py update_translations
+```

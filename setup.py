@@ -5,14 +5,15 @@ import os
 import sys
 from platform import system
 from subprocess import run
-
 from setuptools import setup, Command, glob
+from DistUtilsExtra.command.build_extra import build_extra
+from DistUtilsExtra.command.build_i18n import build_i18n
+from DistUtilsExtra.command.clean_i18n import clean_i18n
 
-__VERSION__ = '6.6'
+__VERSION__ = '6.7'
 PROGRAM_VERSION = __VERSION__
 
 prefix = '/usr/local' if system() == 'FreeBSD' else sys.prefix
-
 
 def datafilelist(installbase, sourcebase):
     datafileList = []
@@ -77,7 +78,7 @@ class CreateTranslationCommand(Command):
         if not os.path.exists(po_file):
             print(f"Creating new {po_file} for locale '{self.locale}'...")
             os.makedirs(po_dir, exist_ok=True)
-            os.system(f'msginit --locale={self.locale} --input={pot_file} --output-file={po_file}')
+            os.system(f'msginit --locale={self.locale}.UTF-8 --input={pot_file} --output-file={po_file}')
         else:
             print(f"PO file for locale '{self.locale}' already exists: {po_file}")
 
@@ -91,17 +92,13 @@ networkmgr_share = [
 data_files = [
     (f'{prefix}/etc/xdg/autostart', ['src/networkmgr.desktop']),
     (f'{prefix}/share/networkmgr', networkmgr_share),
-    (f'{prefix}/share/locale/zh_CN/LC_MESSAGES', ['src/locale/zh_CN/networkmgr.mo']),
-    (f'{prefix}/share/locale/ru/LC_MESSAGES', ['src/locale/ru/networkmgr.mo']),
-    (f'{prefix}/etc/sudoers.d', ['src/sudoers.d/networkmgr'])
+    (f'{prefix}/etc/sudoers.d', ['src/sudoers.d/networkmgr']),
+    (f'{prefix}/etc/devd', ['src/networkmgr.conf'])
 ]
 
-if os.path.exists('/etc/devd'):
-    data_files.append((f'{prefix}/etc/devd', ['src/networkmgr.conf']))
-if os.path.exists('/etc/devd-openrc'):
-    data_files.append((f'{prefix}/etc/devd-openrc', ['src/networkmgr.conf']))
-
 data_files.extend(datafilelist(f'{prefix}/share/icons/hicolor', 'src/icons'))
+data_files.extend(datafilelist(f'{prefix}/share/locale', 'build/mo'))
+
 
 setup(
     name="NetworkMgr",
@@ -118,6 +115,9 @@ setup(
     cmdclass={
         'create_translation': CreateTranslationCommand,
         'update_translations': UpdateTranslationsCommand,
+        "build": build_extra,
+        "build_i18n": build_i18n,
+        "clean": clean_i18n
     }
 )
 
