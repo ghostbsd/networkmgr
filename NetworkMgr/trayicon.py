@@ -25,6 +25,12 @@ from NetworkMgr.net_api import (
 )
 from NetworkMgr.configuration import network_card_configuration
 
+from NetworkMgr.wg_api import (
+    wireguardDictionary,
+    disableWG,
+    enableWG,
+    wg_status
+)
 
 gettext.bindtextdomain('networkmgr', '/usr/local/share/locale')
 gettext.textdomain('networkmgr')
@@ -64,6 +70,30 @@ class trayIcon(object):
 
     def nm_menu(self):
         self.menu = Gtk.Menu()
+        wg_title = Gtk.MenuItem()
+        wg_title.set_label(_("WireGuard VPN"))
+        wg_title.set_sensitive(False)
+        self.menu.append(wg_title)
+        self.menu.append(Gtk.SeparatorMenuItem())
+        wgDevices = self.wginfo['configs']
+        for wgDev in wgDevices:
+            connection_state = wgDevices[wgDev]['state']
+            connection_info = wgDevices[wgDev]['info']
+            if connection_state == "Connected":
+                    wg_item = Gtk.MenuItem(_("%s Connected") % connection_info)
+                    wg_item.set_sensitive(False)
+                    self.menu.append(wg_item)
+                    disconnectwg_item = Gtk.ImageMenuItem(_(f"Disable {wgDev}"))
+                    disconnectwg_item.connect("activate", self.disconnectWG, wgDev)
+                    self.menu.append(disconnectwg_item)
+            else:
+                    notonlinewg = Gtk.MenuItem(_("%s Disconnected") % connection_info)
+                    notonlinewg.set_sensitive(False)
+                    self.menu.append(notonlinewg)
+                    wiredwg_item = Gtk.MenuItem(_("Enable"))
+                    wiredwg_item.connect("activate", self.connectWG, wgDev)
+                    self.menu.append(wiredwg_item)
+        self.menu.append(Gtk.SeparatorMenuItem())
         e_title = Gtk.MenuItem()
         e_title.set_label(_("Ethernet Network"))
         e_title.set_sensitive(False)
@@ -220,6 +250,14 @@ class trayIcon(object):
         stopnetworkcard(netcard)
         self.updateinfo()
 
+    def connectWG(self, widget, wginfo):
+        enableWG(wginfo)
+        self.updateinfo()
+
+    def disconnectWG(self, widget, wginfo):
+        disableWG(wginfo)
+        self.updateinfo()
+
     def closeNetwork(self, widget):
         stopallnetwork()
         self.updateinfo()
@@ -258,6 +296,7 @@ class trayIcon(object):
             defaultcard = self.cardinfo['default']
             default_type = self.network_type(defaultcard)
             GLib.idle_add(self.updatetray, defaultcard, default_type)
+            self.wginfo = wireguardDictionary()
             self.if_running = False
 
     def updatetray(self, defaultdev, default_type):
