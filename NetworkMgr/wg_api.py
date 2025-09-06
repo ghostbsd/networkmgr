@@ -4,7 +4,7 @@ from platform import system
 from subprocess import Popen, PIPE, run, check_output, os
 
 prefix = '/usr/local' if system() == 'FreeBSD' else sys.prefix
-wgconfigpath = prefix + '/etc/wireguard/'
+wgconfigpath = f'{prefix}/etc/wireguard/'
 
 def wg_service_state():
     run('service wireguard status', shell=True)
