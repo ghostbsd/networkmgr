@@ -31,14 +31,14 @@ def wg_dictionary():
     if os.path.exists(WG_CONFIG_PATH):
         wgconfigs = sorted(os.listdir(WG_CONFIG_PATH))
         for wgconfig in wgconfigs:
-            content = open(WG_CONFIG_PATH + wgconfig, encoding="utf-8")
             wg_device = wgconfig.replace('.conf', '')
             wg_state = wg_status(wg_device)
             wg_name = wg_device
-            for line in content:
-                if "# Name = " in line:
-                    wg_name = line.split('=')[1].strip()
-                    break
+            with open(WG_CONFIG_PATH + wgconfig, encoding="utf-8") as content:
+                for line in content:
+                    if "# Name = " in line:
+                        wg_name = line.split('=')[1].strip()
+                        break
 
             seconddictionary = { 'state': wg_state, 'info': wg_name }
             configs[wg_device] = seconddictionary
