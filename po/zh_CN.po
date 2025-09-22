@@ -1,7 +1,7 @@
 # SOME DESCRIPTIVE TITLE.
 # Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
 # This file is distributed under the same license as the PACKAGE package.
-# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+# ykla <yklaxds@gmail.com>, 2025
 #
 #, fuzzy
 msgid ""
@@ -9,14 +9,14 @@ msgstr ""
 "Project-Id-Version: networkmgr\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2022-08-29 15:54+0800\n"
-"PO-Revision-Date: 2025-06-15 22:25+0800\n"
+"PO-Revision-Date: 2025-09-07 10:33+0800\n"
 "Last-Translator: ykla <yklaxds@gmail.com>\n"
 "Language-Team: ykla <yklaxds@gmail.com>\n"
 "Language: zh_CN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"X-Generator: Poedit 3.6\n"
+"X-Generator: Poedit 3.7\n"
 
 #: src/trayicon.py:67
 msgid "Ethernet Network"
@@ -25,7 +25,7 @@ msgstr "以太网"
 #: src/trayicon.py:78
 #, python-format
 msgid "Wired %s Connected"
-msgstr "已连接有线 %s"
+msgstr "有线 %s 已连接"
 
 #: src/trayicon.py:81
 msgid "Disable"
@@ -34,11 +34,11 @@ msgstr "禁用"
 #: src/trayicon.py:86
 #, python-format
 msgid "Wired %s Disconnected"
-msgstr "已中断有线 %s"
+msgstr "有线 %s 已断开"
 
 #: src/trayicon.py:89
 msgid "Enable"
-msgstr "开启"
+msgstr "启用"
 
 #: src/trayicon.py:93
 #, python-format
@@ -48,32 +48,32 @@ msgstr "已拔出有线 %s"
 #: src/trayicon.py:101
 #, python-format
 msgid "WiFi %s Disabled"
-msgstr "已禁用 WiFi %s"
+msgstr "WiFi %s 已禁用"
 
 #: src/trayicon.py:104
 #, python-format
 msgid "Enable Wifi %s"
-msgstr "开启 WiFi %s"
+msgstr "启用 WiFi %s"
 
 #: src/trayicon.py:109
 #, python-format
 msgid "WiFi %s Disconnected"
-msgstr "WiFi %s 已断开连接"
+msgstr "WiFi %s 已断开"
 
 #: src/trayicon.py:113 src/trayicon.py:131
 #, python-format
 msgid "Disable Wifi %s"
-msgstr "关闭 WiFi %s"
+msgstr "禁用 WiFi %s"
 
 #: src/trayicon.py:119
 #, python-format
 msgid "WiFi %s Connected"
-msgstr "已链接 WiFi %s"
+msgstr "WiFi %s 已连接"
 
 #: src/trayicon.py:125
 #, python-format
 msgid "Disconnect from %s"
-msgstr "已断开与 %s 的连接"
+msgstr "已与 %s 断开连接"
 
 #: src/trayicon.py:139
 msgid "Enable Networking"
@@ -85,7 +85,7 @@ msgstr "禁用网络"
 
 #: src/trayicon.py:148
 msgid "Close Network Manager"
-msgstr "关闭网络管理器"
+msgstr "退出网络管理器"
 
 #: src/trayicon.py:156
 msgid "Available Connections"
@@ -98,12 +98,12 @@ msgstr "需要无线网络身份验证"
 #: src/trayicon.py:376
 #, python-brace-format
 msgid "{ssid_info[0]} Wi-Fi Network Authentication failed"
-msgstr "{ssid_info[0]} 无线网络身份验证失败"
+msgstr "无线网络 {ssid_info[0]} 身份验证失败"
 
 #: src/trayicon.py:378
 #, python-brace-format
 msgid "Authentication required by {ssid_info[0]} Wi-Fi Network"
-msgstr "{ssid_info[0]} 无线网络需要身份验证"
+msgstr "无线网络 {ssid_info[0]} 需要身份验证"
 
 #: src/trayicon.py:381
 msgid "Password:"
