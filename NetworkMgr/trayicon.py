@@ -460,7 +460,9 @@ class trayIcon(object):
 
     def setup_wpa_supplicant(self, ssid, ssid_info, pwd, card):
         # Determine caps string - handle extended ssid_info format
-        caps_string = ssid_info[-1] if len(ssid_info) <= 7 else ssid_info[6]
+        # Index 7 contains the full caps_string (e.g., "RSN HTCAP WME...")
+        # Index 6 is the short CAPS (e.g., "EPS") which doesn't contain RSN/WPA
+        caps_string = ssid_info[7] if len(ssid_info) > 7 else ssid_info[-1]
         if 'RSN' in caps_string:
             # /etc/wpa_supplicant.conf written by networkmgr
             ws = '\nnetwork={'
