@@ -86,13 +86,34 @@ def barpercent(sn):
 def is_enterprise_network(caps_string):
     """
     Detect if a network uses WPA-Enterprise (802.1X/EAP) authentication.
-    FreeBSD ifconfig scan shows 'WPA2-EAP' or similar for enterprise networks.
+
+    FreeBSD ifconfig scan doesn't explicitly distinguish PSK from EAP.
+    We use heuristics based on capability flags:
+
+    1. Explicit EAP indicators (if present)
+    2. RSN without WPS AND without typical home router flags (HTCAP, VHTCAP, ATH)
+       suggests a minimal enterprise AP configuration
+
+    Note: This is imperfect - some networks may be misdetected.
     """
-    enterprise_indicators = ['EAP', '802.1X', 'WPA2-EAP', 'WPA-EAP', 'RSN-EAP']
     caps_upper = caps_string.upper()
+
+    # Explicit enterprise indicators (highest confidence)
+    enterprise_indicators = ['EAP', '802.1X', 'WPA2-EAP', 'WPA-EAP', 'RSN-EAP']
     for indicator in enterprise_indicators:
         if indicator in caps_upper:
             return True
+
+    # Heuristic: RSN without WPS and without typical consumer router features
+    # Enterprise APs often have minimal beacon flags
+    has_rsn = 'RSN' in caps_upper
+    has_wps = 'WPS' in caps_upper
+    has_consumer_features = any(f in caps_upper for f in ['HTCAP', 'VHTCAP', 'ATH', 'WME'])
+
+    # Only flag as enterprise if: has RSN, no WPS, and no typical consumer features
+    if has_rsn and not has_wps and not has_consumer_features:
+        return True
+
     return False
 
 
