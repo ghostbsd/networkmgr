@@ -192,8 +192,8 @@ class trayIcon(object):
 
     def ssid_menu_item(self, sn, caps, ssid, ssid_info, wificard):
         menu_item = Gtk.ImageMenuItem(ssid)
-        # Check if enterprise network (index 8 contains enterprise flag)
-        is_enterprise = len(ssid_info) > 8 and ssid_info[8]
+        # Check if enterprise network (index 9 contains enterprise flag boolean)
+        is_enterprise = len(ssid_info) > 9 and ssid_info[9] is True
         if caps in ('E', 'ES'):
             is_secure = False
             click_action = self.menu_click_open
