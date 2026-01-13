@@ -247,7 +247,13 @@ class trayIcon(object):
         self.updateinfo()
 
     def menu_click_enterprise(self, widget, ssid_info, wificard):
-        if f'"{ssid_info[0]}"' in open('/etc/wpa_supplicant.conf').read():
+        ssid_configured = False
+        try:
+            with open('/etc/wpa_supplicant.conf', 'r') as conf:
+                ssid_configured = f'"{ssid_info[0]}"' in conf.read()
+        except (FileNotFoundError, PermissionError, IOError):
+            ssid_configured = False
+        if ssid_configured:
             connectToSsid(ssid_info[0], wificard)
         else:
             self.EnterpriseAuthentication(ssid_info, wificard, False)
@@ -580,16 +586,16 @@ class trayIcon(object):
 
         # Title
         if failed:
-            title_text = _(f"{ssid_info[0]} Enterprise Authentication Failed")
+            title_text = _("%s Enterprise Authentication Failed") % ssid_info[0]
         else:
-            title_text = _(f"Enterprise Authentication for {ssid_info[0]}")
+            title_text = _("Enterprise Authentication for %s") % ssid_info[0]
         title_label = Gtk.Label()
         title_label.set_markup(f"<b><span size='large'>{title_text}</span></b>")
         main_box.pack_start(title_label, False, False, 5)
 
         # Security info
         security_type = ssid_info[7] if len(ssid_info) > 7 else "WPA2-EAP"
-        security_label = Gtk.Label(_(f"Security: {security_type}"))
+        security_label = Gtk.Label(_("Security: %s") % security_type)
         main_box.pack_start(security_label, False, False, 0)
 
         # Grid for form fields

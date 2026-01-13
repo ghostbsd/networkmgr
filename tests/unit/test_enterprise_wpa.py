@@ -70,7 +70,8 @@ class TestSecurityTypeDetection:
     def test_get_security_type_wpa2_psk(self):
         """Test WPA2-PSK detection."""
         assert get_security_type("RSN HTCAP WME") == "WPA2-PSK"
-        assert get_security_type("RSN") == "WPA2-PSK"
+        # Bare RSN without consumer features is classified as enterprise
+        assert get_security_type("RSN") == "WPA2-EAP"
 
     def test_get_security_type_wpa_psk(self):
         """Test WPA-PSK detection."""

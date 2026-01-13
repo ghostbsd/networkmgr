@@ -410,6 +410,14 @@ def wait_inet(card):
             break
 
 
+def _escape_wpa_value(value):
+    """Escape special characters for wpa_supplicant.conf quoted strings."""
+    if not value:
+        return value
+    # Escape backslashes first, then quotes
+    return value.replace('\\', '\\\\').replace('"', '\\"')
+
+
 def generate_eap_config(ssid, eap_config):
     """
     Generate wpa_supplicant network block for EAP/Enterprise authentication.
@@ -427,18 +435,19 @@ def generate_eap_config(ssid, eap_config):
         - domain_suffix_match: server domain validation (optional)
     """
     eap_method = eap_config.get('eap_method', 'PEAP')
-    identity = eap_config.get('identity', '')
-    password = eap_config.get('password', '')
-    ca_cert = eap_config.get('ca_cert', '')
-    client_cert = eap_config.get('client_cert', '')
-    private_key = eap_config.get('private_key', '')
-    private_key_passwd = eap_config.get('private_key_passwd', '')
+    identity = _escape_wpa_value(eap_config.get('identity', ''))
+    password = _escape_wpa_value(eap_config.get('password', ''))
+    ca_cert = _escape_wpa_value(eap_config.get('ca_cert', ''))
+    client_cert = _escape_wpa_value(eap_config.get('client_cert', ''))
+    private_key = _escape_wpa_value(eap_config.get('private_key', ''))
+    private_key_passwd = _escape_wpa_value(eap_config.get('private_key_passwd', ''))
     phase2 = eap_config.get('phase2', 'MSCHAPV2')
-    anonymous_identity = eap_config.get('anonymous_identity', '')
-    domain_suffix_match = eap_config.get('domain_suffix_match', '')
+    anonymous_identity = _escape_wpa_value(eap_config.get('anonymous_identity', ''))
+    domain_suffix_match = _escape_wpa_value(eap_config.get('domain_suffix_match', ''))
+    ssid_escaped = _escape_wpa_value(ssid)
 
     ws = '\nnetwork={'
-    ws += f'\n\tssid="{ssid}"'
+    ws += f'\n\tssid="{ssid_escaped}"'
     ws += '\n\tkey_mgmt=WPA-EAP'
     ws += f'\n\teap={eap_method}'
     ws += f'\n\tidentity="{identity}"'
