@@ -6,7 +6,7 @@ This document describes how to set up a test environment for Enterprise WPA (WPA
 
 - FreeBSD/GhostBSD system
 - A wireless card that supports AP mode (for hostapd)
-- Another wireless card (or separate machine) for testing as client
+- Another wireless card (or separate machine) for testing as a client
 
 ## Installation
 
