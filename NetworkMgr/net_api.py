@@ -327,8 +327,9 @@ def start_static_ipv6_network(netcard, inet6, prefixlen):
 
 
 def enable_slaac(netcard):
-    """Enable SLAAC (Stateless Address Autoconfiguration) on the interface."""
-    # Remove any existing IPv6 addresses first
+    """Enable SLAAC (Stateless Address Autoconfiguration) on the interface
+    by toggling accept_rtadv and soliciting router advertisements."""
+    # First disable, then re-enable to ensure clean state
     run(f'ifconfig {netcard} inet6 -accept_rtadv', shell=True)
     sleep(0.5)
     # Enable accept_rtadv for SLAAC
@@ -343,10 +344,11 @@ def disable_slaac(netcard):
 
 
 def get_ipv6_addresses(netcard):
-    """Get all IPv6 addresses configured on the interface."""
+    """Get all IPv6 addresses configured on the interface.
+    Returns list of tuples: (address, prefixlen)."""
     try:
         output = check_output(f'ifconfig {netcard}', shell=True, universal_newlines=True)
-        # Match inet6 addresses, excluding link-local (fe80::) and localhost (::1)
+        # Match all inet6 addresses with their prefix lengths
         addresses = re.findall(r'inet6 ([0-9a-fA-F:]+)%?\S* prefixlen (\d+)', output)
         return [(addr, int(prefixlen)) for addr, prefixlen in addresses]
     except Exception:
