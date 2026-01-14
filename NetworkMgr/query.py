@@ -57,7 +57,7 @@ def get_interface_settings_ipv6(active_nic):
     # Get IPv6 default gateway from rc.conf or routing table
     # Pattern allows optional interface suffix for link-local (e.g., fe80::1%em0)
     gateway_search = re.search(
-        r'^ipv6_defaultrouter="([0-9a-fA-F:%]+)"',
+        r'^ipv6_defaultrouter="([0-9a-fA-F:]+(?:%[a-zA-Z0-9]+)?)"',
         rc_conf,
         re.MULTILINE
     )
