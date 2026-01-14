@@ -11,9 +11,12 @@ from NetworkMgr.net_api import (
     restart_card_network,
     restart_routing_and_dhcp,
     start_static_network,
+    start_static_ipv6_network,
+    enable_slaac,
+    disable_slaac,
     wait_inet
 )
-from NetworkMgr.query import get_interface_settings
+from NetworkMgr.query import get_interface_settings, get_interface_settings_ipv6
 from subprocess import run
 
 rcconf = open('/etc/rc.conf', 'r').read()
@@ -46,20 +49,28 @@ class netCardConfigWindow(Gtk.Window):
                 self.saveButton.set_sensitive(True)
 
     def edit_ipv6_setting(self, widget, value):
-        if value == "SLAAC":
-            self.ipInputAddressEntry6.set_sensitive(False)
-            self.ipInputMaskEntry6.set_sensitive(False)
-            self.ipInputGatewayEntry6.set_sensitive(False)
-            self.prymary_dnsEntry6.set_sensitive(False)
-            self.searchEntry6.set_sensitive(False)
-            self.saveButton.set_sensitive(False)
-        else:
-            self.ipInputAddressEntry6.set_sensitive(True)
-            self.ipInputMaskEntry6.set_sensitive(True)
-            self.ipInputGatewayEntry6.set_sensitive(True)
-            self.prymary_dnsEntry6.set_sensitive(True)
-            self.searchEntry6.set_sensitive(True)
-            self.saveButton.set_sensitive(True)
+        if widget.get_active():
+            self.method6 = value
+            # Check if GUI elements exist (may be called during init)
+            if not hasattr(self, 'ipInputAddressEntry6'):
+                return
+            if value == "SLAAC":
+                self.ipInputAddressEntry6.set_sensitive(False)
+                self.ipInputMaskEntry6.set_sensitive(False)
+                self.ipInputGatewayEntry6.set_sensitive(False)
+                self.prymary_dnsEntry6.set_sensitive(False)
+                self.searchEntry6.set_sensitive(False)
+            else:
+                self.ipInputAddressEntry6.set_sensitive(True)
+                self.ipInputMaskEntry6.set_sensitive(True)
+                self.ipInputGatewayEntry6.set_sensitive(True)
+                self.prymary_dnsEntry6.set_sensitive(True)
+                self.searchEntry6.set_sensitive(True)
+            # Enable save button if method changed
+            if self.method6 == self.currentSettings6["Assignment Method"]:
+                self.saveButton.set_sensitive(False)
+            else:
+                self.saveButton.set_sensitive(True)
 
     def entry_trigger_save_button(self, widget, event):
         self.saveButton.set_sensitive(True)
@@ -92,6 +103,9 @@ class netCardConfigWindow(Gtk.Window):
             interfaceComboBox.set_active(active_index)
         self.currentSettings = get_interface_settings(DEFAULT_NIC)
         self.method = self.currentSettings["Assignment Method"]
+        # IPv6 settings
+        self.currentSettings6 = get_interface_settings_ipv6(DEFAULT_NIC)
+        self.method6 = self.currentSettings6["Assignment Method"]
         interfaceComboBox.connect("changed", self.cbox_config_refresh, self.NICS)
 
         # Build Label to sit in front of the ComboBox
@@ -267,31 +281,37 @@ class netCardConfigWindow(Gtk.Window):
         interfaceBox6.pack_start(labelOne6, False, False, 0)
         interfaceBox6.pack_end(interfaceComboBox6, True, True, 0)
 
-        # Add radio button to toggle DHCP or not
-        rb_slaac6 = Gtk.RadioButton.new_with_label(None, "SLAAC")
-        rb_slaac6.set_margin_top(15)
-        rb_slaac6.connect("toggled", self.edit_ipv6_setting, "SLAAC")
-        rb_manual6 = Gtk.RadioButton.new_with_label_from_widget(
-            rb_slaac6, "Manual")
-        rb_manual6.set_margin_top(15)
-        rb_manual6.join_group(rb_slaac6)
-        rb_manual6.connect("toggled", self.edit_ipv6_setting, "Manual")
+        # Add radio button to toggle SLAAC or Manual
+        self.rb_slaac6 = Gtk.RadioButton.new_with_label(None, "SLAAC")
+        self.rb_slaac6.set_margin_top(15)
+        self.rb_slaac6.connect("toggled", self.edit_ipv6_setting, "SLAAC")
+        self.rb_manual6 = Gtk.RadioButton.new_with_label_from_widget(
+            self.rb_slaac6, "Manual")
+        self.rb_manual6.set_margin_top(15)
+        self.rb_manual6.join_group(self.rb_slaac6)
+        self.rb_manual6.connect("toggled", self.edit_ipv6_setting, "Manual")
 
-        radioButtonLabel6 = Gtk.Label(label="IPv4 Method:")
+        # Set initial state based on current settings
+        if self.method6 == "Manual":
+            self.rb_manual6.set_active(True)
+        else:
+            self.rb_slaac6.set_active(True)
+
+        radioButtonLabel6 = Gtk.Label(label="IPv6 Method:")
         radioButtonLabel6.set_margin_top(15)
         radioButtonLabel6.set_margin_start(30)
 
         radioBox6 = Gtk.Box(orientation=0, spacing=50)
         radioBox6.set_homogeneous(False)
         radioBox6.pack_start(radioButtonLabel6, False, False, 0)
-        radioBox6.pack_start(rb_slaac6, True, False, 0)
-        radioBox6.pack_end(rb_manual6, True, True, 0)
+        radioBox6.pack_start(self.rb_slaac6, True, False, 0)
+        radioBox6.pack_end(self.rb_manual6, True, True, 0)
 
         # Add Manual Address Field
         ipInputAddressLabel6 = Gtk.Label(label="Address")
         ipInputAddressLabel6.set_margin_top(15)
 
-        ipInputMaskLabel6 = Gtk.Label(label="Subnet Mask")
+        ipInputMaskLabel6 = Gtk.Label(label="Prefix Length")
         ipInputMaskLabel6.set_margin_top(15)
 
         ipInputGatewayLabel6 = Gtk.Label(label="Gateway")
@@ -301,7 +321,7 @@ class netCardConfigWindow(Gtk.Window):
         self.ipInputAddressEntry6.set_margin_start(15)
         self.ipInputAddressEntry6.connect("key-release-event", self.entry_trigger_save_button)
         self.ipInputMaskEntry6 = Gtk.Entry()
-        self.ipInputAddressEntry6.connect("key-release-event", self.entry_trigger_save_button)
+        self.ipInputMaskEntry6.connect("key-release-event", self.entry_trigger_save_button)
         self.ipInputGatewayEntry6 = Gtk.Entry()
         self.ipInputGatewayEntry6.set_margin_end(15)
         self.ipInputGatewayEntry6.connect("key-release-event", self.entry_trigger_save_button)
@@ -353,11 +373,13 @@ class netCardConfigWindow(Gtk.Window):
         searchBox6.pack_start(searchLabel6, False, False, 0)
         searchBox6.pack_end(self.searchEntry6, True, True, 0)
 
-        self.ipInputAddressEntry6.set_sensitive(False)
-        self.ipInputMaskEntry6.set_sensitive(False)
-        self.ipInputGatewayEntry6.set_sensitive(False)
-        self.prymary_dnsEntry6.set_sensitive(False)
-        self.searchEntry6.set_sensitive(False)
+        # Set initial sensitivity based on current method (SLAAC = disabled, Manual = enabled)
+        manual_enabled = (self.method6 == "Manual")
+        self.ipInputAddressEntry6.set_sensitive(manual_enabled)
+        self.ipInputMaskEntry6.set_sensitive(manual_enabled)
+        self.ipInputGatewayEntry6.set_sensitive(manual_enabled)
+        self.prymary_dnsEntry6.set_sensitive(manual_enabled)
+        self.searchEntry6.set_sensitive(manual_enabled)
 
         gridOne6 = Gtk.Grid()
         gridOne6.set_column_homogeneous(True)
@@ -370,7 +392,6 @@ class netCardConfigWindow(Gtk.Window):
         gridOne6.attach(ipEntryBox6, 0, 3, 4, 1)
         gridOne6.attach(dnsEntryBox6, 0, 4, 4, 1)
         gridOne6.attach(searchBox6, 0, 5, 4, 1)
-        gridOne6.set_sensitive(False)
 
         # Build Notebook
 
@@ -401,7 +422,7 @@ class netCardConfigWindow(Gtk.Window):
 
         # Apply Tab 2 content and formatting to the notebook
         nb.append_page(gridOne6)
-        nb.set_tab_label_text(gridOne6, "IPv6 Settings WIP")
+        nb.set_tab_label_text(gridOne6, "IPv6 Settings")
         # Put all the widgets together into one window
         mainBox = Gtk.Box(orientation=1, spacing=0)
         mainBox.pack_start(nb, True, True, 0)
@@ -412,8 +433,11 @@ class netCardConfigWindow(Gtk.Window):
     # for the newly selected active interface.
     def cbox_config_refresh(self, widget, nics):
         # actions here need to refresh the values on the first two tabs.
-        self.currentSettings = get_interface_settings(nics[widget.get_active()])
+        selected_nic = nics[widget.get_active()]
+        self.currentSettings = get_interface_settings(selected_nic)
+        self.currentSettings6 = get_interface_settings_ipv6(selected_nic)
         self.update_interface_settings()
+        self.update_interface_settings_ipv6()
 
     def update_interface_settings(self):
         self.ipInputAddressEntry.set_text(self.currentSettings["Interface IP"])
@@ -426,6 +450,28 @@ class netCardConfigWindow(Gtk.Window):
             self.rb_dhcp4.set_active(True)
         else:
             self.rb_manual4.set_active(True)
+
+    def update_interface_settings_ipv6(self):
+        self.ipInputAddressEntry6.set_text(self.currentSettings6.get("Interface IPv6", ""))
+        self.ipInputMaskEntry6.set_text(str(self.currentSettings6.get("Prefix Length", "64")))
+        self.ipInputGatewayEntry6.set_text(self.currentSettings6.get("Default Gateway", ""))
+        self.prymary_dnsEntry6.set_text(self.currentSettings6.get("DNS Server 1", ""))
+        self.searchEntry6.set_text(self.currentSettings6.get("Search Domain", ""))
+        self.method6 = self.currentSettings6.get("Assignment Method", "SLAAC")
+        if self.method6 == "Manual":
+            self.rb_manual6.set_active(True)
+            self.ipInputAddressEntry6.set_sensitive(True)
+            self.ipInputMaskEntry6.set_sensitive(True)
+            self.ipInputGatewayEntry6.set_sensitive(True)
+            self.prymary_dnsEntry6.set_sensitive(True)
+            self.searchEntry6.set_sensitive(True)
+        else:
+            self.rb_slaac6.set_active(True)
+            self.ipInputAddressEntry6.set_sensitive(False)
+            self.ipInputMaskEntry6.set_sensitive(False)
+            self.ipInputGatewayEntry6.set_sensitive(False)
+            self.prymary_dnsEntry6.set_sensitive(False)
+            self.searchEntry6.set_sensitive(False)
 
     def commit_pending_changes(self, widget):
         self.hide_window()
@@ -479,7 +525,80 @@ class netCardConfigWindow(Gtk.Window):
             wait_inet(nic)
             restart_routing_and_dhcp(nic)
 
+        # Apply IPv6 configuration
+        self.update_system_ipv6(nic)
+
         self.destroy()
+
+    def update_system_ipv6(self, nic):
+        """Apply IPv6 configuration changes."""
+        inet6 = self.ipInputAddressEntry6.get_text()
+        prefixlen = self.ipInputMaskEntry6.get_text() or "64"
+        gateway6 = self.ipInputGatewayEntry6.get_text()
+        dns6 = self.prymary_dnsEntry6.get_text()
+
+        if self.method6 == 'Manual':
+            # Static IPv6 configuration
+            ifconfig_ipv6 = f'ifconfig_{nic}_ipv6="inet6 {inet6} prefixlen {prefixlen}"'
+            self.update_rc_conf(ifconfig_ipv6)
+
+            # Disable rtsold for static configuration
+            self.update_rc_conf('rtsold_enable="NO"')
+
+            # Apply the static IPv6 address
+            if inet6:
+                disable_slaac(nic)
+                start_static_ipv6_network(nic, inet6, prefixlen)
+
+            # Set IPv6 default gateway if provided
+            if gateway6:
+                # Link-local addresses (fe80::) need interface suffix
+                if gateway6.lower().startswith('fe80:') and '%' not in gateway6:
+                    gateway6_full = f'{gateway6}%{nic}'
+                else:
+                    gateway6_full = gateway6
+                # Save with interface suffix in rc.conf for persistence
+                self.update_rc_conf(f'ipv6_defaultrouter="{gateway6_full}"')
+                # Apply gateway immediately
+                run('route delete -inet6 default 2>/dev/null', shell=True)
+                run(f'route add -inet6 default {gateway6_full}', shell=True)
+
+            # Add IPv6 DNS to resolv.conf if provided
+            if dns6:
+                self.add_ipv6_dns(dns6)
+        else:
+            # SLAAC configuration
+            ifconfig_ipv6 = f'ifconfig_{nic}_ipv6="inet6 accept_rtadv"'
+            self.update_rc_conf(ifconfig_ipv6)
+
+            # Enable rtsold for SLAAC
+            self.update_rc_conf('rtsold_enable="YES"')
+
+            # Remove static IPv6 gateway if switching to SLAAC
+            try:
+                self.remove_rc_conf_var('ipv6_defaultrouter')
+            except Exception:
+                pass  # Variable may not exist
+
+            # Enable SLAAC
+            enable_slaac(nic)
+
+    def add_ipv6_dns(self, dns6):
+        """Add IPv6 DNS server to resolv.conf without removing existing entries."""
+        resolv_path = '/etc/resolv.conf'
+        try:
+            with open(resolv_path, 'r') as f:
+                content = f.read()
+            # Check if this IPv6 DNS is already present
+            if f'nameserver {dns6}' not in content:
+                with open(resolv_path, 'a') as f:
+                    f.write(f'nameserver {dns6}\n')
+        except Exception:
+            pass  # resolv.conf may be managed by dhclient
+
+    def remove_rc_conf_var(self, varname):
+        """Remove a variable from rc.conf using sysrc."""
+        run(f'sysrc -x {varname}', shell=True)
 
     def hide_window(self):
         self.hide()
@@ -492,13 +611,17 @@ class netCardConfigWindow(Gtk.Window):
         run(f'sysrc {line}', shell=True)
 
     def remove_rc_conf_line(self, line):
-        with open('/etc/rc.conf', "r+") as rc_conf:
-            lines = rc_conf.readlines()
-            rc_conf.seek(0)
-            idx = lines.index(line)
-            lines.pop(idx)
-            rc_conf.truncate()
-            rc_conf.writelines(lines)
+        try:
+            with open('/etc/rc.conf', "r+") as rc_conf:
+                lines = rc_conf.readlines()
+                if line in lines:
+                    rc_conf.seek(0)
+                    idx = lines.index(line)
+                    lines.pop(idx)
+                    rc_conf.truncate()
+                    rc_conf.writelines(lines)
+        except (ValueError, FileNotFoundError):
+            pass  # Line doesn't exist, nothing to remove
 
 
 def network_card_configuration(default_int):

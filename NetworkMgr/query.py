@@ -5,6 +5,112 @@ import re
 import os
 
 
+def get_interface_settings_ipv6(active_nic):
+    """Get IPv6 settings for the given network interface."""
+    ipv6_settings = {}
+    rc_conf = open("/etc/rc.conf", "r").read()
+
+    # Check if SLAAC is enabled (accept_rtadv in rc.conf)
+    slaac_search = re.search(
+        fr'^ifconfig_{active_nic}_ipv6=".*accept_rtadv',
+        rc_conf,
+        re.MULTILINE | re.IGNORECASE
+    )
+    if slaac_search:
+        ipv6_settings["Assignment Method"] = "SLAAC"
+    else:
+        # Check for static IPv6 configuration
+        static_search = re.search(
+            fr'^ifconfig_{active_nic}_ipv6="inet6\s+([0-9a-fA-F:]+).*prefixlen\s+(\d+)',
+            rc_conf,
+            re.MULTILINE
+        )
+        if static_search:
+            ipv6_settings["Assignment Method"] = "Manual"
+        else:
+            ipv6_settings["Assignment Method"] = "SLAAC"  # Default
+
+    # Get current IPv6 address from ifconfig
+    try:
+        ifcmd = f"ifconfig {active_nic}"
+        ifoutput = check_output(ifcmd.split(" "), universal_newlines=True)
+
+        # Find global IPv6 addresses (exclude link-local fe80::)
+        ipv6_matches = re.findall(
+            r'inet6 ([0-9a-fA-F:]+)%?\S* prefixlen (\d+)',
+            ifoutput
+        )
+        # Filter out link-local addresses
+        global_addrs = [(addr, plen) for addr, plen in ipv6_matches
+                        if not addr.lower().startswith('fe80:')]
+
+        if global_addrs:
+            ipv6_settings["Interface IPv6"] = global_addrs[0][0]
+            ipv6_settings["Prefix Length"] = global_addrs[0][1]
+        else:
+            ipv6_settings["Interface IPv6"] = ""
+            ipv6_settings["Prefix Length"] = "64"
+    except Exception:
+        ipv6_settings["Interface IPv6"] = ""
+        ipv6_settings["Prefix Length"] = "64"
+
+    # Get IPv6 default gateway from rc.conf or routing table
+    # Pattern allows optional interface suffix for link-local (e.g., fe80::1%em0)
+    gateway_search = re.search(
+        r'^ipv6_defaultrouter="([0-9a-fA-F:]+(?:%[a-zA-Z0-9]+)?)"',
+        rc_conf,
+        re.MULTILINE
+    )
+    if gateway_search:
+        ipv6_settings["Default Gateway"] = gateway_search.group(1)
+    else:
+        # Try to get from routing table
+        try:
+            netstat_output = check_output(
+                'netstat -rn -f inet6'.split(),
+                universal_newlines=True
+            )
+            for line in netstat_output.splitlines():
+                if line.startswith('default'):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        # Remove interface suffix if present (e.g., fe80::1%em0)
+                        gw = parts[1].split('%')[0]
+                        ipv6_settings["Default Gateway"] = gw
+                        break
+            else:
+                ipv6_settings["Default Gateway"] = ""
+        except Exception:
+            ipv6_settings["Default Gateway"] = ""
+
+    # Get IPv6 DNS servers from resolv.conf
+    ipv6_settings["DNS Server 1"] = ""
+    if os.path.exists('/etc/resolv.conf'):
+        resolv_conf = open('/etc/resolv.conf').read()
+        # Match IPv6 nameservers (must contain at least one colon)
+        ipv6_nameservers = re.findall(
+            r'^nameserver\s+([0-9a-fA-F]*:[0-9a-fA-F:]+)',
+            resolv_conf,
+            re.MULTILINE
+        )
+        if ipv6_nameservers:
+            ipv6_settings["DNS Server 1"] = ipv6_nameservers[0]
+
+    # Get search domain (shared with IPv4)
+    ipv6_settings["Search Domain"] = ""
+    if os.path.exists('/etc/resolv.conf'):
+        resolv_conf = open('/etc/resolv.conf').read()
+        search_match = re.search(r'^search\s+(.+)$', resolv_conf, re.MULTILINE)
+        if search_match:
+            ipv6_settings["Search Domain"] = search_match.group(1).strip()
+        else:
+            domain_match = re.search(r'^domain\s+(.+)$', resolv_conf, re.MULTILINE)
+            if domain_match:
+                ipv6_settings["Search Domain"] = domain_match.group(1).strip()
+
+    return ipv6_settings
+
+
 def get_interface_settings(active_nic):
     interface_settings = {}
     rc_conf = open("/etc/rc.conf", "r").read()
