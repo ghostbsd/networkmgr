@@ -47,7 +47,7 @@ if re.search(wifi_driver_regex, nic):
     if not wpa_supplicant.exists():
         wpa_supplicant.touch()
         shutil.chown(wpa_supplicant, user="root", group="wheel")
-        wpa_supplicant.chmod(0o765)
+        wpa_supplicant.chmod(0o600)  # Secure: root-only, contains passwords
     for wlanNum in range(0, 9):
         if f'wlan{wlanNum}' not in rc_conf_content:
             if f'wlans_{nic}=' not in rc_conf_content:

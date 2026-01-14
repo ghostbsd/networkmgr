@@ -43,8 +43,7 @@ def wg_dictionary():
             seconddictionary = { 'state': wg_state, 'info': wg_name }
             configs[wg_device] = seconddictionary
 
-        maindictionary['configs'] = configs
-
+    maindictionary['configs'] = configs
     return maindictionary
 
 def disable_wg(wgconfig):

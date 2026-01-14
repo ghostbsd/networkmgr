@@ -1,8 +1,19 @@
 #!/usr/bin/env python
 
 from subprocess import Popen, PIPE, run, check_output
+import os
 import re
 from time import sleep
+
+
+# EAP methods supported for enterprise WPA
+EAP_METHODS = ['PEAP', 'TTLS', 'TLS', 'LEAP', 'FAST', 'PWD']
+
+# Phase 2 (inner) authentication methods
+PHASE2_METHODS = ['MSCHAPV2', 'GTC', 'PAP', 'CHAP', 'MD5']
+
+# Default CA certificate path on FreeBSD/GhostBSD
+DEFAULT_CA_CERT = '/etc/ssl/certs/ca-root-nss.crt'
 
 
 def card_online(netcard):
@@ -72,6 +83,91 @@ def barpercent(sn):
     return int((sig - noise) * 4)
 
 
+def is_enterprise_network(caps_string):
+    """
+    Detect if a network uses WPA-Enterprise (802.1X/EAP) authentication.
+
+    FreeBSD ifconfig scan doesn't explicitly distinguish PSK from EAP.
+    We use heuristics based on capability flags:
+
+    1. Explicit EAP indicators (if present)
+    2. RSN without WPS AND without typical home router flags (HTCAP, VHTCAP, ATH)
+       suggests a minimal enterprise AP configuration
+
+    Note: This is imperfect - some networks may be misdetected.
+    """
+    caps_upper = caps_string.upper()
+
+    # Explicit enterprise indicators (highest confidence)
+    enterprise_indicators = ['EAP', '802.1X', 'WPA2-EAP', 'WPA-EAP', 'RSN-EAP']
+    for indicator in enterprise_indicators:
+        if indicator in caps_upper:
+            return True
+
+    # Heuristic: RSN without WPS and without typical consumer router features
+    # Enterprise APs often have minimal beacon flags
+    has_rsn = 'RSN' in caps_upper
+    has_wps = 'WPS' in caps_upper
+    has_consumer_features = any(f in caps_upper for f in ['HTCAP', 'VHTCAP', 'ATH', 'WME'])
+
+    # Only flag as enterprise if: has RSN, no WPS, and no typical consumer features
+    if has_rsn and not has_wps and not has_consumer_features:
+        return True
+
+    return False
+
+
+def get_security_type(caps_string):
+    """
+    Determine the security type of a wireless network.
+    Returns: 'OPEN', 'WEP', 'WPA-PSK', 'WPA2-PSK', 'WPA-EAP', 'WPA2-EAP'
+    """
+    caps_upper = caps_string.upper()
+    if is_enterprise_network(caps_string):
+        if 'RSN' in caps_upper or 'WPA2' in caps_upper:
+            return 'WPA2-EAP'
+        return 'WPA-EAP'
+    elif 'RSN' in caps_upper:
+        return 'WPA2-PSK'
+    elif 'WPA' in caps_upper:
+        return 'WPA-PSK'
+    elif 'WEP' in caps_upper or 'PRIVACY' in caps_upper:
+        return 'WEP'
+    return 'OPEN'
+
+
+def validate_certificate(cert_path):
+    """
+    Validate that a certificate file exists and is readable.
+    Returns tuple (is_valid, error_message).
+    """
+    if not cert_path:
+        return False, "No certificate path provided"
+    if not os.path.exists(cert_path):
+        return False, f"Certificate file not found: {cert_path}"
+    if not os.path.isfile(cert_path):
+        return False, f"Not a file: {cert_path}"
+    if not os.access(cert_path, os.R_OK):
+        return False, f"Certificate file not readable: {cert_path}"
+    return True, None
+
+
+def get_system_ca_certificates():
+    """
+    Get list of available system CA certificate bundles on FreeBSD.
+    """
+    ca_paths = [
+        '/etc/ssl/certs/ca-root-nss.crt',
+        '/usr/local/share/certs/ca-root-nss.crt',
+        '/etc/ssl/cert.pem',
+    ]
+    available = []
+    for path in ca_paths:
+        if os.path.exists(path):
+            available.append(path)
+    return available
+
+
 def network_service_state():
     return False
 
@@ -105,7 +201,12 @@ def networkdictionary():
                 info[3] = percentage
                 info.insert(0, ssid)
                 # append left over
-                info.append(line[83:].strip())
+                caps_string = line[83:].strip()
+                info.append(caps_string)
+                # Add security type info (index 7)
+                info.append(get_security_type(caps_string))
+                # Add enterprise flag (index 8)
+                info.append(is_enterprise_network(caps_string))
                 connectioninfo[ssid] = info
             if ifWlanDisable(card):
                 connectionstat = {
@@ -271,9 +372,13 @@ def delete_ssid_wpa_supplicant_config(ssid):
         """/etc/wpa_supplicant.conf | sed -f - /etc/wpa_supplicant.conf"""
     out = Popen(cmd, shell=True, stdout=PIPE, universal_newlines=True)
     left_over = out.stdout.read()
-    wpa_supplicant_conf = open('/etc/wpa_supplicant.conf', 'w')
-    wpa_supplicant_conf.writelines(left_over)
-    wpa_supplicant_conf.close()
+    old_umask = os.umask(0o077)
+    try:
+        with open('/etc/wpa_supplicant.conf', 'w') as wpa_supplicant_conf:
+            wpa_supplicant_conf.write(left_over)
+        os.chmod('/etc/wpa_supplicant.conf', 0o600)
+    finally:
+        os.umask(old_umask)
 
 
 def nic_status(card):
@@ -303,3 +408,97 @@ def wait_inet(card):
         if re_ip and '0.0.0.0' not in re_ip.group():
             print(re_ip)
             break
+
+
+def _escape_wpa_value(value):
+    """Escape special characters for wpa_supplicant.conf quoted strings."""
+    if not value:
+        return value
+    # Escape backslashes first, then quotes
+    return value.replace('\\', '\\\\').replace('"', '\\"')
+
+
+def generate_eap_config(ssid, eap_config):
+    """
+    Generate wpa_supplicant network block for EAP/Enterprise authentication.
+
+    eap_config dict should contain:
+        - eap_method: 'PEAP', 'TTLS', 'TLS', etc.
+        - identity: username
+        - password: password (for PEAP/TTLS)
+        - ca_cert: path to CA certificate (optional)
+        - client_cert: path to client certificate (for TLS)
+        - private_key: path to private key (for TLS)
+        - private_key_passwd: private key password (for TLS)
+        - phase2: inner authentication method (for PEAP/TTLS)
+        - anonymous_identity: anonymous outer identity (optional)
+        - domain_suffix_match: server domain validation (optional)
+    """
+    eap_method = eap_config.get('eap_method', 'PEAP')
+    identity = _escape_wpa_value(eap_config.get('identity', ''))
+    password = _escape_wpa_value(eap_config.get('password', ''))
+    ca_cert = _escape_wpa_value(eap_config.get('ca_cert', ''))
+    client_cert = _escape_wpa_value(eap_config.get('client_cert', ''))
+    private_key = _escape_wpa_value(eap_config.get('private_key', ''))
+    private_key_passwd = _escape_wpa_value(eap_config.get('private_key_passwd', ''))
+    phase2 = eap_config.get('phase2', 'MSCHAPV2')
+    anonymous_identity = _escape_wpa_value(eap_config.get('anonymous_identity', ''))
+    domain_suffix_match = _escape_wpa_value(eap_config.get('domain_suffix_match', ''))
+    ssid_escaped = _escape_wpa_value(ssid)
+
+    ws = '\nnetwork={'
+    ws += f'\n\tssid="{ssid_escaped}"'
+    ws += '\n\tkey_mgmt=WPA-EAP'
+    ws += f'\n\teap={eap_method}'
+    ws += f'\n\tidentity="{identity}"'
+
+    if anonymous_identity:
+        ws += f'\n\tanonymous_identity="{anonymous_identity}"'
+
+    if eap_method == 'TLS':
+        # TLS requires client certificate
+        if client_cert:
+            ws += f'\n\tclient_cert="{client_cert}"'
+        if private_key:
+            ws += f'\n\tprivate_key="{private_key}"'
+        if private_key_passwd:
+            ws += f'\n\tprivate_key_passwd="{private_key_passwd}"'
+    else:
+        # PEAP, TTLS, etc. use password
+        ws += f'\n\tpassword="{password}"'
+        if phase2:
+            if eap_method == 'TTLS':
+                ws += f'\n\tphase2="auth={phase2}"'
+            else:  # PEAP
+                ws += f'\n\tphase2="auth={phase2}"'
+
+    if ca_cert:
+        ws += f'\n\tca_cert="{ca_cert}"'
+
+    if domain_suffix_match:
+        ws += f'\n\tdomain_suffix_match="{domain_suffix_match}"'
+
+    ws += '\n}\n'
+    return ws
+
+
+def write_eap_config(ssid, eap_config):
+    """
+    Write EAP configuration to wpa_supplicant.conf with secure permissions.
+    """
+    config = generate_eap_config(ssid, eap_config)
+    wpa_conf_path = '/etc/wpa_supplicant.conf'
+
+    # Write with restrictive permissions (owner read/write only)
+    old_umask = os.umask(0o077)
+    try:
+        with open(wpa_conf_path, 'a') as wsf:
+            wsf.write(config)
+    finally:
+        os.umask(old_umask)
+
+    # Ensure file permissions are correct
+    try:
+        os.chmod(wpa_conf_path, 0o600)
+    except PermissionError:
+        pass  # May need root, handled by sudoers
