@@ -317,6 +317,65 @@ def start_static_network(netcard, inet, netmask):
     run('service routing restart', shell=True)
 
 
+# IPv6 configuration functions
+
+def start_static_ipv6_network(netcard, inet6, prefixlen):
+    """Configure a static IPv6 address on the given interface."""
+    run(f'ifconfig {netcard} inet6 {inet6} prefixlen {prefixlen}', shell=True)
+    sleep(1)
+    run('service routing restart', shell=True)
+
+
+def enable_slaac(netcard):
+    """Enable SLAAC (Stateless Address Autoconfiguration) on the interface."""
+    # Remove any existing IPv6 addresses first
+    run(f'ifconfig {netcard} inet6 -accept_rtadv', shell=True)
+    sleep(0.5)
+    # Enable accept_rtadv for SLAAC
+    run(f'ifconfig {netcard} inet6 accept_rtadv', shell=True)
+    # Start rtsold to solicit router advertisements
+    run(f'rtsol {netcard}', shell=True)
+
+
+def disable_slaac(netcard):
+    """Disable SLAAC on the interface."""
+    run(f'ifconfig {netcard} inet6 -accept_rtadv', shell=True)
+
+
+def get_ipv6_addresses(netcard):
+    """Get all IPv6 addresses configured on the interface."""
+    try:
+        output = check_output(f'ifconfig {netcard}', shell=True, universal_newlines=True)
+        # Match inet6 addresses, excluding link-local (fe80::) and localhost (::1)
+        addresses = re.findall(r'inet6 ([0-9a-fA-F:]+)%?\S* prefixlen (\d+)', output)
+        return [(addr, int(prefixlen)) for addr, prefixlen in addresses]
+    except Exception:
+        return []
+
+
+def has_slaac_enabled(netcard):
+    """Check if SLAAC (accept_rtadv) is enabled on the interface."""
+    try:
+        output = check_output(f'ifconfig {netcard}', shell=True, universal_newlines=True)
+        return 'ACCEPT_RTADV' in output
+    except Exception:
+        return False
+
+
+def get_ipv6_gateway():
+    """Get the default IPv6 gateway from routing table."""
+    try:
+        output = check_output('netstat -rn -f inet6', shell=True, universal_newlines=True)
+        for line in output.splitlines():
+            if line.startswith('default'):
+                parts = line.split()
+                if len(parts) >= 2:
+                    return parts[1]
+    except Exception:
+        pass
+    return ""
+
+
 def startnetworkcard(netcard):
     run(f'service netif start {netcard}', shell=True)
     sleep(1)
