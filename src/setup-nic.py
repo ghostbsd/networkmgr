@@ -5,7 +5,7 @@ import re
 import shutil
 import sys
 from pathlib import Path
-from subprocess import Popen, PIPE
+from subprocess import run
 
 
 def file_content(paths):
@@ -33,8 +33,8 @@ if rc_conf_local.exists():
 
 rc_conf_content = file_content(rc_conf_paths)
 
-not_nics_regex = "(enc|lo|fwe|fwip|tap|plip|pfsync|pflog|ipfw|tun|sl|faith|" \
-    "ppp|bridge|wg|wlan)[0-9]+|vm-[a-z]+"
+not_nics_regex = r"(enc|lo|fwe|fwip|tap|plip|pfsync|pflog|ipfw|tun|sl|faith|" \
+    r"ppp|bridge|wg|wlan)[0-9]+|vm-[a-z]+"
 
 # wifi_driver_regex is taken from devd.conf wifi-driver-regex
 wifi_driver_regex = "(ath|ath[0-9]+k|bwi|bwn|ipw|iwlwifi|iwi|iwm|iwn|malo|mwl|mt79|otus|" \
@@ -48,16 +48,14 @@ if re.search(wifi_driver_regex, nic):
         wpa_supplicant.touch()
         shutil.chown(wpa_supplicant, user="root", group="wheel")
         wpa_supplicant.chmod(0o600)  # Secure: root-only, contains passwords
-    for wlanNum in range(0, 9):
-        if f'wlan{wlanNum}' not in rc_conf_content:
-            if f'wlans_{nic}=' not in rc_conf_content:
-                with rc_conf.open('a') as rc:
-                    rc.writelines(f'wlans_{nic}="wlan{wlanNum}"\n')
-                    rc.writelines(f'ifconfig_wlan{wlanNum}="WPA DHCP"\n')
-                    break
+    if f'wlans_{nic}=' not in rc_conf_content:
+        for wlanNum in range(9):
+            if f'wlan{wlanNum}' not in rc_conf_content:
+                run(['sysrc', f'wlans_{nic}="wlan{wlanNum}"'])
+                run(['sysrc', f'ifconfig_wlan{wlanNum}="WPA DHCP"'])
+                break
+    run(['/etc/pccard_ether', nic, 'startchildren'])
 else:
     if f'ifconfig_{nic}=' not in rc_conf_content:
-        with rc_conf.open('a') as rc:
-            rc.writelines(f'ifconfig_{nic}="DHCP"\n')
-
-Popen(f'/etc/pccard_ether {nic} startchildren', shell=True)
+        run(['sysrc', f'ifconfig_{nic}=DHCP'])
+    run(['/etc/pccard_ether', nic, 'start'])
