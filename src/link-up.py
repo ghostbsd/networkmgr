@@ -3,56 +3,34 @@
 import os
 import re
 import sys
-from subprocess import Popen, PIPE, run
+from subprocess import run, PIPE
 
 args = sys.argv
 if len(args) != 2:
     exit(1)
 nic = args[1]
 
-not_nics_regex = "(enc|lo|fwe|fwip|tap|plip|pfsync|pflog|ipfw|tun|sl|faith|" \
-    "ppp|bridge|wg|wlan)[0-9]+|vm-[a-z]+"
+not_nics_regex = r"(enc|lo|fwe|fwip|tap|plip|pfsync|pflog|ipfw|tun|sl|faith|" \
+    r"ppp|bridge|wg|wlan)[0-9]+|vm-[a-z]+"
 
 # Stop the script if the nic is not valid.
 if re.search(not_nics_regex, nic):
     exit(0)
 
-dhcp = Popen(
-    ['sysrc', '-n', f'ifconfig_{nic}'],
-    stdout=PIPE,
-    close_fds=True,
-    universal_newlines=True
-).stdout.read()
+# This marker file is created by auto-switch.py when the nic is down.
+if os.path.exists(f'/tmp/link-down-{nic}'):
+    nic_ifconfig = run(
+        ['ifconfig', nic],
+        stdout=PIPE,
+        universal_newlines=True
+    ).stdout
 
-if os.path.exists(f'/tmp/network-{nic}'):
-    network = open(f'/tmp/network-{nic}', 'r').read()
-    if 'attached' in network:
-        if dhcp.strip() == 'DHCP':
-            Popen(f'service dhclient quietstart {nic}', shell=True)
-        else:
-            Popen(f'service routing restart', shell=True)
-        with open(f'/tmp/network-{nic}', 'w') as network:
-            network.writelines(f'linked')
-        exit(0)
+    if 'inet ' not in nic_ifconfig:
+        run(['service', 'netif', 'start', nic])
 
-nic_ifconfig = Popen(
-    ['ifconfig', nic],
-    stdout=PIPE,
-    close_fds=True,
-    universal_newlines=True
-).stdout.read()
-
-if 'inet ' in nic_ifconfig:
-    Popen(
-        f'service routing restart ; '
-        f'service dhclient restart {nic}',
-        shell=True
-    )
+    run(['service', 'routing', 'restart'])
+    run(['service', 'dhclient', 'restart', nic])
+    # Clean up marker file
+    os.remove(f'/tmp/link-down-{nic}')
 else:
-    Popen(
-        f'service netif start {nic} ; '
-        'sleep 1 ; '
-        f'service routing restart ; '
-        f'service dhclient restart {nic}',
-        shell=True
-    )
+    run(['service', 'dhclient', 'quietstart', nic])

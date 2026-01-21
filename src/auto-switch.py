@@ -1,36 +1,34 @@
 #!/usr/local/bin/python3
 """
-auto-switch - is used to automatically switches the default interface go down.
+auto-switch - is used to automatically switch the default interface go down.
 """
 
 import sys
-import os
 import re
-from subprocess import Popen, PIPE
+from subprocess import run, PIPE
 
 args = sys.argv
 if len(args) != 2:
     exit()
 nic = args[1]
 
-not_nics_regex = r"(enc|lo|fwe|fwip|tap|plip|pfsync|pflog|ipfw|tun|sl|faith|wlan" \
-                    r"ppp|bridge|wg)[0-9]+(\s*)|vm-[a-z]+(\s*)"
+not_nics_regex = r"(enc|lo|fwe|fwip|tap|plip|pfsync|pflog|ipfw|tun|sl|faith|" \
+                    r"ppp|bridge|wg)[0-9]|vm-[a-z]"
 
-default_nic = Popen(
+default_nic = run(
     'netstat -rn | grep default',
     stdout=PIPE,
     shell=True,
     universal_newlines=True
-).stdout.read()
+).stdout
 
-nics = Popen(
+nics = run(
     ['ifconfig', '-l', 'ether'],
     stdout=PIPE,
-    close_fds=True,
     universal_newlines=True
 )
 
-nics_left_over = nics.stdout.read().replace(nic, '').strip()
+nics_left_over = nics.stdout.replace(nic, '').strip()
 nic_list = sorted(re.sub(not_nics_regex, '', nics_left_over).strip().split())
 
 # Stop the script if the nic is not valid or not in the default route.
@@ -41,19 +39,17 @@ elif nic not in default_nic:
 elif not nic_list:
     exit(0)
 
-nic_ifconfig = Popen(
+nic_ifconfig = run(
     ['ifconfig', nic],
     stdout=PIPE,
-    close_fds=True,
     universal_newlines=True
-).stdout.read()
+).stdout
 
-dhcp = Popen(
+dhcp = run(
     ['sysrc', '-n', f'ifconfig_{nic}'],
     stdout=PIPE,
-    close_fds=True,
     universal_newlines=True
-).stdout.read()
+).stdout
 
 active_status = (
     'status: active' in nic_ifconfig,
@@ -65,24 +61,26 @@ active_status = (
 # Restarting routing adds and nic if there is another one that is active
 # or associated.
 if not any(active_status):
-    os.system(f'service netif stop {nic}')
+    run(['service', 'netif', 'stop', nic])
+    # Create a marker file for link-up.py to detect runtime state change vs boot
+    with open(f'/tmp/link-down-{nic}', 'w') as f:
+        f.write('down')
     if dhcp.strip() == 'DHCP':
         for current_nic in nic_list:
-            output = Popen(
+            output = run(
                 ['ifconfig', current_nic],
                 stdout=PIPE,
-                close_fds=True,
                 universal_newlines=True
             )
-            nic_ifconfig = output.stdout.read()
+            nic_ifconfig = output.stdout
             status_types = [
                 'active',
                 'associated',
             ]
             found_status = re.search(f"status: ({'|'.join(status_types)})", nic_ifconfig)
-            found_inet = re.search("inet(\s|6)", nic_ifconfig)
+            found_inet = re.search(r"inet(\s|6)", nic_ifconfig)
             if found_status and found_inet:
-                os.system(f'service dhclient restart {current_nic}')
+                run(['service', 'dhclient', 'restart', current_nic])
                 break
     else:
-        os.system('service routing restart')
+        run(['service', 'routing', 'restart'])

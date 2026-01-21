@@ -10,7 +10,7 @@ from DistUtilsExtra.command.build_extra import build_extra
 from DistUtilsExtra.command.build_i18n import build_i18n
 from DistUtilsExtra.command.clean_i18n import clean_i18n
 
-__VERSION__ = '6.7'
+__VERSION__ = '6.8'
 PROGRAM_VERSION = __VERSION__
 
 prefix = '/usr/local' if system() == 'FreeBSD' else sys.prefix
