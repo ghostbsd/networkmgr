@@ -3,7 +3,7 @@
 import os
 import re
 import sys
-from subprocess import run
+from subprocess import run, PIPE
 
 args = sys.argv
 if len(args) != 2:
@@ -21,7 +21,7 @@ if re.search(not_nics_regex, nic):
 if os.path.exists(f'/tmp/link-down-{nic}'):
     nic_ifconfig = run(
         ['ifconfig', nic],
-        close_fds=True,
+        stdout=PIPE,
         universal_newlines=True
     ).stdout
 
