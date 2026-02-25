@@ -51,8 +51,8 @@ if re.search(wifi_driver_regex, nic):
     if f'wlans_{nic}=' not in rc_conf_content:
         for wlanNum in range(9):
             if f'wlan{wlanNum}' not in rc_conf_content:
-                run(['sysrc', f'wlans_{nic}="wlan{wlanNum}"'])
-                run(['sysrc', f'ifconfig_wlan{wlanNum}="WPA DHCP"'])
+                run(['sysrc', f'wlans_{nic}=wlan{wlanNum}'])
+                run(['sysrc', f'ifconfig_wlan{wlanNum}=WPA DHCP'])
                 break
     run(['/etc/pccard_ether', nic, 'startchildren'])
 else:
