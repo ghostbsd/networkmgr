@@ -5,7 +5,7 @@ packaging==21.3
 pluggy==1.0.0
 py==1.11.0
 pyparsing==3.0.6
-pytest==6.2.5
+pytest==9.0.3
 pytest-cov==3.0.0
 Tkinter==0.0.0
 toml==0.10.2
