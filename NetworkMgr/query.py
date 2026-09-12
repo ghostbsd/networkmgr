@@ -1,29 +1,90 @@
 #!/usr/bin/env python
 
-from subprocess import check_output
+"""Read-only queries for the current network configuration.
+
+Answers what the configuration UI needs to know about an interface: its
+assignment method, addresses, gateway, DNS servers and search domain, for
+both IPv4 and IPv6. Values come from rc.conf(5) via sysrc, from ifconfig,
+from the routing table and from /etc/resolv.conf.
+"""
+
+from subprocess import CalledProcessError, check_output, run
 import re
 import os
 
+IP_REGEX = r'[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'
+
+
+def _rc_conf_value(name):
+    """Return the effective value of an rc.conf(5) variable.
+
+    sysrc reads every file in rc_conf_files, so a setting placed in
+    /etc/rc.conf.local is seen here and overrides /etc/rc.conf, matching
+    both the boot-time behaviour and where our own sysrc writes land.
+
+    Args:
+        name (str): The rc.conf variable to read, such as "defaultrouter".
+
+    Returns:
+        str: The variable's value with surrounding whitespace removed, or an
+        empty string if it is set nowhere.
+    """
+    sysrc = run(
+        ['sysrc', '-n', name],
+        capture_output=True,
+        universal_newlines=True,
+        check=False
+    )
+    if sysrc.returncode != 0:
+        return ""
+    return sysrc.stdout.strip()
+
+
+def _address_after(keyword, text):
+    """Read the dotted-quad address that follows a keyword.
+
+    Args:
+        keyword (str): the word before the address, such as "netmask".
+        text (str): ifconfig output.
+
+    Returns:
+        str: the address, or an empty string when the keyword is not there.
+        A missing field is ordinary rather than exceptional: a loopback or
+        point-to-point interface carries an address with no broadcast.
+    """
+    found = re.search(fr'{keyword} {IP_REGEX}', text)
+    if not found:
+        return ""
+    return found.group().replace(f'{keyword} ', '').strip()
+
 
 def get_interface_settings_ipv6(active_nic):
-    """Get IPv6 settings for the given network interface."""
+    """Collect the IPv6 settings of one network interface.
+
+    Args:
+        active_nic (str): Interface name, such as "em0" or "wlan0".
+
+    Returns:
+        dict[str, str]: Assignment Method, Interface IPv6, Prefix Length,
+        Default Gateway, DNS Server 1 and Search Domain. Missing values are
+        empty strings rather than absent keys.
+    """
     ipv6_settings = {}
-    rc_conf = open("/etc/rc.conf", "r").read()
+    ifconfig_ipv6 = _rc_conf_value(f'ifconfig_{active_nic}_ipv6')
 
     # Check if SLAAC is enabled (accept_rtadv in rc.conf)
     slaac_search = re.search(
-        fr'^ifconfig_{active_nic}_ipv6=".*accept_rtadv',
-        rc_conf,
-        re.MULTILINE | re.IGNORECASE
+        r'accept_rtadv',
+        ifconfig_ipv6,
+        re.IGNORECASE
     )
     if slaac_search:
         ipv6_settings["Assignment Method"] = "SLAAC"
     else:
         # Check for static IPv6 configuration
         static_search = re.search(
-            fr'^ifconfig_{active_nic}_ipv6="inet6\s+([0-9a-fA-F:]+).*prefixlen\s+(\d+)',
-            rc_conf,
-            re.MULTILINE
+            r'^inet6\s+([0-9a-fA-F:]+).*prefixlen\s+(\d+)',
+            ifconfig_ipv6
         )
         if static_search:
             ipv6_settings["Assignment Method"] = "Manual"
@@ -50,19 +111,18 @@ def get_interface_settings_ipv6(active_nic):
         else:
             ipv6_settings["Interface IPv6"] = ""
             ipv6_settings["Prefix Length"] = "64"
-    except Exception:
+    except (CalledProcessError, OSError):
         ipv6_settings["Interface IPv6"] = ""
         ipv6_settings["Prefix Length"] = "64"
 
-    # Get IPv6 default gateway from rc.conf or routing table
-    # Pattern allows optional interface suffix for link-local (e.g., fe80::1%em0)
-    gateway_search = re.search(
-        r'^ipv6_defaultrouter="([0-9a-fA-F:]+(?:%[a-zA-Z0-9]+)?)"',
-        rc_conf,
-        re.MULTILINE
+    # The suffix allows a link-local gateway (fe80::1%em0). An unset
+    # variable reads as the "NO" sentinel, which fails this match.
+    gateway_search = re.fullmatch(
+        r'[0-9a-fA-F:]+(?:%[a-zA-Z0-9]+)?',
+        _rc_conf_value('ipv6_defaultrouter')
     )
     if gateway_search:
-        ipv6_settings["Default Gateway"] = gateway_search.group(1)
+        ipv6_settings["Default Gateway"] = gateway_search.group()
     else:
         # Try to get from routing table
         try:
@@ -80,13 +140,14 @@ def get_interface_settings_ipv6(active_nic):
                         break
             else:
                 ipv6_settings["Default Gateway"] = ""
-        except Exception:
+        except (CalledProcessError, OSError):
             ipv6_settings["Default Gateway"] = ""
 
     # Get IPv6 DNS servers from resolv.conf
     ipv6_settings["DNS Server 1"] = ""
     if os.path.exists('/etc/resolv.conf'):
-        resolv_conf = open('/etc/resolv.conf').read()
+        with open('/etc/resolv.conf', encoding='utf-8') as resolv_file:
+            resolv_conf = resolv_file.read()
         # Match IPv6 nameservers (must contain at least one colon)
         ipv6_nameservers = re.findall(
             r'^nameserver\s+([0-9a-fA-F]*:[0-9a-fA-F:]+)',
@@ -99,7 +160,8 @@ def get_interface_settings_ipv6(active_nic):
     # Get search domain (shared with IPv4)
     ipv6_settings["Search Domain"] = ""
     if os.path.exists('/etc/resolv.conf'):
-        resolv_conf = open('/etc/resolv.conf').read()
+        with open('/etc/resolv.conf', encoding='utf-8') as resolv_file:
+            resolv_conf = resolv_file.read()
         search_match = re.search(r'^search\s+(.+)$', resolv_conf, re.MULTILINE)
         if search_match:
             ipv6_settings["Search Domain"] = search_match.group(1).strip()
@@ -112,79 +174,79 @@ def get_interface_settings_ipv6(active_nic):
 
 
 def get_interface_settings(active_nic):
-    interface_settings = {}
-    rc_conf = open("/etc/rc.conf", "r").read()
-    DHCPSearch = re.findall(fr'^ifconfig_{active_nic}=".*DHCP', rc_conf, re.MULTILINE)
-    print(f"DHCPSearch is {DHCPSearch} and the length is {len(DHCPSearch)}")
-    if len(DHCPSearch) < 1:
-        DHCPStatusOutput = "Manual"
-    else:
-        DHCPStatusOutput = "DHCP"
+    """Collect the IPv4 settings of one network interface.
 
-    IPREGEX = r'[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'
+    Args:
+        active_nic (str): Interface name, such as "em0" or "wlan0".
+
+    Returns:
+        dict[str, str]: Active Interface, Assignment Method, Interface IP,
+        Interface Subnet Mask, Broadcast Address, Default Gateway, Search
+        Domain and one "DNS Server N" entry per nameserver. DNS Server 1 and
+        2 are always present, empty when unset.
+    """
+    interface_settings = {}
+    if 'DHCP' in _rc_conf_value(f'ifconfig_{active_nic}'):
+        dhcp_status_output = "DHCP"
+    else:
+        dhcp_status_output = "Manual"
 
     ifcmd = f"ifconfig -f inet:dotted {active_nic}"
     ifoutput = check_output(ifcmd.split(" "), universal_newlines=True)
-    re_ip = re.search(fr'inet {IPREGEX}', ifoutput)
-    if re_ip:
-        if_ip = re_ip.group().replace("inet ", "").strip()
-        re_netmask = re.search(fr'netmask {IPREGEX}', ifoutput)
-        if_netmask = re_netmask.group().replace("netmask ", "").strip()
-        re_broadcast = re.search(fr'broadcast {IPREGEX}', ifoutput)
-        if_broadcast = re_broadcast.group().replace("broadcast ", "").strip()
-    else:
-        if_ip = ""
-        if_netmask = ""
-        if_broadcast = ""
-    if (DHCPStatusOutput == "DHCP"):
+    if_ip = _address_after('inet', ifoutput)
+    if_netmask = _address_after('netmask', ifoutput)
+    if_broadcast = _address_after('broadcast', ifoutput)
+    if dhcp_status_output == "DHCP":
         dhclient_leases = f"/var/db/dhclient.leases.{active_nic}"
 
         if os.path.exists(dhclient_leases) is False:
-            print("DHCP is enabled, but we're unable to read the lease "
-                  f"file a /var/db/dhclient.leases.{active_nic}")
+            # No lease file yet, so there is no router option to read. The
+            # window shows an empty gateway rather than a stale one.
             gateway = ""
         else:
-            dh_lease = open(dhclient_leases, "r").read()
-            re_gateway = re.search(fr"option routers {IPREGEX}", dh_lease)
-            gateway = re_gateway.group().replace("option routers ", "")
+            with open(dhclient_leases, "r", encoding='utf-8') as lease_file:
+                dh_lease = lease_file.read()
+            # dhclient appends leases, so the last one is the current one.
+            routers = re.findall(fr'option routers ({IP_REGEX})', dh_lease)
+            gateway = routers[-1] if routers else ""
     else:
-        rc_conf = open('/etc/rc.conf', 'r').read()
-        re_gateway = re.search(fr'^defaultrouter="{IPREGEX}"', rc_conf, re.MULTILINE)
+        # An unset defaultrouter reads as the "NO" sentinel from
+        # /etc/defaults/rc.conf, which fails this match.
+        re_gateway = re.fullmatch(IP_REGEX, _rc_conf_value('defaultrouter'))
         if re_gateway:
-            gateway = re_gateway.group().replace('"', "")
-            gateway = gateway.replace('defaultrouter=', "")
+            gateway = re_gateway.group()
         else:
             gateway = ""
 
     if os.path.exists('/etc/resolv.conf'):
-        resolv_conf = open('/etc/resolv.conf').read()
-        nameservers = re.findall(fr'^nameserver {IPREGEX}', str(resolv_conf), re.MULTILINE)
-        print(nameservers)
+        with open('/etc/resolv.conf', encoding='utf-8') as resolv_file:
+            resolv_conf = resolv_file.read()
+        nameservers = re.findall(fr'^nameserver {IP_REGEX}', str(resolv_conf), re.MULTILINE)
 
-        re_domain_search = re.findall('search [a-zA-Z.]*', str(resolv_conf))
-        if len(re_domain_search) < 1:
-            re_domain_search = re.findall('domain (.*)', resolv_conf)
-        domain_search = str(re_domain_search).replace("domain ", "")
-        domain_search = domain_search.replace("'", "")
-        domain_search = domain_search.replace("[", "")
-        domain_search = domain_search.replace("]", "")
-        domain_search = domain_search.replace('search', '').strip()
+        domain_search = ''
+        search_match = re.search(r'^search\s+(.+)$', resolv_conf, re.MULTILINE)
+        if search_match:
+            domain_search = search_match.group(1).strip()
+        else:
+            domain_match = re.search(r'^domain\s+(.+)$', resolv_conf, re.MULTILINE)
+            if domain_match:
+                domain_search = domain_match.group(1).strip()
     else:
         domain_search = ''
         nameservers = []
 
     interface_settings["Active Interface"] = active_nic
-    interface_settings["Assignment Method"] = DHCPStatusOutput
+    interface_settings["Assignment Method"] = dhcp_status_output
     interface_settings["Interface IP"] = if_ip
     interface_settings["Interface Subnet Mask"] = if_netmask
     interface_settings["Broadcast Address"] = if_broadcast
     interface_settings["Default Gateway"] = gateway
     interface_settings["Search Domain"] = domain_search
 
-    for num in range(len(nameservers)):
+    for num, nameserver in enumerate(nameservers):
         interface_settings[
             f"DNS Server {num + 1}"
-        ] = str(nameservers[(num)]).replace("nameserver", "").strip()
+        ] = str(nameserver).replace("nameserver", "").strip()
     # if DNS Server 1 and 2 are missing create them with empty string
     if "DNS Server 1" not in interface_settings:
         interface_settings["DNS Server 1"] = ""
