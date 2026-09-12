@@ -1,1 +1,1 @@
-%wheel ALL=(ALL) NOPASSWD: /usr/local/bin/networkmgr
+%operator ALL=(ALL) NOPASSWD: /usr/local/bin/networkmgr

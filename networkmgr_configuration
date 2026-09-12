@@ -5,4 +5,4 @@ from NetworkMgr import configuration
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
-configuration.network_card_configuration_window()
+configuration.open_default_configuration()
