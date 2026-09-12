@@ -40,8 +40,8 @@ from NetworkMgr.wg_api import (
     wg_status
 )
 
-gettext.bindtextdomain('networkmgr', '/usr/local/share/locale')
-gettext.textdomain('networkmgr')
+gettext.bindtextdomain('NetworkMgr', '/usr/local/share/locale')
+gettext.textdomain('NetworkMgr')
 _ = gettext.gettext
 
 encoding = locale.getpreferredencoding()
