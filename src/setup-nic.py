@@ -5,7 +5,9 @@
 Invoked by /usr/local/etc/devd/networkmgr.conf with the interface or device
 name as its only argument. Declares the interface in rc.conf if it is not
 declared yet, installs or tops up /etc/wpa_supplicant.conf for a wireless
-device, and brings the interface up through /etc/pccard_ether.
+device, and brings the interface up through /etc/pccard_ether. Wireless
+children are then marked up with ifconfig, since wpa_supplicant leaves them
+down when it has no network to join.
 """
 
 import os
@@ -106,7 +108,11 @@ if re.search(WIFI_DRIVER_REGEX, nic):
                 run(['sysrc', f'wlans_{nic}=wlan{wlan_number}'], check=False)
                 run(['sysrc', f'ifconfig_wlan{wlan_number}=WPA DHCP'], check=False)
                 break
-    run(['/etc/pccard_ether', nic, 'startchildren'], check=False)
+        run(['/etc/pccard_ether', nic, 'startchildren'], check=False)
+        # On the first setup wlan is down
+        run(['ifconfig', nic, 'up'], check=False)
+    else:
+        run(['/etc/pccard_ether', nic, 'startchildren'], check=False)
 else:
     if f'ifconfig_{nic}=' not in RC_CONF_CONTENT:
         run(['sysrc', f'ifconfig_{nic}=DHCP'], check=False)
