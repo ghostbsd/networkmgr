@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: networkmgr\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2022-08-29 15:54+0800\n"
+"POT-Creation-Date: 2026-09-11 21:33-0300\n"
 "PO-Revision-Date: 2025-09-07 10:33+0800\n"
 "Last-Translator: ykla <yklaxds@gmail.com>\n"
 "Language-Team: ykla <yklaxds@gmail.com>\n"
@@ -18,97 +18,236 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: Poedit 3.7\n"
 
-#: src/trayicon.py:67
+#: NetworkMgr/trayicon.py:173
+msgid "WireGuard VPN"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:182
+#, fuzzy, python-format
+msgid "%s Connected"
+msgstr "WiFi %s 已连接"
+
+#: NetworkMgr/trayicon.py:185 NetworkMgr/trayicon.py:219
+#: NetworkMgr/trayicon.py:230
+#, fuzzy, python-format
+msgid "Disable %s"
+msgstr "禁用"
+
+#: NetworkMgr/trayicon.py:189
+#, fuzzy, python-format
+msgid "%s Disconnected"
+msgstr "WiFi %s 已断开"
+
+#: NetworkMgr/trayicon.py:192 NetworkMgr/trayicon.py:212
+msgid "Enable"
+msgstr "启用"
+
+#: NetworkMgr/trayicon.py:198
 msgid "Ethernet Network"
 msgstr "以太网"
 
-#: src/trayicon.py:78
+#: NetworkMgr/trayicon.py:209
+#, fuzzy, python-format
+msgid "Wired %s Disabled"
+msgstr "WiFi %s 已禁用"
+
+#: NetworkMgr/trayicon.py:216
 #, python-format
 msgid "Wired %s Connected"
 msgstr "有线 %s 已连接"
 
-#: src/trayicon.py:81
-msgid "Disable"
-msgstr "禁用"
+#: NetworkMgr/trayicon.py:223 NetworkMgr/trayicon.py:234
+#: NetworkMgr/trayicon.py:281
+#, python-format
+msgid "Configure %s"
+msgstr ""
 
-#: src/trayicon.py:86
+#: NetworkMgr/trayicon.py:227
 #, python-format
 msgid "Wired %s Disconnected"
 msgstr "有线 %s 已断开"
 
-#: src/trayicon.py:89
-msgid "Enable"
-msgstr "启用"
-
-#: src/trayicon.py:93
+#: NetworkMgr/trayicon.py:238
 #, python-format
 msgid "Wired %s Unplug"
 msgstr "已拔出有线 %s"
 
-#: src/trayicon.py:101
+#: NetworkMgr/trayicon.py:246
 #, python-format
 msgid "WiFi %s Disabled"
 msgstr "WiFi %s 已禁用"
 
-#: src/trayicon.py:104
+#: NetworkMgr/trayicon.py:249
 #, python-format
 msgid "Enable Wifi %s"
 msgstr "启用 WiFi %s"
 
-#: src/trayicon.py:109
+#: NetworkMgr/trayicon.py:254
 #, python-format
 msgid "WiFi %s Disconnected"
 msgstr "WiFi %s 已断开"
 
-#: src/trayicon.py:113 src/trayicon.py:131
+#: NetworkMgr/trayicon.py:259 NetworkMgr/trayicon.py:278
 #, python-format
 msgid "Disable Wifi %s"
 msgstr "禁用 WiFi %s"
 
-#: src/trayicon.py:119
+#: NetworkMgr/trayicon.py:265
 #, python-format
 msgid "WiFi %s Connected"
 msgstr "WiFi %s 已连接"
 
-#: src/trayicon.py:125
+#: NetworkMgr/trayicon.py:271
 #, python-format
 msgid "Disconnect from %s"
 msgstr "已与 %s 断开连接"
 
-#: src/trayicon.py:139
-msgid "Enable Networking"
-msgstr "启用网络"
-
-#: src/trayicon.py:143
-msgid "Disable Networking"
+#: NetworkMgr/trayicon.py:287
+#, fuzzy
+msgid "Restart Networking"
 msgstr "禁用网络"
 
-#: src/trayicon.py:148
+#: NetworkMgr/trayicon.py:290
 msgid "Close Network Manager"
 msgstr "退出网络管理器"
 
-#: src/trayicon.py:156
+#: NetworkMgr/trayicon.py:312
+#, python-format
+msgid "%s (WPA3 only)"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:349
 msgid "Available Connections"
 msgstr "可用连接"
 
-#: src/trayicon.py:364
+#: NetworkMgr/trayicon.py:367
+#, fuzzy
+msgid "Forget Network"
+msgstr "以太网"
+
+#: NetworkMgr/trayicon.py:835
+#, python-format
+msgid ""
+"%(card)s did not associate with %(ssid)s before timing out.\n"
+"\n"
+"A weak signal is the usual cause."
+msgstr ""
+
+#: NetworkMgr/trayicon.py:839
+#, python-format
+msgid "wpa_supplicant did not accept the request on %s."
+msgstr ""
+
+#: NetworkMgr/trayicon.py:842
+#, python-format
+msgid "Could not connect to %s"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:873
 msgid "Wi-Fi Network Authentication Required"
 msgstr "需要无线网络身份验证"
 
-#: src/trayicon.py:376
-#, python-brace-format
-msgid "{ssid_info[0]} Wi-Fi Network Authentication failed"
-msgstr "无线网络 {ssid_info[0]} 身份验证失败"
+#: NetworkMgr/trayicon.py:886
+#, python-format
+msgid "Could not connect to %s. Try again."
+msgstr ""
 
-#: src/trayicon.py:378
-#, python-brace-format
-msgid "Authentication required by {ssid_info[0]} Wi-Fi Network"
+#: NetworkMgr/trayicon.py:888
+#, fuzzy, python-format
+msgid "Authentication required by %s Wi-Fi Network"
 msgstr "无线网络 {ssid_info[0]} 需要身份验证"
 
-#: src/trayicon.py:381
+#: NetworkMgr/trayicon.py:890 NetworkMgr/trayicon.py:1086
 msgid "Password:"
 msgstr "密码："
 
-#: src/trayicon.py:384
+#: NetworkMgr/trayicon.py:893
 msgid "Show password"
 msgstr "显示密码"
+
+#: NetworkMgr/trayicon.py:1014
+msgid "Enterprise Wi-Fi Authentication"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1023
+#, fuzzy, python-format
+msgid "%s Enterprise Authentication Failed"
+msgstr "需要无线网络身份验证"
+
+#: NetworkMgr/trayicon.py:1025
+#, python-format
+msgid "Enterprise Authentication for %s"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1029
+#, python-format
+msgid "Security: %s"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1041
+msgid "EAP Method:"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1054
+msgid "Inner Auth:"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1067
+msgid "Username:"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1076
+msgid "Anonymous ID:"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1080
+msgid "Optional - for privacy"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1094
+msgid "Show"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1103
+msgid "CA Certificate:"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1108
+msgid "Select CA Certificate"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1116
+msgid "Certificates (*.pem, *.crt, *.cer)"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1128
+msgid "Client Cert:"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1132
+msgid "Select Client Certificate"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1143
+msgid "Private Key:"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1147
+msgid "Select Private Key"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1151
+msgid "Key files (*.pem, *.key, *.p12)"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1163
+#, fuzzy
+msgid "Key Password:"
+msgstr "密码："
+
+#~ msgid "Enable Networking"
+#~ msgstr "启用网络"
+
+#, python-brace-format
+#~ msgid "{ssid_info[0]} Wi-Fi Network Authentication failed"
+#~ msgstr "无线网络 {ssid_info[0]} 身份验证失败"

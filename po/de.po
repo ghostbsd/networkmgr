@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-12-14 17:25+0000\n"
+"POT-Creation-Date: 2026-09-11 21:33-0300\n"
 "PO-Revision-Date: 2023-12-14 17:25+0000\n"
 "Last-Translator: Joshua Hoffmann <joshua@joshua-hoffmann.eu>\n"
 "Language-Team: Language locale/de\n"
@@ -17,97 +17,236 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: src/trayicon.py:67
+#: NetworkMgr/trayicon.py:173
+msgid "WireGuard VPN"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:182
+#, fuzzy, python-format
+msgid "%s Connected"
+msgstr "WLAN %s verbunden"
+
+#: NetworkMgr/trayicon.py:185 NetworkMgr/trayicon.py:219
+#: NetworkMgr/trayicon.py:230
+#, fuzzy, python-format
+msgid "Disable %s"
+msgstr "Deaktivieren"
+
+#: NetworkMgr/trayicon.py:189
+#, fuzzy, python-format
+msgid "%s Disconnected"
+msgstr "WLAN %s getrennt"
+
+#: NetworkMgr/trayicon.py:192 NetworkMgr/trayicon.py:212
+msgid "Enable"
+msgstr "Aktivieren"
+
+#: NetworkMgr/trayicon.py:198
 msgid "Ethernet Network"
 msgstr "Ethernet-Netzwerk"
 
-#: src/trayicon.py:78
+#: NetworkMgr/trayicon.py:209
+#, fuzzy, python-format
+msgid "Wired %s Disabled"
+msgstr "WLAN %s deaktiviert"
+
+#: NetworkMgr/trayicon.py:216
 #, python-format
 msgid "Wired %s Connected"
 msgstr "Kabel an %s angeschlossen"
 
-#: src/trayicon.py:81
-msgid "Disable"
-msgstr "Deaktivieren"
+#: NetworkMgr/trayicon.py:223 NetworkMgr/trayicon.py:234
+#: NetworkMgr/trayicon.py:281
+#, python-format
+msgid "Configure %s"
+msgstr ""
 
-#: src/trayicon.py:86
+#: NetworkMgr/trayicon.py:227
 #, python-format
 msgid "Wired %s Disconnected"
 msgstr "Kabel von %s getrennt"
 
-#: src/trayicon.py:89
-msgid "Enable"
-msgstr "Aktivieren"
-
-#: src/trayicon.py:93
+#: NetworkMgr/trayicon.py:238
 #, python-format
 msgid "Wired %s Unplug"
 msgstr "Kabel von %s abgesteckt"
 
-#: src/trayicon.py:101
+#: NetworkMgr/trayicon.py:246
 #, python-format
 msgid "WiFi %s Disabled"
 msgstr "WLAN %s deaktiviert"
 
-#: src/trayicon.py:104
+#: NetworkMgr/trayicon.py:249
 #, python-format
 msgid "Enable Wifi %s"
 msgstr "WLAN %s aktivieren"
 
-#: src/trayicon.py:109
+#: NetworkMgr/trayicon.py:254
 #, python-format
 msgid "WiFi %s Disconnected"
 msgstr "WLAN %s getrennt"
 
-#: src/trayicon.py:113 src/trayicon.py:131
+#: NetworkMgr/trayicon.py:259 NetworkMgr/trayicon.py:278
 #, python-format
 msgid "Disable Wifi %s"
 msgstr "WLAN %s deaktivieren"
 
-#: src/trayicon.py:119
+#: NetworkMgr/trayicon.py:265
 #, python-format
 msgid "WiFi %s Connected"
 msgstr "WLAN %s verbunden"
 
-#: src/trayicon.py:125
+#: NetworkMgr/trayicon.py:271
 #, python-format
 msgid "Disconnect from %s"
 msgstr "%s trennen"
 
-#: src/trayicon.py:139
-msgid "Enable Networking"
-msgstr "Netzwerk aktivieren"
-
-#: src/trayicon.py:143
-msgid "Disable Networking"
+#: NetworkMgr/trayicon.py:287
+#, fuzzy
+msgid "Restart Networking"
 msgstr "Netzwerkverbindungen deaktivieren"
 
-#: src/trayicon.py:148
+#: NetworkMgr/trayicon.py:290
 msgid "Close Network Manager"
 msgstr "Network Manager schließen"
 
-#: src/trayicon.py:156
+#: NetworkMgr/trayicon.py:312
+#, python-format
+msgid "%s (WPA3 only)"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:349
 msgid "Available Connections"
 msgstr "Verfügbare Verbindungen"
 
-#: src/trayicon.py:364
+#: NetworkMgr/trayicon.py:367
+#, fuzzy
+msgid "Forget Network"
+msgstr "Ethernet-Netzwerk"
+
+#: NetworkMgr/trayicon.py:835
+#, python-format
+msgid ""
+"%(card)s did not associate with %(ssid)s before timing out.\n"
+"\n"
+"A weak signal is the usual cause."
+msgstr ""
+
+#: NetworkMgr/trayicon.py:839
+#, python-format
+msgid "wpa_supplicant did not accept the request on %s."
+msgstr ""
+
+#: NetworkMgr/trayicon.py:842
+#, python-format
+msgid "Could not connect to %s"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:873
 msgid "Wi-Fi Network Authentication Required"
 msgstr "WLAN erfordert Legitimierung"
 
-#: src/trayicon.py:376
-#, python-brace-format
-msgid "{ssid_info[0]} Wi-Fi Network Authentication failed"
-msgstr "Legitimierung für WLAN {ssid_info[0]} fehlgeschlagen"
+#: NetworkMgr/trayicon.py:886
+#, python-format
+msgid "Could not connect to %s. Try again."
+msgstr ""
 
-#: src/trayicon.py:378
-#, python-brace-format
-msgid "Authentication required by {ssid_info[0]} Wi-Fi Network"
+#: NetworkMgr/trayicon.py:888
+#, fuzzy, python-format
+msgid "Authentication required by %s Wi-Fi Network"
 msgstr "Legitimierung für WLAN {ssid_info[0]} erforderlich"
 
-#: src/trayicon.py:381
+#: NetworkMgr/trayicon.py:890 NetworkMgr/trayicon.py:1086
 msgid "Password:"
 msgstr "Passwort:"
 
-#: src/trayicon.py:384
+#: NetworkMgr/trayicon.py:893
 msgid "Show password"
 msgstr "Passwort anzeigen"
+
+#: NetworkMgr/trayicon.py:1014
+msgid "Enterprise Wi-Fi Authentication"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1023
+#, fuzzy, python-format
+msgid "%s Enterprise Authentication Failed"
+msgstr "WLAN erfordert Legitimierung"
+
+#: NetworkMgr/trayicon.py:1025
+#, python-format
+msgid "Enterprise Authentication for %s"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1029
+#, python-format
+msgid "Security: %s"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1041
+msgid "EAP Method:"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1054
+msgid "Inner Auth:"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1067
+msgid "Username:"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1076
+msgid "Anonymous ID:"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1080
+msgid "Optional - for privacy"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1094
+msgid "Show"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1103
+msgid "CA Certificate:"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1108
+msgid "Select CA Certificate"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1116
+msgid "Certificates (*.pem, *.crt, *.cer)"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1128
+msgid "Client Cert:"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1132
+msgid "Select Client Certificate"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1143
+msgid "Private Key:"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1147
+msgid "Select Private Key"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1151
+msgid "Key files (*.pem, *.key, *.p12)"
+msgstr ""
+
+#: NetworkMgr/trayicon.py:1163
+#, fuzzy
+msgid "Key Password:"
+msgstr "Passwort:"
+
+#~ msgid "Enable Networking"
+#~ msgstr "Netzwerk aktivieren"
+
+#, python-brace-format
+#~ msgid "{ssid_info[0]} Wi-Fi Network Authentication failed"
+#~ msgstr "Legitimierung für WLAN {ssid_info[0]} fehlgeschlagen"

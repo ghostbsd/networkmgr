@@ -1,0 +1,10 @@
+
+[MASTER]
+# Add current directory to Python path so pylint can find local modules
+init-hook='import sys; sys.path.append(".")'
+ignore=.venv,venv,.git,__pycache__,.pytest_cache,build,dist
+
+[FORMAT]
+# Maximum line length
+max-line-length=120
+max-module-lines=1800
