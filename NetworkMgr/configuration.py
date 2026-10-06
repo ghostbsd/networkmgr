@@ -37,9 +37,9 @@ from NetworkMgr import validate
 # address, netmask or keyword such as "WPA DHCP" can hold. No quote, $,
 # backtick, backslash or newline can get through.
 RC_CONF_SAFE_REGEX = re.compile(r'[A-Za-z0-9_.:%/ -]*')
-# An rc.conf variable name. A "." from a vlan name such as em0.10 is let
-# through, sysrc refuses it on its own.
-RC_CONF_NAME_REGEX = re.compile(r'[A-Za-z_][A-Za-z0-9_.]*')
+# An rc.conf variable name. Interface names go through
+# validate.rc_conf_interface first, so em0.10 arrives as em0_10.
+RC_CONF_NAME_REGEX = re.compile(r'[A-Za-z_][A-Za-z0-9_]*')
 
 
 class NetCardConfigWindow(Gtk.Window):
@@ -564,7 +564,18 @@ class NetCardConfigWindow(Gtk.Window):
         nic = validate.interface(self.current_settings["Active Interface"])
         if nic not in self.nics:
             raise ValueError(f'"{nic}" is not one of this system\'s interfaces.')
-        settings = {'nic': nic}
+        settings = {'nic': nic, 'inet': '', 'netmask': ''}
+        if self.method == 'DHCP':
+            # Saving DHCP briefly puts the current address back while
+            # dhclient starts. The entries are greyed out and hold what
+            # ifconfig reported, so an empty or odd value just skips that.
+            try:
+                settings['inet'] = validate.ipv4_address(
+                    self.ip_input_address_entry.get_text(), 'Address')
+                settings['netmask'] = validate.ipv4_netmask(
+                    self.ip_input_mask_entry.get_text())
+            except ValueError:
+                settings['inet'] = settings['netmask'] = ''
         if self.method == 'Manual':
             gateway = self.ip_input_gateway_entry.get_text().strip()
             dns2 = self.secondary_dns_entry.get_text().strip()
@@ -595,6 +606,11 @@ class NetCardConfigWindow(Gtk.Window):
                 'dns6': validate.ipv6_address(dns6, 'IPv6 DNS Server')
                 if dns6 else '',
             })
+        scope = settings.get('gateway6', '').partition('%')[2]
+        if scope and scope != nic:
+            raise ValueError(
+                f'IPv6 Gateway: the "%{scope}" zone does not match the '
+                f'interface being configured, {nic}.')
         return settings
 
     def show_invalid_entry(self, message):
@@ -623,6 +639,7 @@ class NetCardConfigWindow(Gtk.Window):
         """
         settings = self.pending
         nic = settings['nic']
+        rc_nic = validate.rc_conf_interface(nic)
         if self.method == 'Manual':
             inet = settings['inet']
             netmask = settings['netmask']
@@ -630,7 +647,7 @@ class NetCardConfigWindow(Gtk.Window):
                 ifconfig_value = f'WPA inet {inet} netmask {netmask}'
             else:
                 ifconfig_value = f'inet {inet} netmask {netmask}'
-            self.set_rc_conf(f'ifconfig_{nic}', ifconfig_value)
+            self.set_rc_conf(f'ifconfig_{rc_nic}', ifconfig_value)
             if settings['defaultrouter']:
                 self.set_rc_conf('defaultrouter', settings['defaultrouter'])
             else:
@@ -650,13 +667,14 @@ class NetCardConfigWindow(Gtk.Window):
                     nameserver2_line = f'nameserver {dns2}\n'
                     resolv_conf.writelines(nameserver2_line)
         else:
-            self.set_rc_conf(f'ifconfig_{nic}',
+            self.set_rc_conf(f'ifconfig_{rc_nic}',
                              'WPA DHCP' if 'wlan' in nic else 'DHCP')
 
             with open('/etc/rc.conf', 'r', encoding='utf-8') as rc_conf_file:
                 rc_conf = rc_conf_file.read()
             for nic_search in self.nics:
-                if re.search(f'^ifconfig_{nic_search}=".*inet', rc_conf, re.MULTILINE):
+                rc_search = validate.rc_conf_interface(nic_search)
+                if re.search(f'^ifconfig_{rc_search}=".*inet', rc_conf, re.MULTILINE):
                     break
             else:
                 # Nothing static left, so dhclient takes the default
@@ -664,7 +682,8 @@ class NetCardConfigWindow(Gtk.Window):
                 self.remove_rc_conf_var('defaultrouter')
             restart_card_network(nic)
             # sometimes the inet address isn't available immediately after dhcp is enabled.
-            start_static_network(nic, inet, netmask)
+            if settings['inet']:
+                start_static_network(nic, settings['inet'], settings['netmask'])
             wait_for_address(nic)
             restart_routing_and_dhcp(nic)
 
@@ -681,6 +700,7 @@ class NetCardConfigWindow(Gtk.Window):
                 validated_settings().
         """
         nic = settings['nic']
+        rc_nic = validate.rc_conf_interface(nic)
 
         if self.method6 == 'Manual':
             inet6 = settings['inet6']
@@ -688,7 +708,7 @@ class NetCardConfigWindow(Gtk.Window):
             gateway6 = settings['gateway6']
             dns6 = settings['dns6']
             # Static IPv6 configuration
-            self.set_rc_conf(f'ifconfig_{nic}_ipv6',
+            self.set_rc_conf(f'ifconfig_{rc_nic}_ipv6',
                              f'inet6 {inet6} prefixlen {prefixlen}')
 
             # Disable rtsold for static configuration
@@ -719,7 +739,7 @@ class NetCardConfigWindow(Gtk.Window):
                 self.add_ipv6_dns(dns6)
         else:
             # SLAAC configuration
-            self.set_rc_conf(f'ifconfig_{nic}_ipv6', 'inet6 accept_rtadv')
+            self.set_rc_conf(f'ifconfig_{rc_nic}_ipv6', 'inet6 accept_rtadv')
 
             # Enable rtsold for SLAAC
             self.set_rc_conf('rtsold_enable', 'YES')

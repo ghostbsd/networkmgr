@@ -12,6 +12,8 @@ from subprocess import CalledProcessError, check_output, run
 import re
 import os
 
+from NetworkMgr.validate import rc_conf_interface
+
 IP_REGEX = r'[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'
 
 
@@ -70,7 +72,8 @@ def get_interface_settings_ipv6(active_nic):
         empty strings rather than absent keys.
     """
     ipv6_settings = {}
-    ifconfig_ipv6 = _rc_conf_value(f'ifconfig_{active_nic}_ipv6')
+    ifconfig_ipv6 = _rc_conf_value(
+        f'ifconfig_{rc_conf_interface(active_nic)}_ipv6')
 
     # Check if SLAAC is enabled (accept_rtadv in rc.conf)
     slaac_search = re.search(
@@ -186,7 +189,7 @@ def get_interface_settings(active_nic):
         2 are always present, empty when unset.
     """
     interface_settings = {}
-    if 'DHCP' in _rc_conf_value(f'ifconfig_{active_nic}'):
+    if 'DHCP' in _rc_conf_value(f'ifconfig_{rc_conf_interface(active_nic)}'):
         dhcp_status_output = "DHCP"
     else:
         dhcp_status_output = "Manual"

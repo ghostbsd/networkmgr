@@ -22,6 +22,9 @@ MAX_SEARCH_DOMAINS = 6
 MAX_SEARCH_LENGTH = 256
 # A prefix length. str.isdigit() would also take digits such as "²".
 PREFIX_REGEX = re.compile(r'[0-9]{1,3}')
+# rc.subr turns these characters of an interface name into "_" when it
+# looks up ifconfig_<name> and friends. See get_if_var in network.subr.
+RC_CONF_PUNCTUATION = str.maketrans('.-/+', '____')
 
 
 def interface(name):
@@ -40,6 +43,22 @@ def interface(name):
     if not INTERFACE_REGEX.fullmatch(name):
         raise ValueError(f'"{name}" is not a valid interface name.')
     return name
+
+
+def rc_conf_interface(name):
+    """
+    Give the form of an interface name that rc.conf variables use.
+
+    rc.subr reads the settings of em0.10 from ifconfig_em0_10, and sysrc
+    refuses a variable name with a dot in it.
+
+    Args:
+        name (str): the interface, for instance "em0.10".
+
+    Returns:
+        str: the name with ".", "-", "/" and "+" replaced by "_".
+    """
+    return name.translate(RC_CONF_PUNCTUATION)
 
 
 def ipv4_address(text, field):
@@ -75,19 +94,21 @@ def ipv4_netmask(text):
 
     Raises:
         ValueError: when the text is neither a contiguous dotted netmask
-            nor a prefix length from 0 to 32.
+            nor a prefix length from 1 to 32. A zero netmask would put the
+            whole internet on the link, so it is refused.
     """
     value = text.strip()
     error = ValueError(f'Subnet Mask: "{text}" is not a valid netmask.')
     if PREFIX_REGEX.fullmatch(value):
-        if int(value) > 32:
+        if not 1 <= int(value) <= 32:
             raise error
         return str(IPv4Network(f'0.0.0.0/{value}').netmask)
     try:
         mask = IPv4Address(value)
         # IPv4Network also takes host masks such as 0.0.0.255, so check
         # that the netmask it derives is the one that was typed.
-        if IPv4Network(f'0.0.0.0/{value}').netmask != mask:
+        if IPv4Network(f'0.0.0.0/{value}').netmask != mask \
+                or mask == IPv4Address('0.0.0.0'):
             raise error
     except ValueError:
         raise error from None
@@ -183,7 +204,9 @@ def search_domains(text):
     """
     domains = text.split()
     for domain in domains:
-        labels = domain.rstrip('.').split('.')
+        # One trailing dot marks a fully qualified name. Only that one is
+        # dropped, so "example.com.." leaves an empty label and is refused.
+        labels = domain.removesuffix('.').split('.')
         if len(domain) > 253 or not all(LABEL_REGEX.fullmatch(label) for label in labels):
             raise ValueError(f'Search domains: "{domain}" is not a valid domain name.')
     joined = ' '.join(domains)
