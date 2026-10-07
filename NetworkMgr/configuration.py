@@ -5,7 +5,8 @@
 Two tabs, IPv4 and IPv6, each offering an automatic mode (DHCP or SLAAC) or
 a manual address, mask, gateway, DNS and search domain. Saving writes
 rc.conf through sysrc and /etc/resolv.conf directly, then applies the same
-settings to the running system through NetworkMgr.net_api.
+settings to the running system through NetworkMgr.net_api. Every value is
+checked by NetworkMgr.validate first, since rc.conf runs as shell code.
 """
 
 import re
@@ -30,6 +31,15 @@ from NetworkMgr.net_api import (
     wait_for_address
 )
 from NetworkMgr.query import get_interface_settings, get_interface_settings_ipv6
+from NetworkMgr import validate
+
+# What set_rc_conf lets into rc.conf: the characters an interface name,
+# address, netmask or keyword such as "WPA DHCP" can hold. No quote, $,
+# backtick, backslash or newline can get through.
+RC_CONF_SAFE_REGEX = re.compile(r'[A-Za-z0-9_.:%/ -]*')
+# An rc.conf variable name. Interface names go through
+# validate.rc_conf_interface first, so em0.10 arrives as em0_10.
+RC_CONF_NAME_REGEX = re.compile(r'[A-Za-z_][A-Za-z0-9_]*')
 
 
 class NetCardConfigWindow(Gtk.Window):
@@ -122,6 +132,8 @@ class NetCardConfigWindow(Gtk.Window):
         Gtk.Window.__init__(self, title="Network Configuration")
         self.set_default_size(475, 400)
         self.nics = nics_list()
+        # The checked values Save hands to update_system().
+        self.pending = {}
         default_nic = selected_nic if selected_nic else default_card()
         # Build Tab 1 Content
         # Interface Drop Down Combo Box
@@ -521,13 +533,102 @@ class NetCardConfigWindow(Gtk.Window):
             self.search_entry6.set_sensitive(False)
 
     def commit_pending_changes(self, _widget):
-        """Hide the window and apply the settings on the GTK idle handler.
+        """Check the entries, then apply them on the GTK idle handler.
+
+        When an entry is invalid, an error dialog names it and the window
+        stays open so it can be corrected. Nothing is written.
 
         Args:
             _widget (Gtk.Widget): the Save button, unused.
         """
+        try:
+            self.pending = self.validated_settings()
+        except ValueError as error:
+            self.show_invalid_entry(str(error))
+            return
         self.hide_window()
         GLib.idle_add(self.update_system)
+
+    def validated_settings(self):
+        """Read the entries the chosen methods use and check each of them.
+
+        Returns:
+            dict[str, str]: the interface and the normalized values, keyed
+                nic, inet, netmask, defaultrouter, dns1, dns2, search,
+                inet6, prefixlen, gateway6 and dns6. Optional entries left
+                blank are empty strings.
+
+        Raises:
+            ValueError: naming the first entry that is not valid.
+        """
+        nic = validate.interface(self.current_settings["Active Interface"])
+        if nic not in self.nics:
+            raise ValueError(f'"{nic}" is not one of this system\'s interfaces.')
+        settings = {'nic': nic, 'inet': '', 'netmask': ''}
+        if self.method == 'DHCP':
+            # Saving DHCP briefly puts the current address back while
+            # dhclient starts. The entries are greyed out and hold what
+            # ifconfig reported, so an empty or odd value just skips that.
+            try:
+                settings['inet'] = validate.ipv4_address(
+                    self.ip_input_address_entry.get_text(), 'Address')
+                settings['netmask'] = validate.ipv4_netmask(
+                    self.ip_input_mask_entry.get_text())
+            except ValueError:
+                settings['inet'] = settings['netmask'] = ''
+        if self.method == 'Manual':
+            gateway = self.ip_input_gateway_entry.get_text().strip()
+            dns2 = self.secondary_dns_entry.get_text().strip()
+            settings.update({
+                'inet': validate.ipv4_address(
+                    self.ip_input_address_entry.get_text(), 'Address'),
+                'netmask': validate.ipv4_netmask(
+                    self.ip_input_mask_entry.get_text()),
+                'defaultrouter': validate.ipv4_address(gateway, 'Gateway')
+                if gateway else '',
+                'dns1': validate.ip_address(
+                    self.prymary_dns_entry.get_text(), 'Primary DNS Server'),
+                'dns2': validate.ip_address(dns2, 'Secondary DNS Server')
+                if dns2 else '',
+                'search': validate.search_domains(self.search_entry.get_text()),
+            })
+        if self.method6 == 'Manual':
+            prefixlen = self.ip_input_mask_entry6.get_text().strip() or '64'
+            gateway6 = self.ip_input_gateway_entry6.get_text().strip()
+            dns6 = self.prymary_dns_entry6.get_text().strip()
+            settings.update({
+                'inet6': validate.ipv6_address(
+                    self.ip_input_address_entry6.get_text(), 'IPv6 Address'),
+                'prefixlen': validate.ipv6_prefixlen(prefixlen),
+                'gateway6': validate.ipv6_address(
+                    gateway6, 'IPv6 Gateway', allow_scope=True)
+                if gateway6 else '',
+                'dns6': validate.ipv6_address(dns6, 'IPv6 DNS Server')
+                if dns6 else '',
+            })
+        scope = settings.get('gateway6', '').partition('%')[2]
+        if scope and scope != nic:
+            raise ValueError(
+                f'IPv6 Gateway: the "%{scope}" zone does not match the '
+                f'interface being configured, {nic}.')
+        return settings
+
+    def show_invalid_entry(self, message):
+        """Tell the user which entry was refused.
+
+        Args:
+            message (str): the ValueError text from NetworkMgr.validate.
+        """
+        dialog = Gtk.MessageDialog(
+            transient_for=self,
+            modal=True,
+            message_type=Gtk.MessageType.ERROR,
+            buttons=Gtk.ButtonsType.OK,
+            text="Invalid network setting",
+        )
+        dialog.format_secondary_text(message)
+        dialog.run()
+        dialog.destroy()
 
     def update_system(self):
         """Write the chosen IPv4 and IPv6 settings and apply them.
@@ -536,39 +637,44 @@ class NetCardConfigWindow(Gtk.Window):
         a manual configuration, and the interface is restarted so the new
         settings take effect straight away.
         """
-        nic = self.current_settings["Active Interface"]
-        inet = self.ip_input_address_entry.get_text()
-        netmask = self.ip_input_mask_entry.get_text()
-        defaultrouter = self.ip_input_gateway_entry.get_text()
+        settings = self.pending
+        nic = settings['nic']
+        rc_nic = validate.rc_conf_interface(nic)
         if self.method == 'Manual':
+            inet = settings['inet']
+            netmask = settings['netmask']
             if 'wlan' in nic:
                 ifconfig_value = f'WPA inet {inet} netmask {netmask}'
             else:
                 ifconfig_value = f'inet {inet} netmask {netmask}'
-            self.set_rc_conf(f'ifconfig_{nic}', ifconfig_value)
-            self.set_rc_conf('defaultrouter', defaultrouter)
+            self.set_rc_conf(f'ifconfig_{rc_nic}', ifconfig_value)
+            if settings['defaultrouter']:
+                self.set_rc_conf('defaultrouter', settings['defaultrouter'])
+            else:
+                self.remove_rc_conf_var('defaultrouter')
             start_static_network(nic, inet, netmask)
             with open('/etc/resolv.conf', 'w', encoding='utf-8') as resolv_conf:
                 resolv_conf.writelines('# Generated by NetworkMgr\n')
-                search = self.search_entry.get_text()
+                search = settings['search']
                 if search:
                     search_line = f'search {search}\n'
                     resolv_conf.writelines(search_line)
-                dns1 = self.prymary_dns_entry.get_text()
+                dns1 = settings['dns1']
                 nameserver1_line = f'nameserver {dns1}\n'
                 resolv_conf.writelines(nameserver1_line)
-                dns2 = self.secondary_dns_entry.get_text()
+                dns2 = settings['dns2']
                 if dns2:
                     nameserver2_line = f'nameserver {dns2}\n'
                     resolv_conf.writelines(nameserver2_line)
         else:
-            self.set_rc_conf(f'ifconfig_{nic}',
+            self.set_rc_conf(f'ifconfig_{rc_nic}',
                              'WPA DHCP' if 'wlan' in nic else 'DHCP')
 
             with open('/etc/rc.conf', 'r', encoding='utf-8') as rc_conf_file:
                 rc_conf = rc_conf_file.read()
             for nic_search in self.nics:
-                if re.search(f'^ifconfig_{nic_search}=".*inet', rc_conf, re.MULTILINE):
+                rc_search = validate.rc_conf_interface(nic_search)
+                if re.search(f'^ifconfig_{rc_search}=".*inet', rc_conf, re.MULTILINE):
                     break
             else:
                 # Nothing static left, so dhclient takes the default
@@ -576,25 +682,33 @@ class NetCardConfigWindow(Gtk.Window):
                 self.remove_rc_conf_var('defaultrouter')
             restart_card_network(nic)
             # sometimes the inet address isn't available immediately after dhcp is enabled.
-            start_static_network(nic, inet, netmask)
+            if settings['inet']:
+                start_static_network(nic, settings['inet'], settings['netmask'])
             wait_for_address(nic)
             restart_routing_and_dhcp(nic)
 
         # Apply IPv6 configuration
-        self.update_system_ipv6(nic)
+        self.update_system_ipv6(settings)
 
         self.destroy()
 
-    def update_system_ipv6(self, nic):
-        """Apply IPv6 configuration changes."""
-        inet6 = self.ip_input_address_entry6.get_text()
-        prefixlen = self.ip_input_mask_entry6.get_text() or "64"
-        gateway6 = self.ip_input_gateway_entry6.get_text()
-        dns6 = self.prymary_dns_entry6.get_text()
+    def update_system_ipv6(self, settings):
+        """Apply IPv6 configuration changes.
+
+        Args:
+            settings (dict[str, str]): the checked values from
+                validated_settings().
+        """
+        nic = settings['nic']
+        rc_nic = validate.rc_conf_interface(nic)
 
         if self.method6 == 'Manual':
+            inet6 = settings['inet6']
+            prefixlen = settings['prefixlen']
+            gateway6 = settings['gateway6']
+            dns6 = settings['dns6']
             # Static IPv6 configuration
-            self.set_rc_conf(f'ifconfig_{nic}_ipv6',
+            self.set_rc_conf(f'ifconfig_{rc_nic}_ipv6',
                              f'inet6 {inet6} prefixlen {prefixlen}')
 
             # Disable rtsold for static configuration
@@ -625,7 +739,7 @@ class NetCardConfigWindow(Gtk.Window):
                 self.add_ipv6_dns(dns6)
         else:
             # SLAAC configuration
-            self.set_rc_conf(f'ifconfig_{nic}_ipv6', 'inet6 accept_rtadv')
+            self.set_rc_conf(f'ifconfig_{rc_nic}_ipv6', 'inet6 accept_rtadv')
 
             # Enable rtsold for SLAAC
             self.set_rc_conf('rtsold_enable', 'YES')
@@ -679,16 +793,25 @@ class NetCardConfigWindow(Gtk.Window):
     def set_rc_conf(self, name, value):
         """Set one rc.conf variable through sysrc.
 
-        The name and the value are passed as a single argument rather than
-        built into a shell command, so a value holding spaces needs no
-        quoting and a value holding a quote or a semicolon cannot run
-        anything. sysrc adds the quotes when it writes the file.
+        sysrc writes the value between double quotes without escaping it,
+        and rc.conf is run by the shell as root at boot, so a value holding
+        a quote, $(...) or a backtick would run as root. The entries are
+        checked by NetworkMgr.validate before they get here. As a last
+        guard, a name outside RC_CONF_NAME_REGEX or a value with any
+        character outside RC_CONF_SAFE_REGEX is refused rather than written.
 
         Args:
             name (str): the rc.conf variable, for instance ifconfig_em0.
             value (str): its value, for instance "inet 10.0.0.2 netmask
                 255.255.255.0". Spaces are fine.
+
+        Raises:
+            ValueError: when the name or the value holds a character that
+                is not safe in rc.conf.
         """
+        if not RC_CONF_NAME_REGEX.fullmatch(name) \
+                or not RC_CONF_SAFE_REGEX.fullmatch(value):
+            raise ValueError(f'Refusing to write {name!r}={value!r} to rc.conf.')
         run(['sysrc', f'{name}={value}'], check=False)
 
 
