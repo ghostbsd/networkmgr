@@ -2,8 +2,6 @@
 
 A network manager based on Python and GTK3 for FreeBSD, GhostBSD, and DragonFlyBSD. 
 
-![alt text](https://image.ibb.co/bWha3R/Screenshot_at_2017_11_24_20_57_33.png)
-
 NetworkMgr supports FreeBSD rc(8) and openrc(8). 
 
 ## Installation
