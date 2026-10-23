@@ -65,7 +65,7 @@ active_status = (
 
 # Stop the interface if it's not active or associated.
 # This removes the interface from the default route.
-# Restarting routing adds and nic if there is another one that is active
+# Restarting routing adds a nic if there is another one that is active
 # or associated.
 if not any(active_status):
     run(['service', 'netif', 'stop', nic], check=False)
