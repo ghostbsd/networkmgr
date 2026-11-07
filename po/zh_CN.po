@@ -130,7 +130,7 @@ msgid ""
 msgstr ""
 "%(card)s 未能在超时前与 %(ssid)s 建立关联。\n"
 "\n"
-"信号较弱通常是最常见的原因。"
+"最常见的原因是信号较弱。"
 
 #: NetworkMgr/trayicon.py:839
 #, python-format
@@ -189,7 +189,7 @@ msgstr "EAP 方法："
 
 #: NetworkMgr/trayicon.py:1054
 msgid "Inner Auth:"
-msgstr "内层认证："
+msgstr "内层身份验证："
 
 #: NetworkMgr/trayicon.py:1067
 msgid "Username:"
