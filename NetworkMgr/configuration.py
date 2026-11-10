@@ -49,10 +49,12 @@ from NetworkMgr.openvpn_api import (
     parse_openvpn_config,
 )
 from NetworkMgr.wg_api import (
+    WIREGUARD_NOT_INSTALLED_MSG,
     default_wireguard_config,
     delete_wireguard_config,
     disable_wg,
     enable_wg,
+    is_wireguard_installed,
     parse_wireguard_config,
     wg_dictionary,
     wg_service_state,
@@ -73,6 +75,7 @@ from NetworkMgr.vpn_dialog import (
     show_connection_notification,
     show_ipsec_not_installed_alert,
     show_openvpn_not_installed_alert,
+    show_wireguard_not_installed_alert,
 )
 
 # What set_rc_conf lets into rc.conf: the characters an interface name,
@@ -1323,10 +1326,18 @@ class NetCardConfigWindow(Gtk.Window):
                 disable_wg(pid)
                 self.refresh_vpn_list()
                 show_connection_notification(display_name, False)
+            elif not is_wireguard_installed():
+                show_wireguard_not_installed_alert(self)
             else:
-                enable_wg(pid)
+                ok, err_msg = enable_wg(pid)
                 self.refresh_vpn_list()
-                show_connection_notification(display_name, True)
+                if not ok:
+                    if err_msg == WIREGUARD_NOT_INSTALLED_MSG:
+                        show_wireguard_not_installed_alert(self)
+                    else:
+                        self.show_invalid_entry(err_msg)
+                else:
+                    show_connection_notification(display_name, True)
         elif sel['vpn_type'] == 'ipsec':
             protocol = sel['username'] or 'l2tp-ipsec'
             if sel['state'] == 'Connected':
@@ -1793,6 +1804,8 @@ class NetworkSettingsWindow(Gtk.Window):
                 show_openvpn_not_installed_alert(self)
             cfg = default_openvpn_config('New OpenVPN')
         elif chosen == 'wireguard':
+            if not is_wireguard_installed():
+                show_wireguard_not_installed_alert(self)
             cfg = default_wireguard_config('wg0')
         else:
             if not is_ipsec_installed(chosen):
@@ -1893,10 +1906,19 @@ class NetworkSettingsWindow(Gtk.Window):
             if is_connected:
                 disable_wg(ident)
                 show_connection_notification(display_name, False)
+                self._notify_changed()
+            elif not is_wireguard_installed():
+                show_wireguard_not_installed_alert(self)
             else:
-                enable_wg(ident)
-                show_connection_notification(display_name, True)
-            self._notify_changed()
+                ok, err_msg = enable_wg(ident)
+                self._notify_changed()
+                if not ok:
+                    if err_msg == WIREGUARD_NOT_INSTALLED_MSG:
+                        show_wireguard_not_installed_alert(self)
+                    else:
+                        self._show_error(err_msg)
+                else:
+                    show_connection_notification(display_name, True)
         elif item['subtype'] == 'ipsec':
             protocol = item['extra'] or 'l2tp-ipsec'
             if is_connected:
@@ -1978,7 +2000,7 @@ def open_network_settings(on_changed=None):
     """Open the unified NetworkManager-style Network Connections / Settings window."""
     win = NetworkSettingsWindow(on_changed=on_changed)
     win.show_all()
-    win.set_keep_above(True)
+    win.present()
     if Gtk.main_level() == 0:
         win.connect("destroy", Gtk.main_quit)
         Gtk.main()
@@ -1993,7 +2015,7 @@ def open_configuration(default_int):
     """
     win = NetCardConfigWindow(default_int)
     win.show_all()
-    win.set_keep_above(True)
+    win.present()
     if Gtk.main_level() == 0:
         win.connect("destroy", Gtk.main_quit)
         Gtk.main()
@@ -2003,7 +2025,7 @@ def open_default_configuration():
     """Open the configuration window on the default interface and run GTK."""
     win = NetCardConfigWindow()
     win.show_all()
-    win.set_keep_above(True)
+    win.present()
     if Gtk.main_level() == 0:
         win.connect("destroy", Gtk.main_quit)
         Gtk.main()

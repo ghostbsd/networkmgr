@@ -27,7 +27,9 @@ from NetworkMgr.openvpn_api import (
     save_openvpn_config,
 )
 from NetworkMgr.wg_api import (
+    WIREGUARD_NOT_INSTALLED_MSG,
     default_wireguard_config,
+    is_wireguard_installed,
     parse_wireguard_config,
     sanitize_wg_id,
     save_wireguard_config,
@@ -101,6 +103,20 @@ def show_ipsec_not_installed_alert(protocol='l2tp-ipsec', parent=None):
         text="IPsec / L2TP VPN packages are not installed",
     )
     dialog.format_secondary_text(ipsec_missing_packages_message(protocol))
+    dialog.run()
+    dialog.destroy()
+
+
+def show_wireguard_not_installed_alert(parent=None):
+    """Show an English alert dialog informing the user that wireguard-tools is not installed."""
+    dialog = Gtk.MessageDialog(
+        transient_for=parent,
+        modal=True,
+        message_type=Gtk.MessageType.WARNING,
+        buttons=Gtk.ButtonsType.OK,
+        text="WireGuard is not installed",
+    )
+    dialog.format_secondary_text(WIREGUARD_NOT_INSTALLED_MSG)
     dialog.run()
     dialog.destroy()
 
@@ -340,6 +356,8 @@ def import_vpn_file_dialog(parent=None, on_saved=None):
     try:
         vpn_type = detect_vpn_file_type(filepath)
         if vpn_type == 'wireguard':
+            if not is_wireguard_installed():
+                show_wireguard_not_installed_alert(parent)
             cfg = parse_wireguard_config(filepath)
         elif vpn_type == 'ipsec':
             cfg = parse_ipsec_config(filepath)

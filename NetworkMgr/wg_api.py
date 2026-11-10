@@ -8,6 +8,7 @@ are running, and brings them up or down through the wireguard rc service.
 
 import os
 import re
+import shutil
 import sys
 from platform import system
 from subprocess import PIPE, run
@@ -15,6 +16,35 @@ from subprocess import PIPE, run
 PREFIX = '/usr/local' if system() in ('FreeBSD', 'MidnightBSD', 'DragonFly') else sys.prefix
 WG_CONFIG_PATH = f'{PREFIX}/etc/wireguard/'
 WG_ID_REGEX = re.compile(r'[^A-Za-z0-9_-]+')
+
+WIREGUARD_NOT_INSTALLED_MSG = (
+    "WireGuard (wireguard-tools) is not installed on this system.\n\n"
+    "Please install the wireguard-tools package first "
+    "(for example: sudo pkg install wireguard-tools)."
+)
+
+
+def _wg_quick_binary():
+    """Locate the wg-quick executable on BSD/Linux, or return None if not installed."""
+    for candidate in (f'{PREFIX}/bin/wg-quick', '/usr/local/bin/wg-quick',
+                      '/usr/bin/wg-quick', '/bin/wg-quick'):
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return shutil.which('wg-quick')
+
+
+def _wg_binary():
+    """Locate the wg executable on BSD/Linux, or return None if not installed."""
+    for candidate in (f'{PREFIX}/bin/wg', '/usr/local/bin/wg',
+                      '/usr/bin/wg', '/bin/wg'):
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return shutil.which('wg')
+
+
+def is_wireguard_installed():
+    """Report whether wireguard-tools (wg and wg-quick) are installed on this system."""
+    return _wg_quick_binary() is not None and _wg_binary() is not None
 
 
 def sanitize_wg_id(name):
@@ -311,8 +341,9 @@ def disable_wg(wgconfig):
     Args:
         wgconfig (str): the tunnel's configuration name, without .conf.
     """
+    wg_quick_bin = _wg_quick_binary() or 'wg-quick'
     try:
-        run(['wg-quick', 'down', wgconfig], check=False)
+        run([wg_quick_bin, 'down', wgconfig], stdout=PIPE, stderr=PIPE, check=False)
     except OSError:
         pass
 
@@ -322,25 +353,39 @@ def enable_wg(wgconfig):
 
     Args:
         wgconfig (str): the tunnel's configuration name, without .conf.
+
+    Returns:
+        tuple[bool, str]: `(True, '')` on success, or `(False, error_message)`.
     """
+    if not is_wireguard_installed():
+        return False, WIREGUARD_NOT_INSTALLED_MSG
+    wg_quick_bin = _wg_quick_binary()
     try:
-        run(['wg-quick', 'up', wgconfig], check=False)
-    except OSError:
-        pass
+        res = run(
+            [wg_quick_bin, 'up', wgconfig],
+            stdout=PIPE,
+            stderr=PIPE,
+            text=True,
+            check=False,
+        )
+    except (FileNotFoundError, OSError):
+        return False, WIREGUARD_NOT_INSTALLED_MSG
+    if res.returncode != 0:
+        err = (res.stderr or res.stdout or 'wg-quick failed to start tunnel.').strip()
+        return False, err
+    return True, ''
 
 
 def wg_status(wgconfig):
     """Function returning the WireGuard configuration (device) is connected or not."""
+    wg_bin = _wg_binary()
+    if wg_bin is None:
+        return "Disconnected"
     try:
-        result = run(['wg', 'show', wgconfig], stdout=PIPE, stderr=PIPE, check=False)
+        result = run([wg_bin, 'show', wgconfig], stdout=PIPE, stderr=PIPE, check=False)
     except OSError:
         return "Disconnected"
-    out = result.stdout.decode('utf-8')
-    error = result.stderr.decode('utf-8')
-
-    if len(out) == 0 and 'Unable to access interface: Device not configured' in error:
-        status = "Disconnected"
-    else:
-        status = "Connected"
-
-    return status
+    out = result.stdout.decode('utf-8', errors='replace').strip()
+    if result.returncode != 0 or not out:
+        return "Disconnected"
+    return "Connected"

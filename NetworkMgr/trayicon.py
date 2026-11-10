@@ -46,10 +46,12 @@ from NetworkMgr.net_api import (
 from NetworkMgr.configuration import open_configuration, open_network_settings
 
 from NetworkMgr.wg_api import (
+    WIREGUARD_NOT_INSTALLED_MSG,
     wg_dictionary,
     wg_service_state,
     disable_wg,
     enable_wg,
+    is_wireguard_installed,
     parse_wireguard_config
 )
 from NetworkMgr.openvpn_api import (
@@ -73,6 +75,7 @@ from NetworkMgr.vpn_dialog import (
     show_connection_notification,
     show_ipsec_not_installed_alert,
     show_openvpn_not_installed_alert,
+    show_wireguard_not_installed_alert,
     VPNConnectionDialog,
     OpenVPNAuthDialog
 )
@@ -816,8 +819,23 @@ class TrayIcon:
             _widget (Gtk.Widget): the menu item, unused.
             wg_device (str): the tunnel's configuration name, without .conf.
         """
-        enable_wg(wg_device)
+        if not is_wireguard_installed():
+            show_wireguard_not_installed_alert()
+            return
+        ok, err_msg = enable_wg(wg_device)
         self.update_info()
+        if not ok:
+            if err_msg == WIREGUARD_NOT_INSTALLED_MSG:
+                show_wireguard_not_installed_alert()
+                return
+            dialog = Gtk.MessageDialog(
+                None, 0, Gtk.MessageType.WARNING, Gtk.ButtonsType.CLOSE,
+                _("Could not connect to %s") % wg_device
+            )
+            dialog.format_secondary_text(err_msg)
+            dialog.run()
+            dialog.destroy()
+            return
         show_connection_notification(wg_device, True)
 
     def disconnect_wg(self, _widget, wg_device):
