@@ -19,14 +19,17 @@ from gi.repository import Gtk, Gdk, GdkPixbuf, GLib, Pango
 from NetworkMgr.openvpn_api import (
     AUTH_DIGEST_OPTIONS,
     CIPHER_OPTIONS,
+    OPENVPN_CONFIG_PATH,
     OPENVPN_NOT_INSTALLED_MSG,
     default_openvpn_config,
     detect_vpn_file_type,
     is_openvpn_installed,
     parse_openvpn_config,
+    sanitize_profile_id,
     save_openvpn_config,
 )
 from NetworkMgr.wg_api import (
+    WG_CONFIG_PATH,
     WIREGUARD_NOT_INSTALLED_MSG,
     default_wireguard_config,
     is_wireguard_installed,
@@ -35,11 +38,13 @@ from NetworkMgr.wg_api import (
     save_wireguard_config,
 )
 from NetworkMgr.ipsec_api import (
+    IPSEC_DIR,
     IPSEC_PROTOCOLS,
     default_ipsec_config,
     ipsec_missing_packages_message,
     is_ipsec_installed,
     parse_ipsec_config,
+    sanitize_ipsec_id,
     save_ipsec_config,
 )
 
@@ -1392,6 +1397,24 @@ class VPNConnectionDialog(Gtk.Window):
         self.ipsec_ukey_entry.set_text(self.cfg.get('private_key', ''))
         tab1.attach(self.ipsec_ukey_entry, 1, row, 2, 1)
         self.ipsec_rows['private_key'] = (ukey_lbl, self.ipsec_ukey_entry)
+        row += 1
+
+        # Private Key Password (for IKEv2 Cert)
+        ukey_pwd_lbl = _field_label(_("Private Key Password:"))
+        tab1.attach(ukey_pwd_lbl, 0, row, 1, 1)
+        ukey_pwd_box = Gtk.HBox(spacing=6)
+        self.ipsec_ukey_pwd_entry = Gtk.Entry()
+        self.ipsec_ukey_pwd_entry.set_visibility(False)
+        self.ipsec_ukey_pwd_entry.set_hexpand(True)
+        self.ipsec_ukey_pwd_entry.set_text(self.cfg.get('private_key_password', ''))
+        ukey_pwd_show = Gtk.CheckButton(label=_("Show"))
+        ukey_pwd_show.connect(
+            "toggled", lambda w: self.ipsec_ukey_pwd_entry.set_visibility(w.get_active())
+        )
+        ukey_pwd_box.pack_start(self.ipsec_ukey_pwd_entry, True, True, 0)
+        ukey_pwd_box.pack_start(ukey_pwd_show, False, False, 0)
+        tab1.attach(ukey_pwd_box, 1, row, 2, 1)
+        self.ipsec_rows['private_key_password'] = (ukey_pwd_lbl, ukey_pwd_box)
 
         notebook.append_page(tab1, Gtk.Label(label=_("IPsec / L2TP")))
 
@@ -1487,6 +1510,7 @@ class VPNConnectionDialog(Gtk.Window):
                 'ca_cert': proto in ('ikev2-eap', 'ikev2-cert'),
                 'user_cert': proto == 'ikev2-cert',
                 'private_key': proto == 'ikev2-cert',
+                'private_key_password': proto == 'ikev2-cert',
             }
             for key, show_flag in vis.items():
                 for widget in self.ipsec_rows.get(key, ()):
@@ -1527,13 +1551,39 @@ class VPNConnectionDialog(Gtk.Window):
         for widget in self.proxy_rows:
             widget.set_visible(proxy_visible)
 
+    def _confirm_overwrite_if_exists(self, target_path, target_id, orig_id):
+        """Ask the user for confirmation if saving would overwrite another existing VPN."""
+        if orig_id and orig_id == target_id:
+            return True
+        if not os.path.exists(target_path):
+            return True
+        dialog = Gtk.MessageDialog(
+            transient_for=self,
+            modal=True,
+            message_type=Gtk.MessageType.QUESTION,
+            buttons=Gtk.ButtonsType.YES_NO,
+            text=_("Overwrite existing VPN connection?"),
+        )
+        dialog.format_secondary_text(
+            _('A VPN connection with profile ID "%s" already exists. Do you want to replace it?')
+            % target_id
+        )
+        resp = dialog.run()
+        dialog.destroy()
+        return resp == Gtk.ResponseType.YES
+
     def on_save_clicked(self, _widget):
         """Collect form entries, validate, and save the VPN configuration."""
         self.cfg['name'] = self.name_entry.get_text().strip()
+        orig_id = (self.cfg.get('original_profile_id') or '').strip()
 
         try:
             if self.vpn_type == 'wireguard':
                 self.cfg['profile_id'] = self.wg_id_entry.get_text().strip()
+                target_id = sanitize_wg_id(self.cfg['profile_id'] or self.cfg['name'])
+                target_path = os.path.join(WG_CONFIG_PATH, f'{target_id}.conf')
+                if not self._confirm_overwrite_if_exists(target_path, target_id, orig_id):
+                    return
                 self.cfg['address'] = self.wg_addr_entry.get_text().strip()
                 self.cfg['private_key'] = self.wg_priv_entry.get_text().strip()
                 self.cfg['dns'] = self.wg_dns_entry.get_text().strip()
@@ -1545,6 +1595,10 @@ class VPNConnectionDialog(Gtk.Window):
                 self.cfg['persistent_keepalive'] = self.wg_keepalive_entry.get_text().strip()
                 saved_id = save_wireguard_config(self.cfg)
             elif self.vpn_type == 'ipsec':
+                target_id = sanitize_ipsec_id(self.cfg['name'] or self.cfg.get('profile_id', ''))
+                target_path = os.path.join(IPSEC_DIR, f'{target_id}.conf')
+                if not self._confirm_overwrite_if_exists(target_path, target_id, orig_id):
+                    return
                 self.cfg['protocol'] = (
                     self.ipsec_proto_combo.get_active_id() or 'l2tp-ipsec'
                 )
@@ -1558,6 +1612,7 @@ class VPNConnectionDialog(Gtk.Window):
                 self.cfg['ca_cert'] = self.ipsec_ca_entry.get_text().strip()
                 self.cfg['user_cert'] = self.ipsec_ucert_entry.get_text().strip()
                 self.cfg['private_key'] = self.ipsec_ukey_entry.get_text().strip()
+                self.cfg['private_key_password'] = self.ipsec_ukey_pwd_entry.get_text()
                 self.cfg['ike_proposals'] = self.ipsec_ike_entry.get_text().strip()
                 self.cfg['esp_proposals'] = self.ipsec_esp_entry.get_text().strip()
                 self.cfg['aggressive'] = self.ipsec_aggr_check.get_active()
@@ -1571,6 +1626,10 @@ class VPNConnectionDialog(Gtk.Window):
                 save_ipsec_config(self.cfg)
                 saved_id = self.cfg['profile_id']
             else:
+                target_id = sanitize_profile_id(self.cfg['name'])
+                target_path = os.path.join(OPENVPN_CONFIG_PATH, f'{target_id}.conf')
+                if not self._confirm_overwrite_if_exists(target_path, target_id, orig_id):
+                    return
                 # Commit any typed but un-added route from the quick-add bar
                 if self.r4_net_entry.get_text().strip():
                     self._on_add_ipv4_route(None)

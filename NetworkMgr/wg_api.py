@@ -6,6 +6,7 @@ Lists the tunnel configurations under $PREFIX/etc/wireguard, reports which
 are running, and brings them up or down through the wireguard rc service.
 """
 
+from ipaddress import ip_interface, ip_network
 import os
 import re
 import shutil
@@ -48,10 +49,39 @@ def is_wireguard_installed():
     return _wg_quick_binary() is not None and _wg_binary() is not None
 
 
+def _clean_line(value):
+    """Strip control characters and newlines to prevent config directive injection."""
+    return re.sub(r'[\r\n\x00]+', ' ', str(value or '')).strip()
+
+
 def sanitize_wg_id(name):
     """Turn a display name or filename into a safe WireGuard tunnel name."""
-    cleaned = WG_ID_REGEX.sub('_', name.strip()).strip('_-')
-    return cleaned[:15] or 'wg0'
+    cleaned = WG_ID_REGEX.sub('_', (name or '').strip()).strip('_-')
+    if not cleaned:
+        return 'wg0'
+    if not cleaned[0].isalpha():
+        cleaned = f'wg_{cleaned}'
+    return cleaned[:15]
+
+
+def _write_secure_wg_file(path, content, mode=0o600):
+    """Atomically write a WireGuard config with strict permissions and no symlink following."""
+    parent = os.path.dirname(path)
+    os.makedirs(parent, exist_ok=True)
+    try:
+        os.chmod(parent, 0o700)
+    except OSError:
+        pass
+    if os.path.islink(path):
+        raise ValueError(f'Refusing to write to symlink: {path}')
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, 'O_NOFOLLOW', 0)
+    fd = os.open(path, flags, mode)
+    with os.fdopen(fd, 'w', encoding='utf-8') as handle:
+        handle.write(content.rstrip('\n') + '\n')
+    try:
+        os.chmod(path, mode)
+    except OSError:
+        pass
 
 
 def default_wireguard_config(name='wg0'):
@@ -94,10 +124,12 @@ def parse_wireguard_config(filepath):
     base_dir = os.path.dirname(os.path.abspath(filepath))
     stem = os.path.splitext(os.path.basename(filepath))[0]
     cfg = default_wireguard_config(stem)
+    is_internal_profile = False
     if os.path.exists(WG_CONFIG_PATH):
         try:
             if os.path.samefile(base_dir, WG_CONFIG_PATH):
                 cfg['original_profile_id'] = stem
+                is_internal_profile = True
         except OSError:
             pass
     cfg['allowed_ips'] = ''
@@ -148,13 +180,13 @@ def parse_wireguard_config(filepath):
                 cfg['listen_port'] = val
             elif key == 'table':
                 cfg['table'] = val
-            elif key == 'preup':
+            elif is_internal_profile and key == 'preup':
                 cfg['pre_up'] = val
-            elif key == 'postup':
+            elif is_internal_profile and key == 'postup':
                 cfg['post_up'] = val
-            elif key == 'predown':
+            elif is_internal_profile and key == 'predown':
                 cfg['pre_down'] = val
-            elif key == 'postdown':
+            elif is_internal_profile and key == 'postdown':
                 cfg['post_down'] = val
         elif section == 'peer':
             if key == 'publickey':
@@ -187,58 +219,79 @@ def save_wireguard_config(cfg):
     Returns:
         str: the saved tunnel profile_id.
     """
-    display_name = cfg.get('name', '').strip()
+    display_name = _clean_line(cfg.get('name', ''))
     if not display_name:
         raise ValueError('Connection name is required.')
     profile_id = sanitize_wg_id(cfg.get('profile_id') or display_name)
-    if not cfg.get('private_key', '').strip():
+    priv_key = _clean_line(cfg.get('private_key', ''))
+    pub_key = _clean_line(cfg.get('public_key', ''))
+    if not priv_key:
         raise ValueError('Interface Private Key is required.')
-    if not cfg.get('public_key', '').strip():
+    if not pub_key:
         raise ValueError('Peer Public Key is required.')
 
-    os.makedirs(WG_CONFIG_PATH, exist_ok=True)
+    addr_raw = _clean_line(cfg.get('address', ''))
+    if addr_raw:
+        for item in [a.strip() for a in addr_raw.split(',') if a.strip()]:
+            try:
+                ip_interface(item)
+            except ValueError as exc:
+                raise ValueError(f'Invalid Interface Address "{item}": {exc}') from exc
+
+    allowed_raw = _clean_line(cfg.get('allowed_ips', '')) or '0.0.0.0/0, ::/0'
+    for item in [a.strip() for a in allowed_raw.split(',') if a.strip()]:
+        try:
+            ip_network(item, strict=False)
+        except ValueError as exc:
+            raise ValueError(f'Invalid Allowed IP/Network "{item}": {exc}') from exc
+
+    mtu_val = _clean_line(cfg.get('mtu', ''))
+    if mtu_val and (not mtu_val.isdigit() or not (576 <= int(mtu_val) <= 65535)):
+        raise ValueError('MTU must be an integer between 576 and 65535.')
+
+    lport_val = _clean_line(cfg.get('listen_port', ''))
+    if lport_val and (not lport_val.isdigit() or not (1 <= int(lport_val) <= 65535)):
+        raise ValueError('ListenPort must be an integer between 1 and 65535.')
+
+    keepalive_val = _clean_line(cfg.get('persistent_keepalive', ''))
+    if keepalive_val and (not keepalive_val.isdigit() or not (0 <= int(keepalive_val) <= 65535)):
+        raise ValueError('PersistentKeepalive must be an integer between 0 and 65535.')
+
     lines = [
         f'# Name = {display_name}',
         '[Interface]',
-        f"PrivateKey = {cfg['private_key'].strip()}",
+        f'PrivateKey = {priv_key}',
     ]
-    if cfg.get('address', '').strip():
-        lines.append(f"Address = {cfg['address'].strip()}")
-    if cfg.get('dns', '').strip():
-        lines.append(f"DNS = {cfg['dns'].strip()}")
-    if cfg.get('listen_port', '').strip():
-        lines.append(f"ListenPort = {cfg['listen_port'].strip()}")
-    if cfg.get('mtu', '').strip():
-        lines.append(f"MTU = {cfg['mtu'].strip()}")
-    if cfg.get('table', '').strip():
-        lines.append(f"Table = {cfg['table'].strip()}")
-    if cfg.get('pre_up', '').strip():
-        lines.append(f"PreUp = {cfg['pre_up'].strip()}")
-    if cfg.get('post_up', '').strip():
-        lines.append(f"PostUp = {cfg['post_up'].strip()}")
-    if cfg.get('pre_down', '').strip():
-        lines.append(f"PreDown = {cfg['pre_down'].strip()}")
-    if cfg.get('post_down', '').strip():
-        lines.append(f"PostDown = {cfg['post_down'].strip()}")
+    if addr_raw:
+        lines.append(f'Address = {addr_raw}')
+    dns_val = _clean_line(cfg.get('dns', ''))
+    if dns_val:
+        lines.append(f'DNS = {dns_val}')
+    if lport_val:
+        lines.append(f'ListenPort = {lport_val}')
+    if mtu_val:
+        lines.append(f'MTU = {mtu_val}')
+    table_val = _clean_line(cfg.get('table', ''))
+    if table_val and re.fullmatch(r'[A-Za-z0-9_-]+', table_val):
+        lines.append(f'Table = {table_val}')
 
     lines.extend([
         '',
         '[Peer]',
-        f"PublicKey = {cfg['public_key'].strip()}",
+        f'PublicKey = {pub_key}',
     ])
-    if cfg.get('preshared_key', '').strip():
-        lines.append(f"PresharedKey = {cfg['preshared_key'].strip()}")
-    if cfg.get('endpoint', '').strip():
-        lines.append(f"Endpoint = {cfg['endpoint'].strip()}")
-    allowed = cfg.get('allowed_ips', '').strip() or '0.0.0.0/0, ::/0'
-    lines.append(f'AllowedIPs = {allowed}')
-    if cfg.get('persistent_keepalive', '').strip():
-        lines.append(f"PersistentKeepalive = {cfg['persistent_keepalive'].strip()}")
+    psk_val = _clean_line(cfg.get('preshared_key', ''))
+    if psk_val:
+        lines.append(f'PresharedKey = {psk_val}')
+    endpoint_val = _clean_line(cfg.get('endpoint', ''))
+    if endpoint_val:
+        lines.append(f'Endpoint = {endpoint_val}')
+    lines.append(f'AllowedIPs = {allowed_raw}')
+    if keepalive_val:
+        lines.append(f'PersistentKeepalive = {keepalive_val}')
 
     conf_file = os.path.join(WG_CONFIG_PATH, f'{profile_id}.conf')
-    with open(conf_file, 'w', encoding='utf-8') as handle:
-        handle.write('\n'.join(lines) + '\n')
-    os.chmod(conf_file, 0o600)
+    _write_secure_wg_file(conf_file, '\n'.join(lines), 0o600)
 
     original_id = cfg.get('original_profile_id')
     if original_id and original_id != profile_id:

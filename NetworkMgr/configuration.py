@@ -129,53 +129,78 @@ def load_interface_routes(nic):
 
 
 def save_interface_routes(nic, ipv4_routes, ipv6_routes, target_dir=INTERFACE_ROUTES_DIR):
-    """Persist IPv4 and IPv6 static routes for `nic`."""
+    """Persist validated IPv4 and IPv6 static routes for `nic`."""
     if not nic:
         return
     rc_nic = validate.rc_conf_interface(nic)
     os.makedirs(target_dir, exist_ok=True)
-    lines = [f'# Static routes for {nic}']
+    try:
+        os.chmod(target_dir, 0o700)
+    except OSError:
+        pass
+    lines = [f'# Static routes for {rc_nic}']
     for rt in ipv4_routes or []:
         net = (rt.get('network') or '').strip()
         mask = (rt.get('netmask') or '').strip()
         gw = (rt.get('gateway') or '').strip()
         if net and mask and gw:
-            lines.append(f'ipv4_route = {net},{mask},{gw}')
-    for rt6 in ipv6_routes or []:
-        net6 = (rt6.get('network') or '').strip()
-        plen = (rt6.get('prefixlen') or '64').strip()
-        gw6 = (rt6.get('gateway') or '').strip()
-        if net6 and gw6:
-            lines.append(f'ipv6_route = {net6},{plen},{gw6}')
-    lines.append('')
-    path = os.path.join(target_dir, f'{rc_nic}.routes')
-    with open(path, 'w', encoding='utf-8') as fh:
-        fh.write('\n'.join(lines))
-
-
-def apply_interface_routes(nic, ipv4_routes, ipv6_routes):
-    """Apply IPv4 and IPv6 static routes for `nic` to the live routing table."""
-    for rt in ipv4_routes or []:
-        net = (rt.get('network') or '').strip()
-        mask = (rt.get('netmask') or '').strip()
-        gw = (rt.get('gateway') or '').strip()
-        if net and mask and gw:
-            run(
-                ['route', '-n', 'add', '-net', net, gw, mask],
-                stderr=DEVNULL,
-                check=False,
-            )
+            net_ok = validate.ipv4_address(net, 'Static Route Network')
+            mask_ok = validate.ipv4_netmask(mask)
+            gw_ok = validate.ipv4_address(gw, 'Static Route Gateway')
+            lines.append(f'ipv4_route = {net_ok},{mask_ok},{gw_ok}')
     for rt6 in ipv6_routes or []:
         net6 = (rt6.get('network') or '').strip()
         plen = (rt6.get('prefixlen') or '64').strip().lstrip('/')
         gw6 = (rt6.get('gateway') or '').strip()
         if net6 and gw6:
-            dest6 = f'{net6}/{plen}' if '/' not in net6 else net6
-            run(
-                ['route', '-n', 'add', '-inet6', dest6, gw6],
-                stderr=DEVNULL,
-                check=False,
-            )
+            net6_ok = validate.ipv6_address(net6.split('/')[0], 'IPv6 Static Route Prefix')
+            plen_ok = validate.ipv6_prefixlen(plen)
+            gw6_ok = validate.ipv6_address(gw6, 'IPv6 Static Route Gateway', allow_scope=True)
+            lines.append(f'ipv6_route = {net6_ok},{plen_ok},{gw6_ok}')
+    lines.append('')
+    path = os.path.join(target_dir, f'{rc_nic}.routes')
+    if os.path.islink(path):
+        raise ValueError(f'Refusing to write to symlink: {path}')
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, 'O_NOFOLLOW', 0)
+    fd = os.open(path, flags, 0o600)
+    with os.fdopen(fd, 'w', encoding='utf-8') as fh:
+        fh.write('\n'.join(lines))
+
+
+def apply_interface_routes(nic, ipv4_routes, ipv6_routes):
+    """Apply validated IPv4 and IPv6 static routes for `nic` to the live routing table."""
+    for rt in ipv4_routes or []:
+        net = (rt.get('network') or '').strip()
+        mask = (rt.get('netmask') or '').strip()
+        gw = (rt.get('gateway') or '').strip()
+        if net and mask and gw:
+            try:
+                net_ok = validate.ipv4_address(net, 'Static Route Network')
+                mask_ok = validate.ipv4_netmask(mask)
+                gw_ok = validate.ipv4_address(gw, 'Static Route Gateway')
+                run(
+                    ['route', '-n', 'add', '-net', net_ok, gw_ok, mask_ok],
+                    stderr=DEVNULL,
+                    check=False,
+                )
+            except ValueError:
+                pass
+    for rt6 in ipv6_routes or []:
+        net6 = (rt6.get('network') or '').strip()
+        plen = (rt6.get('prefixlen') or '64').strip().lstrip('/')
+        gw6 = (rt6.get('gateway') or '').strip()
+        if net6 and gw6:
+            try:
+                net6_ok = validate.ipv6_address(net6.split('/')[0], 'IPv6 Static Route Prefix')
+                plen_ok = validate.ipv6_prefixlen(plen)
+                gw6_ok = validate.ipv6_address(gw6, 'IPv6 Static Route Gateway', allow_scope=True)
+                run(
+                    ['route', '-n', 'add', '-inet6', f'{net6_ok}/{plen_ok}', gw6_ok],
+                    stderr=DEVNULL,
+                    check=False,
+                )
+            except ValueError:
+                pass
 
 
 class NetCardConfigWindow(Gtk.Window):
@@ -915,6 +940,16 @@ class NetCardConfigWindow(Gtk.Window):
             raise ValueError(
                 f'IPv6 Gateway: the "%{scope}" zone does not match the '
                 f'interface being configured, {nic}.')
+        if hasattr(self, 'nic_r4_store'):
+            for r in self.nic_r4_store:
+                validate.ipv4_address(r[0], 'Static Route Network')
+                validate.ipv4_netmask(r[1])
+                validate.ipv4_address(r[2], 'Static Route Gateway')
+        if hasattr(self, 'nic_r6_store'):
+            for r6 in self.nic_r6_store:
+                validate.ipv6_address(r6[0].split('/')[0], 'IPv6 Static Route Prefix')
+                validate.ipv6_prefixlen(r6[1].lstrip('/'))
+                validate.ipv6_address(r6[2], 'IPv6 Static Route Gateway', allow_scope=True)
         return settings
 
     def show_invalid_entry(self, message):

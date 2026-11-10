@@ -8,6 +8,7 @@ and runtime connection management on FreeBSD/GhostBSD using StrongSwan
 L2TP over IPsec (Windows Server, MikroTik, Ubiquiti, FortiGate, etc.).
 """
 
+from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network
 import glob
 import json
 import os
@@ -40,6 +41,63 @@ DEFAULT_ESP_PROPOSALS = (
 )
 
 PROFILE_ID_SAFE_RE = re.compile(r'[^A-Za-z0-9_-]+')
+SAFE_HOST_RE = re.compile(r'^[A-Za-z0-9_.:%-]+$')
+SAFE_PROPOSAL_RE = re.compile(r'^[A-Za-z0-9_,-]+$')
+
+
+def _clean_line(value):
+    """Strip newlines and NUL bytes to prevent config directive injection."""
+    return re.sub(r'[\r\n\x00]+', '', str(value or '')).strip()
+
+
+def _escape_quoted(value):
+    """Escape backslashes and double quotes for StrongSwan and mpd5 quoted strings."""
+    cleaned = re.sub(r'[\r\n\x00]+', '', str(value or ''))
+    return cleaned.replace('\\', '\\\\').replace('"', '\\"')
+
+
+def _write_secure_ipsec_file(path, content, mode=0o600):
+    """Atomically write an IPsec/mpd5 file with strict permissions and no symlink following."""
+    parent = os.path.dirname(path)
+    os.makedirs(parent, exist_ok=True)
+    try:
+        os.chmod(parent, 0o700)
+    except OSError:
+        pass
+    if os.path.islink(path):
+        raise ValueError(f'Refusing to write to symlink: {path}')
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, 'O_NOFOLLOW', 0)
+    fd = os.open(path, flags, mode)
+    with os.fdopen(fd, 'w', encoding='utf-8') as fh:
+        fh.write(content)
+    try:
+        os.chmod(path, mode)
+    except OSError:
+        pass
+
+
+def _pid_is_mpd5(pid):
+    """Return True if `pid` is alive and is an `mpd5` process."""
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    try:
+        res = run(
+            ['ps', '-p', str(pid), '-o', 'comm='],
+            stdout=PIPE,
+            stderr=DEVNULL,
+            universal_newlines=True,
+            check=False,
+        )
+        comm = (res.stdout or '').strip().lower()
+        if comm:
+            return 'mpd' in comm
+    except OSError:
+        pass
+    return True
 
 
 def _strongswan_binary():
@@ -316,20 +374,42 @@ def save_ipsec_config(cfg, target_dir=IPSEC_DIR):
     Returns:
         str: path to the saved `.conf` file.
     """
-    display_name = (cfg.get('name') or cfg.get('profile_id') or '').strip()
+    display_name = _clean_line(cfg.get('name') or cfg.get('profile_id') or '')
     profile_id = sanitize_ipsec_id(display_name)
-    old_profile_id = (cfg.get('original_profile_id') or '').strip()
+    old_profile_id = _clean_line(cfg.get('original_profile_id') or '')
     cfg['profile_id'] = profile_id
     if not cfg.get('name'):
         cfg['name'] = profile_id
 
-    gateway = (cfg.get('gateway') or '').strip()
+    gateway = _clean_line(cfg.get('gateway') or '')
     if not gateway:
         raise ValueError('Gateway (Server Address) is required.')
+    if not SAFE_HOST_RE.fullmatch(gateway):
+        raise ValueError(f'Invalid Gateway address: "{gateway}"')
+
+    port_val = _clean_line(cfg.get('l2tp_port') or '1701') or '1701'
+    if not port_val.isdigit() or not (1 <= int(port_val) <= 65535):
+        raise ValueError('L2TP UDP Port must be an integer between 1 and 65535.')
+
+    mtu_val = _clean_line(cfg.get('mtu') or '1400') or '1400'
+    if not mtu_val.isdigit() or not (576 <= int(mtu_val) <= 65535):
+        raise ValueError('PPP MTU must be an integer between 576 and 65535.')
+
+    ike_val = _clean_line(cfg.get('ike_proposals') or DEFAULT_IKE_PROPOSALS) or DEFAULT_IKE_PROPOSALS
+    if not SAFE_PROPOSAL_RE.fullmatch(ike_val):
+        raise ValueError('Phase 1 (IKE) proposals contain invalid characters.')
+
+    esp_val = _clean_line(cfg.get('esp_proposals') or DEFAULT_ESP_PROPOSALS) or DEFAULT_ESP_PROPOSALS
+    if not SAFE_PROPOSAL_RE.fullmatch(esp_val):
+        raise ValueError('Phase 2 (ESP) proposals contain invalid characters.')
 
     os.makedirs(target_dir, exist_ok=True)
+    try:
+        os.chmod(target_dir, 0o700)
+    except OSError:
+        pass
     if old_profile_id and old_profile_id != profile_id:
-        old_path = os.path.join(target_dir, f'{old_profile_id}.conf')
+        old_path = os.path.join(target_dir, f'{ sanitize_ipsec_id(old_profile_id) }.conf')
         if os.path.isfile(old_path):
             try:
                 os.remove(old_path)
@@ -339,62 +419,79 @@ def save_ipsec_config(cfg, target_dir=IPSEC_DIR):
 
     lines = [
         '# networkmgr-ipsec configuration',
-        f'name = {cfg.get("name", profile_id)}',
-        f'protocol = {cfg.get("protocol", "l2tp-ipsec")}',
+        f'name = {_clean_line(cfg.get("name", profile_id))}',
+        f'protocol = {_clean_line(cfg.get("protocol", "l2tp-ipsec"))}',
         f'gateway = {gateway}',
-        f'local_id = {cfg.get("local_id", "").strip()}',
-        f'remote_id = {cfg.get("remote_id", "").strip()}',
-        f'psk = {cfg.get("psk", "")}',
-        f'username = {cfg.get("username", "").strip()}',
-        f'password = {cfg.get("password", "")}',
-        f'domain = {cfg.get("domain", "").strip()}',
-        f'ca_cert = {cfg.get("ca_cert", "").strip()}',
-        f'user_cert = {cfg.get("user_cert", "").strip()}',
-        f'private_key = {cfg.get("private_key", "").strip()}',
-        f'private_key_password = {cfg.get("private_key_password", "")}',
-        f'ike_proposals = {cfg.get("ike_proposals", DEFAULT_IKE_PROPOSALS).strip()}',
-        f'esp_proposals = {cfg.get("esp_proposals", DEFAULT_ESP_PROPOSALS).strip()}',
+        f'local_id = {_clean_line(cfg.get("local_id", ""))}',
+        f'remote_id = {_clean_line(cfg.get("remote_id", ""))}',
+        f'psk = {_clean_line(cfg.get("psk", ""))}',
+        f'username = {_clean_line(cfg.get("username", ""))}',
+        f'password = {_clean_line(cfg.get("password", ""))}',
+        f'domain = {_clean_line(cfg.get("domain", ""))}',
+        f'ca_cert = {_clean_line(cfg.get("ca_cert", ""))}',
+        f'user_cert = {_clean_line(cfg.get("user_cert", ""))}',
+        f'private_key = {_clean_line(cfg.get("private_key", ""))}',
+        f'private_key_password = {_clean_line(cfg.get("private_key_password", ""))}',
+        f'ike_proposals = {ike_val}',
+        f'esp_proposals = {esp_val}',
         f'aggressive = {bool(cfg.get("aggressive", False))}',
-        f'l2tp_port = {cfg.get("l2tp_port", "1701").strip() or "1701"}',
+        f'l2tp_port = {port_val}',
         f'ppp_mschapv2 = {bool(cfg.get("ppp_mschapv2", True))}',
         f'ppp_chap = {bool(cfg.get("ppp_chap", True))}',
         f'ppp_pap = {bool(cfg.get("ppp_pap", False))}',
         f'mppe_required = {bool(cfg.get("mppe_required", False))}',
-        f'mtu = {cfg.get("mtu", "1400").strip() or "1400"}',
+        f'mtu = {mtu_val}',
         f'default_route = {bool(cfg.get("default_route", True))}',
-        f'ipv4_method = {cfg.get("ipv4_method", "Automatic")}',
-        f'ipv4_address = {cfg.get("ipv4_address", "").strip()}',
-        f'ipv4_netmask = {cfg.get("ipv4_netmask", "").strip()}',
-        f'ipv4_gateway = {cfg.get("ipv4_gateway", "").strip()}',
-        f'ipv4_dns = {cfg.get("ipv4_dns", "").strip()}',
-        f'ipv6_method = {cfg.get("ipv6_method", "Automatic")}',
-        f'ipv6_address = {cfg.get("ipv6_address", "").strip()}',
-        f'ipv6_prefixlen = {cfg.get("ipv6_prefixlen", "").strip()}',
-        f'ipv6_gateway = {cfg.get("ipv6_gateway", "").strip()}',
-        f'ipv6_dns = {cfg.get("ipv6_dns", "").strip()}',
+        f'ipv4_method = {_clean_line(cfg.get("ipv4_method", "Automatic"))}',
+        f'ipv4_address = {_clean_line(cfg.get("ipv4_address", ""))}',
+        f'ipv4_netmask = {_clean_line(cfg.get("ipv4_netmask", ""))}',
+        f'ipv4_gateway = {_clean_line(cfg.get("ipv4_gateway", ""))}',
+        f'ipv4_dns = {_clean_line(cfg.get("ipv4_dns", ""))}',
+        f'ipv6_method = {_clean_line(cfg.get("ipv6_method", "Automatic"))}',
+        f'ipv6_address = {_clean_line(cfg.get("ipv6_address", ""))}',
+        f'ipv6_prefixlen = {_clean_line(cfg.get("ipv6_prefixlen", ""))}',
+        f'ipv6_gateway = {_clean_line(cfg.get("ipv6_gateway", ""))}',
+        f'ipv6_dns = {_clean_line(cfg.get("ipv6_dns", ""))}',
     ]
 
     for rt in cfg.get('ipv4_routes') or []:
-        addr = (rt.get('address') or '').strip()
-        mask = (rt.get('netmask') or '').strip()
-        gw = (rt.get('gateway') or '').strip()
-        metric = (rt.get('metric') or '').strip()
+        addr = _clean_line(rt.get('address') or '')
+        mask = _clean_line(rt.get('netmask') or '')
+        gw = _clean_line(rt.get('gateway') or '')
+        metric = _clean_line(rt.get('metric') or '')
         if addr and mask:
+            try:
+                IPv4Address(addr)
+                if mask.isdigit():
+                    if not (0 <= int(mask) <= 32):
+                        raise ValueError()
+                else:
+                    IPv4Address(mask)
+                if gw:
+                    IPv4Address(gw)
+            except ValueError as exc:
+                raise ValueError(f'Invalid IPv4 static route "{addr} / {mask}": {exc}') from exc
             lines.append(f'ipv4_route = {addr},{mask},{gw},{metric}')
 
     for rt6 in cfg.get('ipv6_routes') or []:
-        addr6 = (rt6.get('address') or '').strip()
-        plen = (rt6.get('prefixlen') or '64').strip()
-        gw6 = (rt6.get('gateway') or '').strip()
-        metric6 = (rt6.get('metric') or '').strip()
+        addr6 = _clean_line(rt6.get('address') or '')
+        plen = _clean_line(rt6.get('prefixlen') or '64').lstrip('/')
+        gw6 = _clean_line(rt6.get('gateway') or '')
+        metric6 = _clean_line(rt6.get('metric') or '')
         if addr6:
+            try:
+                IPv6Address(addr6.split('/')[0])
+                if not plen.isdigit() or not (0 <= int(plen) <= 128):
+                    raise ValueError('Invalid prefix length')
+                if gw6:
+                    IPv6Address(gw6.split('%')[0])
+            except ValueError as exc:
+                raise ValueError(f'Invalid IPv6 static route "{addr6}/{plen}": {exc}') from exc
             lines.append(f'ipv6_route = {addr6},{plen},{gw6},{metric6}')
 
     lines.append('')
     conf_path = os.path.join(target_dir, f'{profile_id}.conf')
-    fd = os.open(conf_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, 'w', encoding='utf-8') as fh:
-        fh.write('\n'.join(lines))
+    _write_secure_ipsec_file(conf_path, '\n'.join(lines), 0o600)
     return conf_path
 
 
@@ -426,6 +523,7 @@ def ipsec_configs(target_dir=IPSEC_DIR):
 
 def ipsec_is_connected(profile_id):
     """Return True if the given IPsec / L2TP profile is currently active."""
+    profile_id = sanitize_ipsec_id(profile_id)
     state_file = os.path.join(RUN_DIR, f'{profile_id}.state')
     if not os.path.isfile(state_file):
         return False
@@ -434,8 +532,7 @@ def ipsec_is_connected(profile_id):
         try:
             with open(pid_file, 'r', encoding='utf-8') as fh:
                 pid = int(fh.read().strip())
-            os.kill(pid, 0)
-            return True
+            return _pid_is_mpd5(pid)
         except (ValueError, OSError):
             return False
     ipsec_bin = _strongswan_binary()
@@ -528,13 +625,22 @@ def _ensure_strongswan_includes():
 def _write_strongswan_files(profile_id, cfg):
     """Write StrongSwan connection and secrets snippets for `profile_id`."""
     _ensure_strongswan_includes()
-    protocol = cfg.get('protocol', 'l2tp-ipsec')
-    gateway = cfg.get('gateway', '').strip()
-    local_id = cfg.get('local_id', '').strip()
-    remote_id = cfg.get('remote_id', '').strip()
-    ike = cfg.get('ike_proposals', DEFAULT_IKE_PROPOSALS).strip() or DEFAULT_IKE_PROPOSALS
-    esp = cfg.get('esp_proposals', DEFAULT_ESP_PROPOSALS).strip() or DEFAULT_ESP_PROPOSALS
-    port = cfg.get('l2tp_port', '1701').strip() or '1701'
+    profile_id = sanitize_ipsec_id(profile_id)
+    protocol = _clean_line(cfg.get('protocol', 'l2tp-ipsec'))
+    gateway = _clean_line(cfg.get('gateway', ''))
+    if not SAFE_HOST_RE.fullmatch(gateway):
+        raise ValueError(f'Invalid gateway address: "{gateway}"')
+    local_id = _escape_quoted(cfg.get('local_id', '').strip())
+    remote_id = _escape_quoted(cfg.get('remote_id', '').strip())
+    ike = _clean_line(cfg.get('ike_proposals', DEFAULT_IKE_PROPOSALS)) or DEFAULT_IKE_PROPOSALS
+    if not SAFE_PROPOSAL_RE.fullmatch(ike):
+        ike = DEFAULT_IKE_PROPOSALS
+    esp = _clean_line(cfg.get('esp_proposals', DEFAULT_ESP_PROPOSALS)) or DEFAULT_ESP_PROPOSALS
+    if not SAFE_PROPOSAL_RE.fullmatch(esp):
+        esp = DEFAULT_ESP_PROPOSALS
+    port = _clean_line(cfg.get('l2tp_port', '1701')) or '1701'
+    if not port.isdigit() or not (1 <= int(port) <= 65535):
+        port = '1701'
 
     conn_lines = [
         f'conn nm-{profile_id}',
@@ -552,9 +658,9 @@ def _write_strongswan_files(profile_id, cfg):
         conn_lines.append(f'    rightid="{remote_id}"')
 
     secret_lines = []
-    psk = cfg.get('psk', '')
-    user = cfg.get('username', '').strip()
-    pw = cfg.get('password', '')
+    psk = _escape_quoted(cfg.get('psk', ''))
+    user = _escape_quoted(cfg.get('username', '').strip())
+    pw = _escape_quoted(cfg.get('password', ''))
 
     if protocol == 'l2tp-ipsec':
         conn_lines.extend([
@@ -583,16 +689,19 @@ def _write_strongswan_files(profile_id, cfg):
             '    leftsourceip=%config',
             '    rightsubnet=0.0.0.0/0',
         ])
-        if cfg.get('user_cert'):
-            conn_lines.append(f'    leftcert="{cfg["user_cert"]}"')
-        if cfg.get('ca_cert'):
-            conn_lines.append(f'    rightca="{cfg["ca_cert"]}"')
-        if cfg.get('private_key'):
-            key_pw = cfg.get('private_key_password', '')
+        ucert = _escape_quoted(cfg.get('user_cert', '').strip())
+        cacert = _escape_quoted(cfg.get('ca_cert', '').strip())
+        pkey = _escape_quoted(cfg.get('private_key', '').strip())
+        if ucert:
+            conn_lines.append(f'    leftcert="{ucert}"')
+        if cacert:
+            conn_lines.append(f'    rightca="{cacert}"')
+        if pkey:
+            key_pw = _escape_quoted(cfg.get('private_key_password', ''))
             if key_pw:
-                secret_lines.append(f' : RSA "{cfg["private_key"]}" "{key_pw}"')
+                secret_lines.append(f' : RSA "{pkey}" "{key_pw}"')
             else:
-                secret_lines.append(f' : RSA "{cfg["private_key"]}"')
+                secret_lines.append(f' : RSA "{pkey}"')
     elif protocol == 'ikev1-xauth':
         conn_lines.extend([
             '    keyexchange=ikev1',
@@ -608,7 +717,7 @@ def _write_strongswan_files(profile_id, cfg):
             conn_lines.append(f'    xauth_identity="{user}"')
         secret_lines.append(f'%any {gateway} : PSK "{psk}"')
         if user:
-            secret_lines.append(f'{user} : XAUTH "{pw}"')
+            secret_lines.append(f'"{user}" : XAUTH "{pw}"')
     else:  # ikev2-eap (Windows Server IKEv2 / EAP-MSCHAPv2)
         conn_lines.extend([
             '    keyexchange=ikev2',
@@ -619,35 +728,45 @@ def _write_strongswan_files(profile_id, cfg):
         ])
         if user:
             conn_lines.append(f'    eap_identity="{user}"')
-        if cfg.get('ca_cert'):
-            conn_lines.append(f'    rightca="{cfg["ca_cert"]}"')
+        cacert = _escape_quoted(cfg.get('ca_cert', '').strip())
+        if cacert:
+            conn_lines.append(f'    rightca="{cacert}"')
         else:
             conn_lines.append('    rightsendcert=never')
         if user:
-            secret_lines.append(f'{user} : EAP "{pw}"')
+            secret_lines.append(f'"{user}" : EAP "{pw}"')
 
     conn_path = os.path.join(STRONGSWAN_CONF_DIR, f'nm-{profile_id}.conf')
-    with open(conn_path, 'w', encoding='utf-8') as fh:
-        fh.write('\n'.join(conn_lines) + '\n')
+    _write_secure_ipsec_file(conn_path, '\n'.join(conn_lines) + '\n', 0o600)
 
     sec_path = os.path.join(STRONGSWAN_CONF_DIR, f'nm-{profile_id}.secrets')
-    fd = os.open(sec_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, 'w', encoding='utf-8') as fh:
-        fh.write('\n'.join(secret_lines) + '\n')
+    _write_secure_ipsec_file(sec_path, '\n'.join(secret_lines) + '\n', 0o600)
 
 
 def _write_mpd5_config(profile_id, cfg):
     """Write the FreeBSD `mpd5` L2TP client configuration for `profile_id`."""
+    profile_id = sanitize_ipsec_id(profile_id)
     mpd_dir = os.path.join(RUN_DIR, profile_id)
     os.makedirs(mpd_dir, exist_ok=True)
+    try:
+        os.chmod(mpd_dir, 0o700)
+    except OSError:
+        pass
 
-    gateway = cfg.get('gateway', '').strip()
-    port = cfg.get('l2tp_port', '1701').strip() or '1701'
-    user = cfg.get('username', '').strip()
-    domain = cfg.get('domain', '').strip()
-    full_user = f'{domain}\\\\{user}' if domain and user else user
-    password = cfg.get('password', '')
-    mtu = cfg.get('mtu', '1400').strip() or '1400'
+    gateway = _clean_line(cfg.get('gateway', ''))
+    if not SAFE_HOST_RE.fullmatch(gateway):
+        raise ValueError(f'Invalid gateway address: "{gateway}"')
+    port = _clean_line(cfg.get('l2tp_port', '1701')) or '1701'
+    if not port.isdigit() or not (1 <= int(port) <= 65535):
+        port = '1701'
+    user = _clean_line(cfg.get('username', ''))
+    domain = _clean_line(cfg.get('domain', ''))
+    raw_full_user = f'{domain}\\{user}' if domain and user else user
+    full_user = _escape_quoted(raw_full_user)
+    password = _escape_quoted(cfg.get('password', ''))
+    mtu = _clean_line(cfg.get('mtu', '1400')) or '1400'
+    if not mtu.isdigit() or not (576 <= int(mtu) <= 65535):
+        mtu = '1400'
 
     iface_lines = [
         '    set iface disable on-demand',
@@ -657,14 +776,22 @@ def _write_mpd5_config(profile_id, cfg):
     if cfg.get('default_route', True):
         iface_lines.append('    set iface route default')
     for rt in cfg.get('ipv4_routes') or []:
-        addr = (rt.get('address') or '').strip()
-        mask = (rt.get('netmask') or '').strip()
+        addr = _clean_line(rt.get('address') or '')
+        mask = _clean_line(rt.get('netmask') or '')
         if addr and mask:
-            iface_lines.append(f'    set iface route {addr}/{mask}')
+            try:
+                net_obj = IPv4Network(f'{addr}/{mask}', strict=False)
+                iface_lines.append(f'    set iface route {net_obj.with_prefixlen}')
+            except ValueError:
+                pass
 
     ipcp_range = '0.0.0.0/0 0.0.0.0/0'
     if cfg.get('ipv4_method') == 'Manual' and cfg.get('ipv4_address'):
-        ipcp_range = f'{cfg["ipv4_address"].strip()}/32 0.0.0.0/0'
+        try:
+            addr4 = str(IPv4Address(_clean_line(cfg['ipv4_address'])))
+            ipcp_range = f'{addr4}/32 0.0.0.0/0'
+        except ValueError:
+            pass
 
     auth_lines = []
     if cfg.get('ppp_mschapv2', True):
@@ -704,41 +831,52 @@ def _write_mpd5_config(profile_id, cfg):
     ])
 
     mpd_path = os.path.join(mpd_dir, 'mpd.conf')
-    fd = os.open(mpd_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, 'w', encoding='utf-8') as fh:
-        fh.write(mpd_conf)
+    _write_secure_ipsec_file(mpd_path, mpd_conf, 0o600)
     return mpd_dir
 
 
 def _apply_custom_routes(cfg):
-    """Apply static IPv4/IPv6 routes configured on the profile."""
+    """Apply validated static IPv4/IPv6 routes configured on the profile."""
     for rt in cfg.get('ipv4_routes') or []:
-        addr = (rt.get('address') or '').strip()
-        mask = (rt.get('netmask') or '').strip()
-        gw = (rt.get('gateway') or cfg.get('ipv4_gateway') or '').strip()
+        addr = _clean_line(rt.get('address') or '')
+        mask = _clean_line(rt.get('netmask') or '')
+        gw = _clean_line(rt.get('gateway') or cfg.get('ipv4_gateway') or '')
         if addr and mask and gw:
             try:
+                addr_ok = str(IPv4Address(addr))
+                gw_ok = str(IPv4Address(gw))
+                if mask.isdigit() and 0 <= int(mask) <= 32:
+                    mask_ok = str(IPv4Network(f'0.0.0.0/{mask}').netmask)
+                else:
+                    mask_ok = str(IPv4Address(mask))
                 run(
-                    ['route', '-n', 'add', '-net', addr, gw, mask],
+                    ['route', '-n', 'add', '-net', addr_ok, gw_ok, mask_ok],
                     stdout=PIPE,
                     stderr=PIPE,
                     check=False,
                 )
-            except OSError:
+            except (ValueError, OSError):
                 pass
     for rt6 in cfg.get('ipv6_routes') or []:
-        addr6 = (rt6.get('address') or '').strip()
-        plen = (rt6.get('prefixlen') or '64').strip()
-        gw6 = (rt6.get('gateway') or cfg.get('ipv6_gateway') or '').strip()
+        addr6 = _clean_line(rt6.get('address') or '')
+        plen = _clean_line(rt6.get('prefixlen') or '64').lstrip('/')
+        gw6 = _clean_line(rt6.get('gateway') or cfg.get('ipv6_gateway') or '')
         if addr6 and gw6:
             try:
+                net6_ok = str(IPv6Network(f'{addr6}/{plen}', strict=False))
+                gw6_parts = gw6.split('%', 1)
+                gw6_ip = str(IPv6Address(gw6_parts[0]))
+                if len(gw6_parts) == 2 and re.fullmatch(r'[A-Za-z0-9_.-]+', gw6_parts[1]):
+                    gw6_ok = f'{gw6_ip}%{gw6_parts[1]}'
+                else:
+                    gw6_ok = gw6_ip
                 run(
-                    ['route', '-n', 'add', '-inet6', f'{addr6}/{plen}', gw6],
+                    ['route', '-n', 'add', '-inet6', net6_ok, gw6_ok],
                     stdout=PIPE,
                     stderr=PIPE,
                     check=False,
                 )
-            except OSError:
+            except (ValueError, OSError):
                 pass
 
 
@@ -845,9 +983,9 @@ def disable_ipsec(profile_id):
     if os.path.isfile(pid_file):
         try:
             with open(pid_file, 'r', encoding='utf-8') as fh:
-                pid = fh.read().strip()
-            if pid.isdigit():
-                run(['kill', '-TERM', pid], stdout=PIPE, stderr=PIPE, check=False)
+                pid_str = fh.read().strip()
+            if pid_str.isdigit() and _pid_is_mpd5(int(pid_str)):
+                run(['kill', '-TERM', pid_str], stdout=PIPE, stderr=PIPE, check=False)
         except OSError:
             pass
         try:

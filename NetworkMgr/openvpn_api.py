@@ -47,6 +47,52 @@ INLINE_TAGS = (
     'http-proxy-user-pass',
 )
 
+# Dangerous OpenVPN directives that execute external commands/plugins or
+# write to arbitrary filesystem paths as root. Filtered out like NetworkManager-openvpn.
+FORBIDDEN_OPENVPN_DIRECTIVES = frozenset({
+    'script-security',
+    'up',
+    'down',
+    'up-restart',
+    'route-up',
+    'route-pre-down',
+    'ipchange',
+    'client-connect',
+    'client-disconnect',
+    'learn-address',
+    'auth-user-pass-verify',
+    'tls-verify',
+    'plugin',
+    'management',
+    'log',
+    'log-append',
+    'status',
+    'writepid',
+    'cd',
+    'chroot',
+    'daemon',
+    'setenv',
+    'setenv-safe',
+    'lladdr',
+})
+
+
+def _clean_ovpn_val(value):
+    """Strip newlines and NUL bytes to prevent OpenVPN directive injection."""
+    return re.sub(r'[\r\n\x00]+', ' ', str(value or '')).strip()
+
+
+def _is_safe_extra_line(raw_line):
+    """Return True if an extra OpenVPN directive line is safe to preserve."""
+    cleaned = _clean_ovpn_val(raw_line)
+    if not cleaned:
+        return False
+    tokens = _tokenize_ovpn_line(cleaned)
+    if not tokens:
+        return False
+    directive = tokens[0].lower().lstrip('-')
+    return directive not in FORBIDDEN_OPENVPN_DIRECTIVES
+
 CIPHER_OPTIONS = [
     '',
     'AES-256-GCM',
@@ -297,9 +343,27 @@ def _resolve_relative_path(base_dir, file_ref):
     if not file_ref or file_ref == '[inline]':
         return ''
     if os.path.isabs(file_ref):
-        return file_ref
+        return os.path.normpath(file_ref)
     candidate = os.path.normpath(os.path.join(base_dir, file_ref))
     return candidate
+
+
+def _is_safe_credential_file(base_dir, filepath, is_internal_profile):
+    """Check whether a credential/askpass file is safe to auto-read as root.
+
+    Prevents an untrusted external .ovpn file from referencing /etc/master.passwd
+    or symlinks via `auth-user-pass` / `askpass` and leaking contents into the UI.
+    """
+    if not filepath or os.path.islink(filepath) or not os.path.isfile(filepath):
+        return False
+    if is_internal_profile:
+        return True
+    try:
+        real_base = os.path.realpath(base_dir)
+        real_target = os.path.realpath(filepath)
+        return os.path.commonpath([real_base, real_target]) == real_base
+    except (ValueError, OSError):
+        return False
 
 
 def _key_content_is_encrypted(text):
@@ -368,12 +432,14 @@ def parse_openvpn_config(filepath):
     base_dir = os.path.dirname(os.path.abspath(filepath))
     stem = os.path.splitext(os.path.basename(filepath))[0]
     cfg = default_openvpn_config(stem)
+    is_internal_profile = False
     # If the file being loaded is already inside OPENVPN_CONFIG_PATH, record its
     # original_profile_id so renaming it in the editor cleans up the old file.
     if os.path.exists(OPENVPN_CONFIG_PATH):
         try:
             if os.path.samefile(base_dir, OPENVPN_CONFIG_PATH):
                 cfg['original_profile_id'] = stem
+                is_internal_profile = True
         except OSError:
             pass
     # Reset defaults that should reflect the file's explicit contents
@@ -535,24 +601,26 @@ def parse_openvpn_config(filepath):
         elif directive == 'pull-filter' and len(args) >= 2:
             if args[0].lower() == 'ignore' and 'ipv6' in args[1].lower():
                 cfg['ipv6_method'] = 'disabled'
-            else:
-                cfg['extra_lines'].append(raw_line.rstrip('\r\n'))
+            elif _is_safe_extra_line(raw_line):
+                cfg['extra_lines'].append(_clean_ovpn_val(raw_line))
         elif directive == 'auth-user-pass':
             cfg['auth_user_pass'] = True
             if len(args) >= 1 and args[0] != '[inline]':
                 resolved = _resolve_relative_path(base_dir, args[0])
-                cfg['auth_user_pass_path'] = resolved
-                user, pwd = _read_credentials_file(resolved)
-                if user:
-                    cfg['username'] = user
-                if pwd:
-                    cfg['password'] = pwd
+                if _is_safe_credential_file(base_dir, resolved, is_internal_profile):
+                    cfg['auth_user_pass_path'] = resolved
+                    user, pwd = _read_credentials_file(resolved)
+                    if user:
+                        cfg['username'] = user
+                    if pwd:
+                        cfg['password'] = pwd
         elif directive == 'askpass' and len(args) >= 1:
             resolved = _resolve_relative_path(base_dir, args[0])
-            cfg['askpass_path'] = resolved
-            key_pwd = _read_single_line_file(resolved)
-            if key_pwd:
-                cfg['key_password'] = key_pwd
+            if _is_safe_credential_file(base_dir, resolved, is_internal_profile):
+                cfg['askpass_path'] = resolved
+                key_pwd = _read_single_line_file(resolved)
+                if key_pwd:
+                    cfg['key_password'] = key_pwd
         elif directive == 'cipher' and len(args) >= 1:
             cfg['cipher'] = args[0]
         elif directive == 'data-ciphers' and len(args) >= 1:
@@ -649,20 +717,22 @@ def parse_openvpn_config(filepath):
             cfg['proxy_port'] = args[1]
             if len(args) >= 3 and args[2] not in ('auto', 'auto-nct', 'none'):
                 auth_file = _resolve_relative_path(base_dir, args[2])
-                p_user, p_pwd = _read_credentials_file(auth_file)
-                if p_user:
-                    cfg['proxy_username'] = p_user
-                if p_pwd:
-                    cfg['proxy_password'] = p_pwd
+                if _is_safe_credential_file(base_dir, auth_file, is_internal_profile):
+                    p_user, p_pwd = _read_credentials_file(auth_file)
+                    if p_user:
+                        cfg['proxy_username'] = p_user
+                    if p_pwd:
+                        cfg['proxy_password'] = p_pwd
         elif directive == 'socks-proxy' and len(args) >= 1:
             cfg['proxy_type'] = 'socks'
             cfg['proxy_server'] = args[0]
             cfg['proxy_port'] = args[1] if len(args) >= 2 else '1080'
-        elif directive in ('daemon', 'writepid', 'status', 'cd'):
-            # Managed automatically by NetworkMgr when starting the tunnel
+        elif directive in FORBIDDEN_OPENVPN_DIRECTIVES:
+            # Disallow script execution and arbitrary file-write directives
             continue
         else:
-            cfg['extra_lines'].append(raw_line.rstrip('\r\n'))
+            if _is_safe_extra_line(raw_line):
+                cfg['extra_lines'].append(_clean_ovpn_val(raw_line))
 
     # Format the Gateway string the same way NetworkManager-openvpn does:
     # host[:port[:proto]], comma-separated when multiple remotes exist.
@@ -710,22 +780,40 @@ def parse_openvpn_config(filepath):
 
 
 def _write_secure_file(path, content, mode=0o600):
-    """Write text to a file and set its permissions."""
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, 'w', encoding='utf-8') as handle:
+    """Write text to a file atomically with strict permissions and no symlink following."""
+    parent = os.path.dirname(path)
+    os.makedirs(parent, exist_ok=True)
+    if os.path.islink(path):
+        raise ValueError(f'Refusing to write to symlink: {path}')
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, 'O_NOFOLLOW', 0)
+    fd = os.open(path, flags, mode)
+    with os.fdopen(fd, 'w', encoding='utf-8') as handle:
         handle.write(content.rstrip('\n') + '\n')
-    os.chmod(path, mode)
+    try:
+        os.chmod(path, mode)
+    except OSError:
+        pass
 
 
 def _copy_or_keep_cert(src_path, dest_dir, dest_filename, mode=0o600):
     """Copy an external certificate/key into the profile's cert directory."""
     if not src_path:
         return ''
+    if os.path.islink(src_path):
+        raise ValueError(f'Refusing to import symlinked certificate/key: "{src_path}"')
     os.makedirs(dest_dir, exist_ok=True)
+    os.chmod(dest_dir, 0o700)
     dest_path = os.path.join(dest_dir, dest_filename)
+    if os.path.islink(dest_path):
+        raise ValueError(f'Refusing to overwrite symlink: "{dest_path}"')
     if os.path.abspath(src_path) != os.path.abspath(dest_path) and os.path.isfile(src_path):
-        shutil.copy2(src_path, dest_path)
-        os.chmod(dest_path, mode)
+        with open(src_path, 'rb') as src_fh:
+            data = src_fh.read()
+        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, 'O_NOFOLLOW', 0)
+        fd = os.open(dest_path, flags, 0o600)
+        with os.fdopen(fd, 'wb') as dst_fh:
+            dst_fh.write(data)
+        os.chmod(dest_path, 0o600)
         return dest_path
     return src_path
 
@@ -985,11 +1073,12 @@ def save_openvpn_config(cfg):
     if cfg.get('remote_cert_tls') in ('server', 'client'):
         lines.append(f"remote-cert-tls {cfg['remote_cert_tls']}")
     if cfg.get('verify_x509_name'):
-        v_type = cfg.get('verify_x509_type', '').strip()
-        if v_type:
-            lines.append(f"verify-x509-name \"{cfg['verify_x509_name']}\" {v_type}")
+        v_name = _clean_ovpn_val(cfg['verify_x509_name']).replace('\\', '\\\\').replace('"', '\\"')
+        v_type = _clean_ovpn_val(cfg.get('verify_x509_type', ''))
+        if v_type in ('name', 'name-prefix', 'subject'):
+            lines.append(f'verify-x509-name "{v_name}" {v_type}')
         else:
-            lines.append(f"verify-x509-name \"{cfg['verify_x509_name']}\"")
+            lines.append(f'verify-x509-name "{v_name}"')
     if cfg.get('tls_version_min'):
         lines.append(f"tls-version-min {cfg['tls_version_min']}")
     if cfg.get('tls_version_max'):
@@ -1095,11 +1184,11 @@ def save_openvpn_config(cfg):
     lines.append(f'verb {verb}')
 
     for extra in cfg.get('extra_lines', []):
-        if extra.strip():
-            lines.append(extra)
+        if _is_safe_extra_line(extra):
+            lines.append(_clean_ovpn_val(extra))
 
     conf_file = os.path.join(OPENVPN_CONFIG_PATH, f'{profile_id}.conf')
-    _write_secure_file(conf_file, '\n'.join(lines), 0o600)
+    _write_secure_file(conf_file, '\n'.join([_clean_ovpn_val(ln) for ln in lines]), 0o600)
 
     if original_id and original_id != profile_id:
         delete_openvpn_config(original_id)
@@ -1138,17 +1227,30 @@ def openvpn_service_state():
     return result.stdout.strip() or 'NO'
 
 
-def _pid_is_alive(pid):
-    """Check whether a process ID exists."""
+def _pid_is_alive(pid, expected_comm='openvpn'):
+    """Check whether a process ID exists and matches `expected_comm`."""
     if pid <= 0:
         return False
     try:
         os.kill(pid, 0)
-        return True
     except ProcessLookupError:
         return False
     except PermissionError:
-        return True
+        pass
+    try:
+        res = run(
+            ['ps', '-p', str(pid), '-o', 'comm='],
+            stdout=PIPE,
+            stderr=DEVNULL,
+            text=True,
+            check=False,
+        )
+        comm = (res.stdout or '').strip().lower()
+        if comm:
+            return expected_comm.lower() in comm
+    except OSError:
+        pass
+    return True
 
 
 def _profile_pid(profile_id):
