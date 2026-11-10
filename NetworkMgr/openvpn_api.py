@@ -113,14 +113,18 @@ def _normalize_ipv4_netmask(mask_or_prefix):
 
 
 def detect_vpn_file_type(filepath):
-    """Detect whether a configuration file is for WireGuard or OpenVPN.
+    """Detect whether a configuration file is for WireGuard, IPsec/L2TP, or OpenVPN.
 
     Args:
-        filepath (str): path to the .ovpn or .conf file.
+        filepath (str): path to the .ovpn, .conf, .ipsec, or .sswan file.
 
     Returns:
-        str: 'wireguard' or 'openvpn'.
+        str: 'wireguard', 'ipsec', or 'openvpn'.
     """
+    ext = os.path.splitext(filepath)[1].lower()
+    if ext in ('.sswan', '.ipsec'):
+        return 'ipsec'
+
     try:
         with open(filepath, 'r', encoding='utf-8', errors='replace') as handle:
             content = handle.read(8192)
@@ -130,6 +134,14 @@ def detect_vpn_file_type(filepath):
     if re.search(r'^\s*\[Interface\]\s*$', content, re.MULTILINE | re.IGNORECASE) \
             and re.search(r'^\s*\[Peer\]\s*$', content, re.MULTILINE | re.IGNORECASE):
         return 'wireguard'
+    if '# networkmgr-ipsec' in content:
+        return 'ipsec'
+    if re.search(r'(?m)^\s*conn\s+\S+', content) and re.search(
+        r'(?m)^\s*(?:keyexchange|leftauth|rightauth|right|ike|esp)\s*=', content
+    ):
+        return 'ipsec'
+    if content.lstrip().startswith('{') and '"remote"' in content and '"addr"' in content:
+        return 'ipsec'
     return 'openvpn'
 
 

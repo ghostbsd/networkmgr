@@ -50,11 +50,21 @@ from NetworkMgr.wg_api import (
     wg_dictionary,
     wg_service_state,
 )
+from NetworkMgr.ipsec_api import (
+    default_ipsec_config,
+    delete_ipsec_config,
+    disable_ipsec,
+    enable_ipsec,
+    ipsec_dictionary,
+    is_ipsec_installed,
+    parse_ipsec_config,
+)
 from NetworkMgr.vpn_dialog import (
     OpenVPNAuthDialog,
     VPNConnectionDialog,
     import_vpn_file_dialog,
     show_connection_notification,
+    show_ipsec_not_installed_alert,
     show_openvpn_not_installed_alert,
 )
 
@@ -889,6 +899,10 @@ class NetCardConfigWindow(Gtk.Window):
         new_btn.connect("clicked", self.on_new_vpn_clicked)
         btn_bar.pack_start(new_btn, False, False, 0)
 
+        new_ipsec_btn = Gtk.Button(label="New IPsec / L2TP")
+        new_ipsec_btn.connect("clicked", self.on_new_ipsec_clicked)
+        btn_bar.pack_start(new_ipsec_btn, False, False, 0)
+
         edit_btn = Gtk.Button(label="Edit")
         edit_btn.connect("clicked", self.on_edit_vpn_clicked)
         btn_bar.pack_start(edit_btn, False, False, 0)
@@ -905,7 +919,7 @@ class NetCardConfigWindow(Gtk.Window):
         return vbox
 
     def refresh_vpn_list(self):
-        """Reload all OpenVPN and WireGuard profiles into the VPN tab store."""
+        """Reload all OpenVPN, WireGuard, and IPsec/L2TP profiles into the VPN tab store."""
         if not hasattr(self, 'vpn_store'):
             return
         self.vpn_store.clear()
@@ -938,6 +952,22 @@ class NetCardConfigWindow(Gtk.Window):
                 '',
             ])
 
+        ipsec_info = ipsec_dictionary()
+        for pid, meta in ipsec_info.get('configs', {}).items():
+            proto = meta.get('protocol', 'l2tp-ipsec')
+            type_label = 'L2TP / IPsec' if proto == 'l2tp-ipsec' else 'IPsec (IKEv2/v1)'
+            self.vpn_store.append([
+                meta.get('info', pid),
+                type_label,
+                meta.get('gateway', ''),
+                meta.get('state', 'Disconnected'),
+                pid,
+                'ipsec',
+                meta.get('path', ''),
+                False,
+                proto,
+            ])
+
     def _selected_vpn_row(self):
         """Return the currently selected row from the VPN TreeView, or None."""
         selection = self.vpn_tree.get_selection()
@@ -957,7 +987,7 @@ class NetCardConfigWindow(Gtk.Window):
         }
 
     def on_import_vpn_clicked(self, _widget):
-        """Import an OpenVPN (.ovpn/.conf) or WireGuard (.conf) file."""
+        """Import an OpenVPN (.ovpn/.conf), WireGuard (.conf), or IPsec (.ipsec/.sswan) file."""
         import_vpn_file_dialog(
             parent=self,
             on_saved=lambda _pid, _vtype: self.refresh_vpn_list(),
@@ -973,6 +1003,16 @@ class NetCardConfigWindow(Gtk.Window):
         editor.show_all()
         editor.refresh_dynamic_visibility()
 
+    def on_new_ipsec_clicked(self, _widget):
+        """Open the VPN editor to create a new IPsec / L2TP profile from scratch."""
+        editor = VPNConnectionDialog(
+            default_ipsec_config('New IPsec VPN'),
+            parent=self,
+            on_saved=lambda _pid, _vtype: self.refresh_vpn_list(),
+        )
+        editor.show_all()
+        editor.refresh_dynamic_visibility()
+
     def on_edit_vpn_clicked(self, _widget):
         """Open the VPN editor for the selected VPN profile."""
         sel = self._selected_vpn_row()
@@ -981,6 +1021,8 @@ class NetCardConfigWindow(Gtk.Window):
         try:
             if sel['vpn_type'] == 'wireguard':
                 cfg = parse_wireguard_config(sel['path'])
+            elif sel['vpn_type'] == 'ipsec':
+                cfg = parse_ipsec_config(sel['path'])
             else:
                 cfg = parse_openvpn_config(sel['path'])
         except ValueError as err:
@@ -1010,6 +1052,21 @@ class NetCardConfigWindow(Gtk.Window):
                 enable_wg(pid)
                 self.refresh_vpn_list()
                 show_connection_notification(display_name, True)
+        elif sel['vpn_type'] == 'ipsec':
+            protocol = sel['username'] or 'l2tp-ipsec'
+            if sel['state'] == 'Connected':
+                disable_ipsec(pid)
+                self.refresh_vpn_list()
+                show_connection_notification(display_name, False)
+            elif not is_ipsec_installed(protocol):
+                show_ipsec_not_installed_alert(protocol, self)
+            else:
+                ok, err_msg = enable_ipsec(pid)
+                self.refresh_vpn_list()
+                if not ok:
+                    self.show_invalid_entry(err_msg)
+                else:
+                    show_connection_notification(display_name, True)
         else:
             if sel['state'] == 'Connected':
                 disable_openvpn(pid)
@@ -1054,6 +1111,8 @@ class NetCardConfigWindow(Gtk.Window):
         pid = sel['profile_id']
         if sel['vpn_type'] == 'wireguard':
             delete_wireguard_config(pid)
+        elif sel['vpn_type'] == 'ipsec':
+            delete_ipsec_config(pid)
         else:
             delete_openvpn_config(pid)
         self.refresh_vpn_list()

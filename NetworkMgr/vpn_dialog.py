@@ -32,6 +32,14 @@ from NetworkMgr.wg_api import (
     sanitize_wg_id,
     save_wireguard_config,
 )
+from NetworkMgr.ipsec_api import (
+    IPSEC_PROTOCOLS,
+    default_ipsec_config,
+    ipsec_missing_packages_message,
+    is_ipsec_installed,
+    parse_ipsec_config,
+    save_ipsec_config,
+)
 
 gettext.bindtextdomain('NetworkMgr', '/usr/local/share/locale')
 gettext.textdomain('NetworkMgr')
@@ -79,6 +87,20 @@ def show_openvpn_not_installed_alert(parent=None):
         text="OpenVPN is not installed",
     )
     dialog.format_secondary_text(OPENVPN_NOT_INSTALLED_MSG)
+    dialog.run()
+    dialog.destroy()
+
+
+def show_ipsec_not_installed_alert(protocol='l2tp-ipsec', parent=None):
+    """Show an English alert dialog informing the user that StrongSwan/mpd5 is not installed."""
+    dialog = Gtk.MessageDialog(
+        transient_for=parent,
+        modal=True,
+        message_type=Gtk.MessageType.WARNING,
+        buttons=Gtk.ButtonsType.OK,
+        text="IPsec / L2TP VPN packages are not installed",
+    )
+    dialog.format_secondary_text(ipsec_missing_packages_message(protocol))
     dialog.run()
     dialog.destroy()
 
@@ -283,9 +305,11 @@ def import_vpn_file_dialog(parent=None, on_saved=None):
     )
 
     vpn_filter = Gtk.FileFilter()
-    vpn_filter.set_name(_("VPN Configurations (*.ovpn, *.conf)"))
+    vpn_filter.set_name(_("VPN Configurations (*.ovpn, *.conf, *.ipsec, *.sswan)"))
     vpn_filter.add_pattern("*.ovpn")
     vpn_filter.add_pattern("*.conf")
+    vpn_filter.add_pattern("*.ipsec")
+    vpn_filter.add_pattern("*.sswan")
     chooser.add_filter(vpn_filter)
 
     ovpn_filter = Gtk.FileFilter()
@@ -293,6 +317,13 @@ def import_vpn_file_dialog(parent=None, on_saved=None):
     ovpn_filter.add_pattern("*.ovpn")
     ovpn_filter.add_pattern("*.conf")
     chooser.add_filter(ovpn_filter)
+
+    ipsec_filter = Gtk.FileFilter()
+    ipsec_filter.set_name(_("IPsec / StrongSwan / L2TP (*.conf, *.ipsec, *.sswan)"))
+    ipsec_filter.add_pattern("*.conf")
+    ipsec_filter.add_pattern("*.ipsec")
+    ipsec_filter.add_pattern("*.sswan")
+    chooser.add_filter(ipsec_filter)
 
     all_filter = Gtk.FileFilter()
     all_filter.set_name(_("All Files (*)"))
@@ -310,6 +341,10 @@ def import_vpn_file_dialog(parent=None, on_saved=None):
         vpn_type = detect_vpn_file_type(filepath)
         if vpn_type == 'wireguard':
             cfg = parse_wireguard_config(filepath)
+        elif vpn_type == 'ipsec':
+            cfg = parse_ipsec_config(filepath)
+            if not is_ipsec_installed(cfg.get('protocol', 'l2tp-ipsec')):
+                show_ipsec_not_installed_alert(cfg.get('protocol', 'l2tp-ipsec'), parent)
         else:
             if not is_openvpn_installed():
                 show_openvpn_not_installed_alert(parent)
@@ -389,15 +424,21 @@ class VPNConnectionDialog(Gtk.Window):
 
         type_lbl = _field_label(_("VPN Type:"))
         header_grid.attach(type_lbl, 0, 1, 1, 1)
-        type_val_lbl = Gtk.Label(
-            label="WireGuard" if self.vpn_type == 'wireguard' else "OpenVPN"
-        )
+        if self.vpn_type == 'wireguard':
+            type_text = "WireGuard"
+        elif self.vpn_type == 'ipsec':
+            type_text = "IPsec / L2TP / IKEv2"
+        else:
+            type_text = "OpenVPN"
+        type_val_lbl = Gtk.Label(label=type_text)
         type_val_lbl.set_halign(Gtk.Align.START)
         header_grid.attach(type_val_lbl, 1, 1, 2, 1)
 
         if self.vpn_type == 'wireguard':
             self._build_wireguard_notebook(main_box)
             self.name_entry.connect("changed", self._on_wg_name_changed)
+        elif self.vpn_type == 'ipsec':
+            self._build_ipsec_notebook(main_box)
         else:
             self._build_openvpn_notebook(main_box)
 
@@ -1192,9 +1233,246 @@ class VPNConnectionDialog(Gtk.Window):
 
         notebook.append_page(grid, Gtk.Label(label="WireGuard"))
 
+    def _build_ipsec_notebook(self, main_box):
+        """Build the tabbed notebook for IPsec (IKEv2/IKEv1) & L2TP/IPsec profiles."""
+        notebook = Gtk.Notebook()
+        main_box.pack_start(notebook, True, True, 0)
+        self.ipsec_rows = {}
+
+        # Tab 1: IPsec / L2TP General & Authentication
+        tab1 = Gtk.Grid()
+        tab1.set_border_width(12)
+        tab1.set_column_spacing(10)
+        tab1.set_row_spacing(8)
+        row = 0
+
+        tab1.attach(_bold_label(_("Gateway & Protocol")), 0, row, 3, 1)
+        row += 1
+
+        tab1.attach(_field_label(_("Protocol:")), 0, row, 1, 1)
+        self.ipsec_proto_combo = Gtk.ComboBoxText()
+        current_proto = self.cfg.get('protocol', 'l2tp-ipsec')
+        for proto_id, proto_label in IPSEC_PROTOCOLS:
+            self.ipsec_proto_combo.append(proto_id, _(proto_label))
+        if not self.ipsec_proto_combo.set_active_id(current_proto):
+            self.ipsec_proto_combo.set_active(0)
+        self.ipsec_proto_combo.connect(
+            "changed", lambda _w: self.refresh_dynamic_visibility()
+        )
+        tab1.attach(self.ipsec_proto_combo, 1, row, 2, 1)
+        row += 1
+
+        tab1.attach(_field_label(_("Gateway (Server):")), 0, row, 1, 1)
+        self.ipsec_gw_entry = Gtk.Entry()
+        self.ipsec_gw_entry.set_hexpand(True)
+        self.ipsec_gw_entry.set_placeholder_text("vpn.company.com or 203.0.113.10")
+        self.ipsec_gw_entry.set_text(self.cfg.get('gateway', ''))
+        tab1.attach(self.ipsec_gw_entry, 1, row, 2, 1)
+        row += 1
+
+        tab1.attach(_field_label(_("Remote ID (Optional):")), 0, row, 1, 1)
+        self.ipsec_remote_id_entry = Gtk.Entry()
+        self.ipsec_remote_id_entry.set_placeholder_text("@vpn.company.com")
+        self.ipsec_remote_id_entry.set_text(self.cfg.get('remote_id', ''))
+        tab1.attach(self.ipsec_remote_id_entry, 1, row, 2, 1)
+        row += 1
+
+        tab1.attach(_field_label(_("Local ID / Group Name:")), 0, row, 1, 1)
+        self.ipsec_local_id_entry = Gtk.Entry()
+        self.ipsec_local_id_entry.set_placeholder_text(_("Optional client ID or IPsec group"))
+        self.ipsec_local_id_entry.set_text(self.cfg.get('local_id', ''))
+        tab1.attach(self.ipsec_local_id_entry, 1, row, 2, 1)
+        row += 1
+
+        tab1.attach(_bold_label(_("Authentication")), 0, row, 3, 1)
+        row += 1
+
+        # Pre-Shared Key (PSK)
+        psk_lbl = _field_label(_("Pre-Shared Key (PSK):"))
+        tab1.attach(psk_lbl, 0, row, 1, 1)
+        psk_box = Gtk.HBox(spacing=6)
+        self.ipsec_psk_entry = Gtk.Entry()
+        self.ipsec_psk_entry.set_visibility(False)
+        self.ipsec_psk_entry.set_hexpand(True)
+        self.ipsec_psk_entry.set_text(self.cfg.get('psk', ''))
+        psk_show = Gtk.CheckButton(label=_("Show"))
+        psk_show.connect(
+            "toggled", lambda w: self.ipsec_psk_entry.set_visibility(w.get_active())
+        )
+        psk_box.pack_start(self.ipsec_psk_entry, True, True, 0)
+        psk_box.pack_start(psk_show, False, False, 0)
+        tab1.attach(psk_box, 1, row, 2, 1)
+        self.ipsec_rows['psk'] = (psk_lbl, psk_box)
+        row += 1
+
+        # Username
+        user_lbl = _field_label(_("Username:"))
+        tab1.attach(user_lbl, 0, row, 1, 1)
+        self.ipsec_user_entry = Gtk.Entry()
+        self.ipsec_user_entry.set_hexpand(True)
+        self.ipsec_user_entry.set_text(self.cfg.get('username', ''))
+        tab1.attach(self.ipsec_user_entry, 1, row, 2, 1)
+        self.ipsec_rows['username'] = (user_lbl, self.ipsec_user_entry)
+        row += 1
+
+        # Password
+        pwd_lbl = _field_label(_("Password:"))
+        tab1.attach(pwd_lbl, 0, row, 1, 1)
+        pwd_box = Gtk.HBox(spacing=6)
+        self.ipsec_pwd_entry = Gtk.Entry()
+        self.ipsec_pwd_entry.set_visibility(False)
+        self.ipsec_pwd_entry.set_hexpand(True)
+        self.ipsec_pwd_entry.set_text(self.cfg.get('password', ''))
+        pwd_show = Gtk.CheckButton(label=_("Show"))
+        pwd_show.connect(
+            "toggled", lambda w: self.ipsec_pwd_entry.set_visibility(w.get_active())
+        )
+        pwd_box.pack_start(self.ipsec_pwd_entry, True, True, 0)
+        pwd_box.pack_start(pwd_show, False, False, 0)
+        tab1.attach(pwd_box, 1, row, 2, 1)
+        self.ipsec_rows['password'] = (pwd_lbl, pwd_box)
+        row += 1
+
+        # NT Domain (for Windows Server L2TP / Active Directory)
+        dom_lbl = _field_label(_("NT Domain (Windows AD):"))
+        tab1.attach(dom_lbl, 0, row, 1, 1)
+        self.ipsec_domain_entry = Gtk.Entry()
+        self.ipsec_domain_entry.set_placeholder_text(_("Optional (e.g. CORP)"))
+        self.ipsec_domain_entry.set_text(self.cfg.get('domain', ''))
+        tab1.attach(self.ipsec_domain_entry, 1, row, 2, 1)
+        self.ipsec_rows['domain'] = (dom_lbl, self.ipsec_domain_entry)
+        row += 1
+
+        # CA Certificate (for IKEv2 EAP / Cert)
+        ca_lbl = _field_label(_("CA Certificate:"))
+        tab1.attach(ca_lbl, 0, row, 1, 1)
+        self.ipsec_ca_entry = Gtk.Entry()
+        self.ipsec_ca_entry.set_hexpand(True)
+        self.ipsec_ca_entry.set_placeholder_text(_("Optional path to CA .pem/.crt"))
+        self.ipsec_ca_entry.set_text(self.cfg.get('ca_cert', ''))
+        tab1.attach(self.ipsec_ca_entry, 1, row, 2, 1)
+        self.ipsec_rows['ca_cert'] = (ca_lbl, self.ipsec_ca_entry)
+        row += 1
+
+        # User Certificate (for IKEv2 Cert)
+        ucert_lbl = _field_label(_("Client Certificate:"))
+        tab1.attach(ucert_lbl, 0, row, 1, 1)
+        self.ipsec_ucert_entry = Gtk.Entry()
+        self.ipsec_ucert_entry.set_hexpand(True)
+        self.ipsec_ucert_entry.set_placeholder_text("/path/to/client.crt")
+        self.ipsec_ucert_entry.set_text(self.cfg.get('user_cert', ''))
+        tab1.attach(self.ipsec_ucert_entry, 1, row, 2, 1)
+        self.ipsec_rows['user_cert'] = (ucert_lbl, self.ipsec_ucert_entry)
+        row += 1
+
+        # Private Key (for IKEv2 Cert)
+        ukey_lbl = _field_label(_("Client Private Key:"))
+        tab1.attach(ukey_lbl, 0, row, 1, 1)
+        self.ipsec_ukey_entry = Gtk.Entry()
+        self.ipsec_ukey_entry.set_hexpand(True)
+        self.ipsec_ukey_entry.set_placeholder_text("/path/to/client.key")
+        self.ipsec_ukey_entry.set_text(self.cfg.get('private_key', ''))
+        tab1.attach(self.ipsec_ukey_entry, 1, row, 2, 1)
+        self.ipsec_rows['private_key'] = (ukey_lbl, self.ipsec_ukey_entry)
+
+        notebook.append_page(tab1, Gtk.Label(label=_("IPsec / L2TP")))
+
+        # Tab 2: Phase 1/2 Algorithms & L2TP PPP Options
+        tab2 = Gtk.Grid()
+        tab2.set_border_width(12)
+        tab2.set_column_spacing(10)
+        tab2.set_row_spacing(8)
+        r2 = 0
+
+        tab2.attach(_bold_label(_("IPsec Phase 1 (IKE) & Phase 2 (ESP)")), 0, r2, 3, 1)
+        r2 += 1
+
+        tab2.attach(_field_label(_("Phase 1 Algorithms (IKE):")), 0, r2, 1, 1)
+        self.ipsec_ike_entry = Gtk.Entry()
+        self.ipsec_ike_entry.set_hexpand(True)
+        self.ipsec_ike_entry.set_text(self.cfg.get('ike_proposals', ''))
+        tab2.attach(self.ipsec_ike_entry, 1, r2, 2, 1)
+        r2 += 1
+
+        tab2.attach(_field_label(_("Phase 2 Algorithms (ESP):")), 0, r2, 1, 1)
+        self.ipsec_esp_entry = Gtk.Entry()
+        self.ipsec_esp_entry.set_hexpand(True)
+        self.ipsec_esp_entry.set_text(self.cfg.get('esp_proposals', ''))
+        tab2.attach(self.ipsec_esp_entry, 1, r2, 2, 1)
+        r2 += 1
+
+        self.ipsec_aggr_check = Gtk.CheckButton(
+            label=_("Use IKEv1 Aggressive Mode")
+        )
+        self.ipsec_aggr_check.set_active(bool(self.cfg.get('aggressive', False)))
+        tab2.attach(self.ipsec_aggr_check, 1, r2, 2, 1)
+        r2 += 1
+
+        tab2.attach(_bold_label(_("L2TP / PPP Settings (Windows Server / mpd5)")), 0, r2, 3, 1)
+        r2 += 1
+
+        tab2.attach(_field_label(_("L2TP UDP Port:")), 0, r2, 1, 1)
+        self.ipsec_port_entry = Gtk.Entry()
+        self.ipsec_port_entry.set_text(self.cfg.get('l2tp_port', '1701'))
+        tab2.attach(self.ipsec_port_entry, 1, r2, 1, 1)
+        r2 += 1
+
+        tab2.attach(_field_label(_("PPP MTU:")), 0, r2, 1, 1)
+        self.ipsec_mtu_entry = Gtk.Entry()
+        self.ipsec_mtu_entry.set_text(self.cfg.get('mtu', '1400'))
+        tab2.attach(self.ipsec_mtu_entry, 1, r2, 1, 1)
+        r2 += 1
+
+        self.ipsec_mschapv2_check = Gtk.CheckButton(
+            label=_("Allow MSCHAPv2 authentication (Recommended for Windows Server)")
+        )
+        self.ipsec_mschapv2_check.set_active(bool(self.cfg.get('ppp_mschapv2', True)))
+        tab2.attach(self.ipsec_mschapv2_check, 1, r2, 2, 1)
+        r2 += 1
+
+        self.ipsec_chap_check = Gtk.CheckButton(label=_("Allow CHAP authentication"))
+        self.ipsec_chap_check.set_active(bool(self.cfg.get('ppp_chap', True)))
+        tab2.attach(self.ipsec_chap_check, 1, r2, 2, 1)
+        r2 += 1
+
+        self.ipsec_pap_check = Gtk.CheckButton(label=_("Allow PAP authentication"))
+        self.ipsec_pap_check.set_active(bool(self.cfg.get('ppp_pap', False)))
+        tab2.attach(self.ipsec_pap_check, 1, r2, 2, 1)
+        r2 += 1
+
+        self.ipsec_mppe_check = Gtk.CheckButton(
+            label=_("Require MPPE point-to-point encryption")
+        )
+        self.ipsec_mppe_check.set_active(bool(self.cfg.get('mppe_required', False)))
+        tab2.attach(self.ipsec_mppe_check, 1, r2, 2, 1)
+        r2 += 1
+
+        self.ipsec_defroute_check = Gtk.CheckButton(
+            label=_("Use this VPN connection as default route")
+        )
+        self.ipsec_defroute_check.set_active(bool(self.cfg.get('default_route', True)))
+        tab2.attach(self.ipsec_defroute_check, 1, r2, 2, 1)
+
+        notebook.append_page(tab2, Gtk.Label(label=_("Phase 1/2 & PPP")))
+
     def refresh_dynamic_visibility(self):
         """Show only the fields relevant to the selected authentication/IP/TLS/proxy mode."""
         if self.vpn_type == 'wireguard':
+            return
+        if self.vpn_type == 'ipsec':
+            proto = self.ipsec_proto_combo.get_active_id() or 'l2tp-ipsec'
+            vis = {
+                'psk': proto in ('l2tp-ipsec', 'ikev2-psk', 'ikev1-xauth'),
+                'username': proto in ('l2tp-ipsec', 'ikev2-eap', 'ikev1-xauth'),
+                'password': proto in ('l2tp-ipsec', 'ikev2-eap', 'ikev1-xauth'),
+                'domain': proto == 'l2tp-ipsec',
+                'ca_cert': proto in ('ikev2-eap', 'ikev2-cert'),
+                'user_cert': proto == 'ikev2-cert',
+                'private_key': proto == 'ikev2-cert',
+            }
+            for key, show_flag in vis.items():
+                for widget in self.ipsec_rows.get(key, ()):
+                    widget.set_visible(show_flag)
             return
         auth_type = self.auth_type_combo.get_active_id() or 'tls'
         visibility = {
@@ -1248,6 +1526,32 @@ class VPNConnectionDialog(Gtk.Window):
                 self.cfg['allowed_ips'] = self.wg_allowed_entry.get_text().strip()
                 self.cfg['persistent_keepalive'] = self.wg_keepalive_entry.get_text().strip()
                 saved_id = save_wireguard_config(self.cfg)
+            elif self.vpn_type == 'ipsec':
+                self.cfg['protocol'] = (
+                    self.ipsec_proto_combo.get_active_id() or 'l2tp-ipsec'
+                )
+                self.cfg['gateway'] = self.ipsec_gw_entry.get_text().strip()
+                self.cfg['remote_id'] = self.ipsec_remote_id_entry.get_text().strip()
+                self.cfg['local_id'] = self.ipsec_local_id_entry.get_text().strip()
+                self.cfg['psk'] = self.ipsec_psk_entry.get_text()
+                self.cfg['username'] = self.ipsec_user_entry.get_text().strip()
+                self.cfg['password'] = self.ipsec_pwd_entry.get_text()
+                self.cfg['domain'] = self.ipsec_domain_entry.get_text().strip()
+                self.cfg['ca_cert'] = self.ipsec_ca_entry.get_text().strip()
+                self.cfg['user_cert'] = self.ipsec_ucert_entry.get_text().strip()
+                self.cfg['private_key'] = self.ipsec_ukey_entry.get_text().strip()
+                self.cfg['ike_proposals'] = self.ipsec_ike_entry.get_text().strip()
+                self.cfg['esp_proposals'] = self.ipsec_esp_entry.get_text().strip()
+                self.cfg['aggressive'] = self.ipsec_aggr_check.get_active()
+                self.cfg['l2tp_port'] = self.ipsec_port_entry.get_text().strip() or '1701'
+                self.cfg['mtu'] = self.ipsec_mtu_entry.get_text().strip() or '1400'
+                self.cfg['ppp_mschapv2'] = self.ipsec_mschapv2_check.get_active()
+                self.cfg['ppp_chap'] = self.ipsec_chap_check.get_active()
+                self.cfg['ppp_pap'] = self.ipsec_pap_check.get_active()
+                self.cfg['mppe_required'] = self.ipsec_mppe_check.get_active()
+                self.cfg['default_route'] = self.ipsec_defroute_check.get_active()
+                save_ipsec_config(self.cfg)
+                saved_id = self.cfg['profile_id']
             else:
                 # Commit any typed but un-added route from the quick-add bar
                 if self.r4_net_entry.get_text().strip():

@@ -61,9 +61,17 @@ from NetworkMgr.openvpn_api import (
     is_openvpn_installed,
     parse_openvpn_config
 )
+from NetworkMgr.ipsec_api import (
+    disable_ipsec,
+    enable_ipsec,
+    ipsec_dictionary,
+    is_ipsec_installed,
+    parse_ipsec_config
+)
 from NetworkMgr.vpn_dialog import (
     import_vpn_file_dialog,
     show_connection_notification,
+    show_ipsec_not_installed_alert,
     show_openvpn_not_installed_alert,
     VPNConnectionDialog,
     OpenVPNAuthDialog
@@ -411,6 +419,43 @@ class TrayIcon:
                 config_cb = (
                     (lambda path=ovpn_path: self.configure_openvpn_profile(None, path))
                     if ovpn_path
+                    else None
+                )
+                self.menu.append(
+                    self._connection_menu_row(
+                        connection_info, is_connected, toggle_cb, config_cb
+                    )
+                )
+            self.menu.append(Gtk.SeparatorMenuItem())
+
+        ipsec_info = ipsec_dictionary()
+        if len(ipsec_info['configs']) > 0:
+            ipsec_title = Gtk.MenuItem()
+            ipsec_title.set_label(_("IPsec / L2TP VPN"))
+            ipsec_title.set_sensitive(False)
+            self.menu.append(ipsec_title)
+            self.menu.append(Gtk.SeparatorMenuItem())
+            for ipsec_dev, ipsec_meta in ipsec_info['configs'].items():
+                connection_state = ipsec_meta['state']
+                connection_info = ipsec_meta['info']
+                ipsec_path = ipsec_meta.get('path', '')
+                is_connected = connection_state == "Connected"
+                toggle_cb = (
+                    (
+                        lambda dev=ipsec_dev, info=connection_info: self.disconnect_ipsec(
+                            None, dev, info
+                        )
+                    )
+                    if is_connected
+                    else (
+                        lambda dev=ipsec_dev, meta=ipsec_meta: self.connect_ipsec(
+                            None, dev, meta
+                        )
+                    )
+                )
+                config_cb = (
+                    (lambda path=ipsec_path: self.configure_ipsec_profile(None, path))
+                    if ipsec_path
                     else None
                 )
                 self.menu.append(
@@ -850,6 +895,46 @@ class TrayIcon:
         """Open the VPN editor for an existing OpenVPN configuration."""
         try:
             cfg = parse_openvpn_config(ovpn_path)
+        except ValueError:
+            return
+        editor = VPNConnectionDialog(
+            cfg,
+            parent=None,
+            on_saved=lambda _pid, _vtype: self.update_info(),
+        )
+        editor.show_all()
+        editor.refresh_dynamic_visibility()
+
+    def connect_ipsec(self, _widget, ipsec_dev, ipsec_meta):
+        """Bring an IPsec (IKEv2/IKEv1) or L2TP/IPsec tunnel up."""
+        protocol = ipsec_meta.get('protocol', 'l2tp-ipsec')
+        display_name = ipsec_meta.get('info', ipsec_dev)
+        if not is_ipsec_installed(protocol):
+            show_ipsec_not_installed_alert(protocol)
+            return
+        ok, err_msg = enable_ipsec(ipsec_dev)
+        self.update_info()
+        if not ok:
+            dialog = Gtk.MessageDialog(
+                None, 0, Gtk.MessageType.WARNING, Gtk.ButtonsType.CLOSE,
+                _("Could not connect to %s") % display_name
+            )
+            dialog.format_secondary_text(err_msg)
+            dialog.run()
+            dialog.destroy()
+            return
+        show_connection_notification(display_name, True)
+
+    def disconnect_ipsec(self, _widget, ipsec_dev, display_name=None):
+        """Take an IPsec or L2TP/IPsec tunnel down."""
+        disable_ipsec(ipsec_dev)
+        self.update_info()
+        show_connection_notification(display_name or ipsec_dev, False)
+
+    def configure_ipsec_profile(self, _widget, ipsec_path):
+        """Open the VPN editor for an existing IPsec or L2TP/IPsec configuration."""
+        try:
+            cfg = parse_ipsec_config(ipsec_path)
         except ValueError:
             return
         editor = VPNConnectionDialog(
