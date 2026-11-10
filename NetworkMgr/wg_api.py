@@ -242,8 +242,11 @@ def wg_service_state():
             and sysrc reports an unset variable as an error rather than a
             value.
     """
-    result = run(['sysrc', '-n', 'wireguard_enable'],
-                 stdout=PIPE, stderr=PIPE, check=False, text=True)
+    try:
+        result = run(['sysrc', '-n', 'wireguard_enable'],
+                     stdout=PIPE, stderr=PIPE, check=False, text=True)
+    except OSError:
+        return 'NO'
     if result.returncode != 0:
         return 'NO'
     return result.stdout.strip() or 'NO'

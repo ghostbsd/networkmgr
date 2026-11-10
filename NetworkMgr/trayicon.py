@@ -43,7 +43,7 @@ from NetworkMgr.net_api import (
     get_system_ca_certificates,
     save_eap_network
 )
-from NetworkMgr.configuration import open_configuration
+from NetworkMgr.configuration import open_configuration, open_network_settings
 
 from NetworkMgr.wg_api import (
     wg_dictionary,
@@ -542,6 +542,10 @@ class TrayIcon:
                 self.menu.append(Gtk.SeparatorMenuItem())
                 wifinum += 1
 
+        settings_item = Gtk.MenuItem(_("Settings"))
+        settings_item.connect("activate", self.open_settings_window)
+        self.menu.append(settings_item)
+
         import_vpn_item = Gtk.MenuItem(_("Import VPN Configuration..."))
         import_vpn_item.connect("activate", self.import_vpn_configuration)
         self.menu.append(import_vpn_item)
@@ -689,6 +693,10 @@ class TrayIcon:
             interface (str): interface name to configure.
         """
         open_configuration(interface)
+
+    def open_settings_window(self, _widget):
+        """Open the unified NetworkManager-style Settings window."""
+        open_network_settings(on_changed=self.update_info)
 
     def connect_open_network(self, _widget, ssid, wifi_card):
         """

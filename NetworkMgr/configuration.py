@@ -9,6 +9,7 @@ settings to the running system through NetworkMgr.net_api. Every value is
 checked by NetworkMgr.validate first, since rc.conf runs as shell code.
 """
 
+import os
 import re
 from subprocess import DEVNULL, run
 
@@ -18,14 +19,19 @@ gi.require_version('Gtk', '3.0')
 # gi.require_version() has to run before the typelib is loaded, so the
 # imports below cannot be hoisted above it.
 # pylint: disable=wrong-import-position
-from gi.repository import Gtk, GLib
+from gi.repository import Gtk, GLib, Pango
 from NetworkMgr.net_api import (
     default_card,
+    disable_wifi,
+    enable_wifi,
+    network_dictionary,
     nics_list,
     restart_card_network,
     restart_routing_and_dhcp,
+    start_network_card,
     start_static_network,
     start_static_ipv6_network,
+    stop_network_card,
     enable_slaac,
     disable_slaac,
     wait_for_address
@@ -43,6 +49,7 @@ from NetworkMgr.openvpn_api import (
     parse_openvpn_config,
 )
 from NetworkMgr.wg_api import (
+    default_wireguard_config,
     delete_wireguard_config,
     disable_wg,
     enable_wg,
@@ -75,6 +82,97 @@ RC_CONF_SAFE_REGEX = re.compile(r'[A-Za-z0-9_.:%/ -]*')
 # An rc.conf variable name. Interface names go through
 # validate.rc_conf_interface first, so em0.10 arrives as em0_10.
 RC_CONF_NAME_REGEX = re.compile(r'[A-Za-z_][A-Za-z0-9_]*')
+
+INTERFACE_ROUTES_DIR = '/usr/local/etc/networkmgr/routes'
+
+
+def load_interface_routes(nic):
+    """Load saved IPv4 and IPv6 static routes for `nic`.
+
+    Returns:
+        tuple[list[dict], list[dict]]: `(ipv4_routes, ipv6_routes)`.
+    """
+    ipv4_routes = []
+    ipv6_routes = []
+    if not nic:
+        return ipv4_routes, ipv6_routes
+    rc_nic = validate.rc_conf_interface(nic)
+    path = os.path.join(INTERFACE_ROUTES_DIR, f'{rc_nic}.routes')
+    if not os.path.isfile(path):
+        return ipv4_routes, ipv6_routes
+    try:
+        with open(path, 'r', encoding='utf-8', errors='replace') as fh:
+            for line in fh:
+                sline = line.strip()
+                if not sline or sline.startswith('#') or '=' not in sline:
+                    continue
+                k, v = [p.strip() for p in sline.split('=', 1)]
+                parts = [p.strip() for p in v.split(',')]
+                if k == 'ipv4_route' and len(parts) >= 3:
+                    ipv4_routes.append({
+                        'network': parts[0],
+                        'netmask': parts[1],
+                        'gateway': parts[2],
+                    })
+                elif k == 'ipv6_route' and len(parts) >= 3:
+                    ipv6_routes.append({
+                        'network': parts[0],
+                        'prefixlen': parts[1],
+                        'gateway': parts[2],
+                    })
+    except OSError:
+        pass
+    return ipv4_routes, ipv6_routes
+
+
+def save_interface_routes(nic, ipv4_routes, ipv6_routes, target_dir=INTERFACE_ROUTES_DIR):
+    """Persist IPv4 and IPv6 static routes for `nic`."""
+    if not nic:
+        return
+    rc_nic = validate.rc_conf_interface(nic)
+    os.makedirs(target_dir, exist_ok=True)
+    lines = [f'# Static routes for {nic}']
+    for rt in ipv4_routes or []:
+        net = (rt.get('network') or '').strip()
+        mask = (rt.get('netmask') or '').strip()
+        gw = (rt.get('gateway') or '').strip()
+        if net and mask and gw:
+            lines.append(f'ipv4_route = {net},{mask},{gw}')
+    for rt6 in ipv6_routes or []:
+        net6 = (rt6.get('network') or '').strip()
+        plen = (rt6.get('prefixlen') or '64').strip()
+        gw6 = (rt6.get('gateway') or '').strip()
+        if net6 and gw6:
+            lines.append(f'ipv6_route = {net6},{plen},{gw6}')
+    lines.append('')
+    path = os.path.join(target_dir, f'{rc_nic}.routes')
+    with open(path, 'w', encoding='utf-8') as fh:
+        fh.write('\n'.join(lines))
+
+
+def apply_interface_routes(nic, ipv4_routes, ipv6_routes):
+    """Apply IPv4 and IPv6 static routes for `nic` to the live routing table."""
+    for rt in ipv4_routes or []:
+        net = (rt.get('network') or '').strip()
+        mask = (rt.get('netmask') or '').strip()
+        gw = (rt.get('gateway') or '').strip()
+        if net and mask and gw:
+            run(
+                ['route', '-n', 'add', '-net', net, gw, mask],
+                stderr=DEVNULL,
+                check=False,
+            )
+    for rt6 in ipv6_routes or []:
+        net6 = (rt6.get('network') or '').strip()
+        plen = (rt6.get('prefixlen') or '64').strip().lstrip('/')
+        gw6 = (rt6.get('gateway') or '').strip()
+        if net6 and gw6:
+            dest6 = f'{net6}/{plen}' if '/' not in net6 else net6
+            run(
+                ['route', '-n', 'add', '-inet6', dest6, gw6],
+                stderr=DEVNULL,
+                check=False,
+            )
 
 
 class NetCardConfigWindow(Gtk.Window):
@@ -162,14 +260,16 @@ class NetCardConfigWindow(Gtk.Window):
         """
         self.save_button.set_sensitive(self.settings_complete())
 
-    def __init__(self, selected_nic=None):
+    def __init__(self, selected_nic=None, on_saved=None):
         # Build Default Window
         Gtk.Window.__init__(self, title="Network Configuration")
-        self.set_default_size(475, 400)
+        self.set_default_size(580, 520)
+        self.on_saved = on_saved
         self.nics = nics_list()
         # The checked values Save hands to update_system().
         self.pending = {}
         default_nic = selected_nic if selected_nic else default_card()
+        self.active_nic = default_nic
         # Build Tab 1 Content
         # Interface Drop Down Combo Box
         cell = Gtk.CellRendererText()
@@ -323,6 +423,8 @@ class NetCardConfigWindow(Gtk.Window):
             self.secondary_dns_entry.set_sensitive(False)
             self.search_entry.set_sensitive(False)
 
+        routes_box4 = self._build_nic_ipv4_routes_section()
+
         grid_one = Gtk.Grid()
         grid_one.set_column_homogeneous(True)
         grid_one.set_row_homogeneous(False)
@@ -335,6 +437,7 @@ class NetCardConfigWindow(Gtk.Window):
         grid_one.attach(dns_entry_box1, 0, 4, 4, 1)
         grid_one.attach(dns_entry_box2, 0, 5, 4, 1)
         grid_one.attach(search_box, 0, 6, 4, 1)
+        grid_one.attach(routes_box4, 0, 7, 4, 1)
 
         # Build Tab 2 Content
 
@@ -469,6 +572,9 @@ class NetCardConfigWindow(Gtk.Window):
         self.prymary_dns_entry6.set_sensitive(manual_enabled)
         self.search_entry6.set_sensitive(manual_enabled)
 
+        routes_box6 = self._build_nic_ipv6_routes_section()
+        self._reload_nic_routes(default_nic)
+
         grid_one6 = Gtk.Grid()
         grid_one6.set_column_homogeneous(True)
         grid_one6.set_row_homogeneous(False)
@@ -480,6 +586,7 @@ class NetCardConfigWindow(Gtk.Window):
         grid_one6.attach(ip_entry_box6, 0, 3, 4, 1)
         grid_one6.attach(dns_entry_box6, 0, 4, 4, 1)
         grid_one6.attach(search_box6, 0, 5, 4, 1)
+        grid_one6.attach(routes_box6, 0, 6, 4, 1)
 
         # Build Notebook
 
@@ -523,6 +630,153 @@ class NetCardConfigWindow(Gtk.Window):
         main_box.pack_end(buttons_window, False, False, 0)
         self.add(main_box)
 
+    def _build_nic_ipv4_routes_section(self):
+        """Build the IPv4 Static Routes table and quick-add controls for an interface."""
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        vbox.set_margin_start(20)
+        vbox.set_margin_end(20)
+        vbox.set_margin_bottom(10)
+
+        lbl = Gtk.Label(label="Static Routes (IPv4):")
+        lbl.set_halign(Gtk.Align.START)
+        vbox.pack_start(lbl, False, False, 0)
+
+        self.nic_r4_store = Gtk.ListStore(str, str, str)
+        self.nic_r4_tree = Gtk.TreeView(model=self.nic_r4_store)
+        for idx, (col_title, width) in enumerate(
+            (("Destination Network", 150), ("Subnet Mask", 140), ("Gateway", 140))
+        ):
+            renderer = Gtk.CellRendererText()
+            col = Gtk.TreeViewColumn(col_title, renderer, text=idx)
+            col.set_min_width(width)
+            col.set_resizable(True)
+            self.nic_r4_tree.append_column(col)
+
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_min_content_height(80)
+        scroll.set_shadow_type(Gtk.ShadowType.IN)
+        scroll.add(self.nic_r4_tree)
+        vbox.pack_start(scroll, True, True, 0)
+
+        add_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        self.nic_r4_net = Gtk.Entry()
+        self.nic_r4_net.set_placeholder_text("Network (10.8.0.0)")
+        self.nic_r4_mask = Gtk.Entry()
+        self.nic_r4_mask.set_placeholder_text("Mask (255.255.255.0)")
+        self.nic_r4_gw = Gtk.Entry()
+        self.nic_r4_gw.set_placeholder_text("Gateway (192.168.1.1)")
+
+        add_btn = Gtk.Button(label="Add Route")
+        add_btn.connect("clicked", self._on_add_nic_r4)
+        del_btn = Gtk.Button(label="Remove")
+        del_btn.connect("clicked", self._on_del_nic_r4)
+
+        add_bar.pack_start(self.nic_r4_net, True, True, 0)
+        add_bar.pack_start(self.nic_r4_mask, True, True, 0)
+        add_bar.pack_start(self.nic_r4_gw, True, True, 0)
+        add_bar.pack_start(add_btn, False, False, 0)
+        add_bar.pack_start(del_btn, False, False, 0)
+        vbox.pack_start(add_bar, False, False, 0)
+        return vbox
+
+    def _on_add_nic_r4(self, _widget):
+        net = self.nic_r4_net.get_text().strip()
+        mask = self.nic_r4_mask.get_text().strip() or '255.255.255.0'
+        gw = self.nic_r4_gw.get_text().strip()
+        if net and gw:
+            self.nic_r4_store.append([net, mask, gw])
+            self.nic_r4_net.set_text('')
+            self.nic_r4_mask.set_text('')
+            self.nic_r4_gw.set_text('')
+            self.save_button.set_sensitive(self.settings_complete())
+
+    def _on_del_nic_r4(self, _widget):
+        sel = self.nic_r4_tree.get_selection()
+        model, it = sel.get_selected()
+        if it is not None:
+            model.remove(it)
+            self.save_button.set_sensitive(self.settings_complete())
+
+    def _build_nic_ipv6_routes_section(self):
+        """Build the IPv6 Static Routes table and quick-add controls for an interface."""
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        vbox.set_margin_start(20)
+        vbox.set_margin_end(20)
+        vbox.set_margin_bottom(10)
+
+        lbl = Gtk.Label(label="Static Routes (IPv6):")
+        lbl.set_halign(Gtk.Align.START)
+        vbox.pack_start(lbl, False, False, 0)
+
+        self.nic_r6_store = Gtk.ListStore(str, str, str)
+        self.nic_r6_tree = Gtk.TreeView(model=self.nic_r6_store)
+        for idx, (col_title, width) in enumerate(
+            (("Destination Prefix", 170), ("Prefix Length", 100), ("Gateway", 160))
+        ):
+            renderer = Gtk.CellRendererText()
+            col = Gtk.TreeViewColumn(col_title, renderer, text=idx)
+            col.set_min_width(width)
+            col.set_resizable(True)
+            self.nic_r6_tree.append_column(col)
+
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_min_content_height(80)
+        scroll.set_shadow_type(Gtk.ShadowType.IN)
+        scroll.add(self.nic_r6_tree)
+        vbox.pack_start(scroll, True, True, 0)
+
+        add_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        self.nic_r6_net = Gtk.Entry()
+        self.nic_r6_net.set_placeholder_text("Prefix (fd00:10::)")
+        self.nic_r6_plen = Gtk.Entry()
+        self.nic_r6_plen.set_placeholder_text("64")
+        self.nic_r6_plen.set_width_chars(6)
+        self.nic_r6_gw = Gtk.Entry()
+        self.nic_r6_gw.set_placeholder_text("Gateway (fd00::1)")
+
+        add_btn = Gtk.Button(label="Add Route")
+        add_btn.connect("clicked", self._on_add_nic_r6)
+        del_btn = Gtk.Button(label="Remove")
+        del_btn.connect("clicked", self._on_del_nic_r6)
+
+        add_bar.pack_start(self.nic_r6_net, True, True, 0)
+        add_bar.pack_start(self.nic_r6_plen, False, False, 0)
+        add_bar.pack_start(self.nic_r6_gw, True, True, 0)
+        add_bar.pack_start(add_btn, False, False, 0)
+        add_bar.pack_start(del_btn, False, False, 0)
+        vbox.pack_start(add_bar, False, False, 0)
+        return vbox
+
+    def _on_add_nic_r6(self, _widget):
+        net = self.nic_r6_net.get_text().strip()
+        plen = self.nic_r6_plen.get_text().strip() or '64'
+        gw = self.nic_r6_gw.get_text().strip()
+        if net and gw:
+            self.nic_r6_store.append([net, plen, gw])
+            self.nic_r6_net.set_text('')
+            self.nic_r6_plen.set_text('')
+            self.nic_r6_gw.set_text('')
+            self.save_button.set_sensitive(self.settings_complete())
+
+    def _on_del_nic_r6(self, _widget):
+        sel = self.nic_r6_tree.get_selection()
+        model, it = sel.get_selected()
+        if it is not None:
+            model.remove(it)
+            self.save_button.set_sensitive(self.settings_complete())
+
+    def _reload_nic_routes(self, nic):
+        """Populate the IPv4 and IPv6 Static Routes stores for `nic`."""
+        if hasattr(self, 'nic_r4_store'):
+            self.nic_r4_store.clear()
+        if hasattr(self, 'nic_r6_store'):
+            self.nic_r6_store.clear()
+        r4_list, r6_list = load_interface_routes(nic)
+        for rt in r4_list:
+            self.nic_r4_store.append([rt['network'], rt['netmask'], rt['gateway']])
+        for rt6 in r6_list:
+            self.nic_r6_store.append([rt6['network'], rt6['prefixlen'], rt6['gateway']])
+
     # Used with the combo box to refresh the UI of tab 1 with active settings
     # for the newly selected active interface.
     def cbox_config_refresh(self, widget):
@@ -532,10 +786,12 @@ class NetCardConfigWindow(Gtk.Window):
             widget (Gtk.ComboBox): the interface combo box.
         """
         selected_nic = self.nics[widget.get_active()]
+        self.active_nic = selected_nic
         self.current_settings = get_interface_settings(selected_nic)
         self.current_settings6 = get_interface_settings_ipv6(selected_nic)
         self.update_interface_settings()
         self.update_interface_settings_ipv6()
+        self._reload_nic_routes(selected_nic)
 
     def update_interface_settings(self):
         """Fill the IPv4 tab's widgets from the current settings."""
@@ -582,6 +838,10 @@ class NetCardConfigWindow(Gtk.Window):
         Args:
             _widget (Gtk.Widget): the Save button, unused.
         """
+        if hasattr(self, 'nic_r4_net') and self.nic_r4_net.get_text().strip():
+            self._on_add_nic_r4(None)
+        if hasattr(self, 'nic_r6_net') and self.nic_r6_net.get_text().strip():
+            self._on_add_nic_r6(None)
         try:
             self.pending = self.validated_settings()
         except ValueError as error:
@@ -731,6 +991,21 @@ class NetCardConfigWindow(Gtk.Window):
         # Apply IPv6 configuration
         self.update_system_ipv6(settings)
 
+        # Persist and apply static routes for this interface
+        if hasattr(self, 'nic_r4_store') and hasattr(self, 'nic_r6_store'):
+            r4_list = [
+                {'network': r[0], 'netmask': r[1], 'gateway': r[2]}
+                for r in self.nic_r4_store
+            ]
+            r6_list = [
+                {'network': r[0], 'prefixlen': r[1], 'gateway': r[2]}
+                for r in self.nic_r6_store
+            ]
+            save_interface_routes(nic, r4_list, r6_list)
+            apply_interface_routes(nic, r4_list, r6_list)
+
+        if self.on_saved is not None:
+            self.on_saved()
         self.destroy()
 
     def update_system_ipv6(self, settings):
@@ -1118,6 +1393,598 @@ class NetCardConfigWindow(Gtk.Window):
         self.refresh_vpn_list()
 
 
+class ChooseVPNTypeDialog(Gtk.Dialog):
+    """NetworkManager-style 'Choose a Connection Type' dialog for creating/importing VPNs."""
+
+    CONNECTION_TYPES = (
+        (
+            'openvpn',
+            'OpenVPN',
+            'Compatible with OpenVPN servers (.ovpn / TLS / Password / Static Key).',
+        ),
+        (
+            'l2tp-ipsec',
+            'Layer 2 Tunneling Protocol (L2TP / IPsec)',
+            'Compatible with Windows Server VPN, MikroTik, Ubiquiti, FortiGate, and L2TP/IPsec gateways.',
+        ),
+        (
+            'ikev2-eap',
+            'IPsec / IKEv2 (StrongSwan — EAP / Windows Server IKEv2)',
+            'Compatible with Windows Server Always On VPN and IKEv2 EAP-MSCHAPv2 gateways.',
+        ),
+        (
+            'ikev2-psk',
+            'IPsec / IKEv2 with Pre-Shared Key (PSK)',
+            'Standard IKEv2 tunnel authenticated with a Pre-Shared Key.',
+        ),
+        (
+            'ikev2-cert',
+            'IPsec / IKEv2 with X.509 Certificates',
+            'Standard IKEv2 tunnel authenticated with client and CA certificates.',
+        ),
+        (
+            'ikev1-xauth',
+            'Cisco Compatible VPN (IPsec / IKEv1 XAuth + PSK)',
+            'Compatible with Cisco IPsec / IKEv1 XAuth gateways.',
+        ),
+        (
+            'wireguard',
+            'WireGuard',
+            'Modern high-performance WireGuard VPN tunnel (wg-quick).',
+        ),
+        (
+            'import',
+            'Import a saved VPN configuration...',
+            'Import an existing .ovpn, .conf, .ipsec, or .sswan configuration file.',
+        ),
+    )
+
+    def __init__(self, parent=None):
+        super().__init__(
+            title="Choose a Connection Type",
+            transient_for=parent,
+            flags=0,
+        )
+        self.set_default_size(500, 240)
+        self.set_border_width(12)
+        self.add_buttons(
+            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+            "Create...", Gtk.ResponseType.ACCEPT,
+        )
+
+        content = self.get_content_area()
+        content.set_spacing(10)
+
+        intro = Gtk.Label(
+            label="Select the type of VPN connection you wish to create or import:"
+        )
+        intro.set_halign(Gtk.Align.START)
+        attrs = Pango.AttrList()
+        attrs.insert(Pango.attr_weight_new(Pango.Weight.BOLD))
+        intro.set_attributes(attrs)
+        content.pack_start(intro, False, False, 4)
+
+        self.type_combo = Gtk.ComboBoxText()
+        for type_id, title, _desc in self.CONNECTION_TYPES:
+            self.type_combo.append(type_id, title)
+        self.type_combo.set_active(0)
+        self.type_combo.connect("changed", self._on_type_changed)
+        content.pack_start(self.type_combo, False, False, 0)
+
+        self.desc_label = Gtk.Label()
+        self.desc_label.set_halign(Gtk.Align.START)
+        self.desc_label.set_line_wrap(True)
+        self.desc_label.set_max_width_chars(62)
+        content.pack_start(self.desc_label, False, False, 6)
+        self._on_type_changed(self.type_combo)
+        self.show_all()
+
+    def _on_type_changed(self, combo):
+        active_id = combo.get_active_id()
+        for type_id, _title, desc in self.CONNECTION_TYPES:
+            if type_id == active_id:
+                self.desc_label.set_text(desc)
+                break
+
+    def get_selected_type(self):
+        """Return the chosen connection type identifier."""
+        return self.type_combo.get_active_id() or 'openvpn'
+
+
+class NetworkSettingsWindow(Gtk.Window):
+    """NetworkManager (`nm-connection-editor`) style Settings window.
+
+    Displays all Ethernet, Wi-Fi, and VPN connections grouped by category in a
+    single unified window. Allows configuring IPv4/IPv6 (DHCP, Static IP, DNS,
+    Search Domains, and Static Routes) on Ethernet/Wi-Fi interfaces, as well as
+    creating, importing, editing, connecting/disconnecting, and deleting VPNs
+    (OpenVPN, WireGuard, L2TP/IPsec, IKEv2/IKEv1).
+    """
+
+    def __init__(self, on_changed=None):
+        super().__init__(title="Network Connections — Settings")
+        self.set_default_size(720, 480)
+        self.set_position(Gtk.WindowPosition.CENTER)
+        self.set_border_width(12)
+        self.on_changed = on_changed
+
+        main_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        self.add(main_vbox)
+
+        # TreeStore columns:
+        #   0: Name (str)
+        #   1: Type / Protocol (str)
+        #   2: Address / Gateway (str)
+        #   3: Status / Method (str)
+        #   4: Category ('header' | 'nic' | 'vpn')
+        #   5: Identifier (nic name or vpn profile_id)
+        #   6: Subtype ('ethernet' | 'wifi' | 'openvpn' | 'wireguard' | 'ipsec')
+        #   7: Config Path (str)
+        #   8: Needs Auth (bool)
+        #   9: Extra (username or ipsec protocol)
+        self.tree_store = Gtk.TreeStore(
+            str, str, str, str, str, str, str, str, bool, str
+        )
+        self.tree_view = Gtk.TreeView(model=self.tree_store)
+        self.tree_view.set_headers_visible(True)
+        self.tree_view.connect("row-activated", self.on_row_activated)
+        self.tree_view.get_selection().connect(
+            "changed", self._on_selection_changed
+        )
+
+        cols = (
+            ("Connection / Interface", 0, 210),
+            ("Type", 1, 135),
+            ("IP / Gateway", 2, 175),
+            ("Status", 3, 120),
+        )
+        for title, col_idx, min_w in cols:
+            renderer = Gtk.CellRendererText()
+            column = Gtk.TreeViewColumn(title, renderer, text=col_idx)
+            column.set_min_width(min_w)
+            column.set_resizable(True)
+            self.tree_view.append_column(column)
+
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_vexpand(True)
+        scroll.set_hexpand(True)
+        scroll.set_shadow_type(Gtk.ShadowType.IN)
+        scroll.add(self.tree_view)
+        main_vbox.pack_start(scroll, True, True, 0)
+
+        # Bottom action toolbar modeled after nm-connection-editor
+        action_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        main_vbox.pack_start(action_bar, False, False, 0)
+
+        self.add_vpn_btn = Gtk.Button(label="+ Add VPN...")
+        self.add_vpn_btn.set_tooltip_text(
+            "Create a new VPN connection (OpenVPN, L2TP/IPsec, IKEv2, WireGuard) or import a file"
+        )
+        self.add_vpn_btn.connect("clicked", self.on_add_vpn_clicked)
+        action_bar.pack_start(self.add_vpn_btn, False, False, 0)
+
+        self.import_btn = Gtk.Button(label="Import VPN...")
+        self.import_btn.set_tooltip_text(
+            "Import an OpenVPN (.ovpn/.conf), WireGuard (.conf), or IPsec (.ipsec/.sswan) file"
+        )
+        self.import_btn.connect("clicked", self.on_import_clicked)
+        action_bar.pack_start(self.import_btn, False, False, 0)
+
+        self.edit_btn = Gtk.Button(label="Configure / Edit")
+        self.edit_btn.set_tooltip_text(
+            "Configure IPv4, IPv6, DNS, Static Routes, or VPN settings for the selected item"
+        )
+        self.edit_btn.connect("clicked", self.on_edit_clicked)
+        action_bar.pack_start(self.edit_btn, False, False, 0)
+
+        self.toggle_btn = Gtk.Button(label="Connect / Disconnect")
+        self.toggle_btn.connect("clicked", self.on_toggle_clicked)
+        action_bar.pack_start(self.toggle_btn, False, False, 0)
+
+        self.delete_btn = Gtk.Button(label="– Delete")
+        self.delete_btn.set_tooltip_text("Delete the selected VPN connection")
+        self.delete_btn.connect("clicked", self.on_delete_clicked)
+        action_bar.pack_start(self.delete_btn, False, False, 0)
+
+        close_btn = Gtk.Button(label="Close")
+        close_btn.connect("clicked", lambda _w: self.destroy())
+        action_bar.pack_end(close_btn, False, False, 0)
+
+        self.refresh_connections()
+
+    def _notify_changed(self):
+        self.refresh_connections()
+        if self.on_changed is not None:
+            self.on_changed()
+
+    def refresh_connections(self):
+        """Populate Ethernet, Wi-Fi, and VPN sections in the TreeStore."""
+        self.tree_store.clear()
+
+        card_info = network_dictionary()
+        cards = card_info.get('cards', {})
+        all_nics = nics_list() or list(cards.keys())
+
+        eth_nics = [n for n in all_nics if 'wlan' not in n]
+        wifi_nics = [n for n in all_nics if 'wlan' in n]
+
+        if eth_nics:
+            eth_root = self.tree_store.append(
+                None,
+                ['Ethernet', '', '', '', 'header', '', '', '', False, ''],
+            )
+            for nic in eth_nics:
+                try:
+                    cfg4 = get_interface_settings(nic)
+                except OSError:
+                    cfg4 = {}
+                method = cfg4.get('Assignment Method', 'DHCP')
+                ip_addr = cfg4.get('Interface IP', '') or '—'
+                gw = cfg4.get('Default Gateway', '')
+                addr_str = f'{ip_addr} (GW {gw})' if gw and ip_addr != '—' else ip_addr
+                conn_state = (
+                    cards.get(nic, {}).get('state', {}).get('connection', method)
+                )
+                status_str = f'{conn_state} ({method})' if conn_state != method else method
+                self.tree_store.append(
+                    eth_root,
+                    [
+                        nic,
+                        'Ethernet (802.3)',
+                        addr_str,
+                        status_str,
+                        'nic',
+                        nic,
+                        'ethernet',
+                        '',
+                        False,
+                        '',
+                    ],
+                )
+
+        if wifi_nics:
+            wifi_root = self.tree_store.append(
+                None,
+                ['Wi-Fi', '', '', '', 'header', '', '', '', False, ''],
+            )
+            for nic in wifi_nics:
+                try:
+                    cfg4 = get_interface_settings(nic)
+                except OSError:
+                    cfg4 = {}
+                method = cfg4.get('Assignment Method', 'DHCP')
+                ip_addr = cfg4.get('Interface IP', '') or '—'
+                st = cards.get(nic, {}).get('state', {})
+                conn_state = st.get('connection', method)
+                ssid = st.get('ssid', '')
+                name_str = f'{nic} ({ssid})' if ssid else nic
+                status_str = f'{conn_state} ({method})' if conn_state != method else method
+                self.tree_store.append(
+                    wifi_root,
+                    [
+                        name_str,
+                        'Wi-Fi (802.11)',
+                        ip_addr,
+                        status_str,
+                        'nic',
+                        nic,
+                        'wifi',
+                        '',
+                        False,
+                        '',
+                    ],
+                )
+
+        vpn_root = self.tree_store.append(
+            None,
+            ['VPN Connections', '', '', '', 'header', '', '', '', False, ''],
+        )
+
+        ovpn_info = openvpn_dictionary()
+        for pid, meta in ovpn_info.get('configs', {}).items():
+            self.tree_store.append(
+                vpn_root,
+                [
+                    meta.get('info', pid),
+                    'OpenVPN',
+                    meta.get('gateway', ''),
+                    meta.get('state', 'Disconnected'),
+                    'vpn',
+                    pid,
+                    'openvpn',
+                    meta.get('path', ''),
+                    bool(meta.get('needs_auth', False)),
+                    meta.get('username', ''),
+                ],
+            )
+
+        wg_info = wg_dictionary(wg_service_state())
+        for pid, meta in wg_info.get('configs', {}).items():
+            self.tree_store.append(
+                vpn_root,
+                [
+                    meta.get('info', pid),
+                    'WireGuard',
+                    meta.get('gateway', ''),
+                    meta.get('state', 'Disconnected'),
+                    'vpn',
+                    pid,
+                    'wireguard',
+                    meta.get('path', ''),
+                    False,
+                    '',
+                ],
+            )
+
+        ipsec_info = ipsec_dictionary()
+        for pid, meta in ipsec_info.get('configs', {}).items():
+            proto = meta.get('protocol', 'l2tp-ipsec')
+            type_label = 'L2TP / IPsec' if proto == 'l2tp-ipsec' else 'IPsec (IKEv2/v1)'
+            self.tree_store.append(
+                vpn_root,
+                [
+                    meta.get('info', pid),
+                    type_label,
+                    meta.get('gateway', ''),
+                    meta.get('state', 'Disconnected'),
+                    'vpn',
+                    pid,
+                    'ipsec',
+                    meta.get('path', ''),
+                    False,
+                    proto,
+                ],
+            )
+
+        self.tree_view.expand_all()
+        self._on_selection_changed(self.tree_view.get_selection())
+
+    def _selected_item(self):
+        sel = self.tree_view.get_selection()
+        model, it = sel.get_selected()
+        if it is None:
+            return None
+        cat = model[it][4]
+        if cat == 'header':
+            return None
+        return {
+            'name': model[it][0],
+            'type_label': model[it][1],
+            'gateway': model[it][2],
+            'state': model[it][3],
+            'category': cat,
+            'id': model[it][5],
+            'subtype': model[it][6],
+            'path': model[it][7],
+            'needs_auth': model[it][8],
+            'extra': model[it][9],
+        }
+
+    def _on_selection_changed(self, _selection):
+        item = self._selected_item()
+        has_item = item is not None
+        is_vpn = has_item and item['category'] == 'vpn'
+        self.edit_btn.set_sensitive(has_item)
+        self.toggle_btn.set_sensitive(has_item)
+        self.delete_btn.set_sensitive(is_vpn)
+
+    def on_row_activated(self, _tree_view, _path, _column):
+        """Double-clicking a row opens its configuration editor."""
+        self.on_edit_clicked(None)
+
+    def on_add_vpn_clicked(self, _widget):
+        """Open the NetworkManager-style 'Choose a Connection Type' dialog."""
+        chooser = ChooseVPNTypeDialog(parent=self)
+        resp = chooser.run()
+        chosen = chooser.get_selected_type()
+        chooser.destroy()
+        if resp != Gtk.ResponseType.ACCEPT:
+            return
+
+        if chosen == 'import':
+            import_vpn_file_dialog(
+                parent=self,
+                on_saved=lambda _pid, _vtype: self._notify_changed(),
+            )
+            return
+
+        if chosen == 'openvpn':
+            if not is_openvpn_installed():
+                show_openvpn_not_installed_alert(self)
+            cfg = default_openvpn_config('New OpenVPN')
+        elif chosen == 'wireguard':
+            cfg = default_wireguard_config('wg0')
+        else:
+            if not is_ipsec_installed(chosen):
+                show_ipsec_not_installed_alert(chosen, self)
+            cfg = default_ipsec_config('New IPsec VPN')
+            cfg['protocol'] = chosen
+
+        editor = VPNConnectionDialog(
+            cfg,
+            parent=self,
+            on_saved=lambda _pid, _vtype: self._notify_changed(),
+        )
+        editor.show_all()
+        editor.refresh_dynamic_visibility()
+
+    def on_import_clicked(self, _widget):
+        """Import a VPN configuration file directly."""
+        import_vpn_file_dialog(
+            parent=self,
+            on_saved=lambda _pid, _vtype: self._notify_changed(),
+        )
+
+    def on_edit_clicked(self, _widget):
+        """Open the interface editor (Ethernet/Wi-Fi) or VPN editor for the selected row."""
+        item = self._selected_item()
+        if not item:
+            return
+
+        if item['category'] == 'nic':
+            nic_win = NetCardConfigWindow(
+                selected_nic=item['id'],
+                on_saved=self._notify_changed,
+            )
+            nic_win.set_transient_for(self)
+            nic_win.show_all()
+            return
+
+        if not item['path']:
+            return
+        try:
+            if item['subtype'] == 'wireguard':
+                cfg = parse_wireguard_config(item['path'])
+            elif item['subtype'] == 'ipsec':
+                cfg = parse_ipsec_config(item['path'])
+            else:
+                cfg = parse_openvpn_config(item['path'])
+        except ValueError as err:
+            dialog = Gtk.MessageDialog(
+                transient_for=self,
+                modal=True,
+                message_type=Gtk.MessageType.ERROR,
+                buttons=Gtk.ButtonsType.OK,
+                text="Could not open VPN configuration",
+            )
+            dialog.format_secondary_text(str(err))
+            dialog.run()
+            dialog.destroy()
+            return
+
+        editor = VPNConnectionDialog(
+            cfg,
+            parent=self,
+            on_saved=lambda _pid, _vtype: self._notify_changed(),
+        )
+        editor.show_all()
+        editor.refresh_dynamic_visibility()
+
+    def on_toggle_clicked(self, _widget):
+        """Connect or disconnect the selected Ethernet, Wi-Fi, or VPN item."""
+        item = self._selected_item()
+        if not item:
+            return
+
+        ident = item['id']
+        display_name = item['name'] or ident
+        is_connected = item['state'].startswith('Connected')
+
+        if item['category'] == 'nic':
+            if item['subtype'] == 'wifi':
+                if is_connected:
+                    disable_wifi(ident)
+                    show_connection_notification(ident, False)
+                else:
+                    enable_wifi(ident)
+                    show_connection_notification(ident, True)
+            else:
+                if is_connected:
+                    stop_network_card(ident)
+                    show_connection_notification(ident, False)
+                else:
+                    start_network_card(ident)
+                    show_connection_notification(ident, True)
+            self._notify_changed()
+            return
+
+        # VPN item
+        if item['subtype'] == 'wireguard':
+            if is_connected:
+                disable_wg(ident)
+                show_connection_notification(display_name, False)
+            else:
+                enable_wg(ident)
+                show_connection_notification(display_name, True)
+            self._notify_changed()
+        elif item['subtype'] == 'ipsec':
+            protocol = item['extra'] or 'l2tp-ipsec'
+            if is_connected:
+                disable_ipsec(ident)
+                show_connection_notification(display_name, False)
+                self._notify_changed()
+            elif not is_ipsec_installed(protocol):
+                show_ipsec_not_installed_alert(protocol, self)
+            else:
+                ok, err_msg = enable_ipsec(ident)
+                self._notify_changed()
+                if not ok:
+                    self._show_error(err_msg)
+                else:
+                    show_connection_notification(display_name, True)
+        else:  # openvpn
+            if is_connected:
+                disable_openvpn(ident)
+                show_connection_notification(display_name, False)
+                self._notify_changed()
+            elif not is_openvpn_installed():
+                show_openvpn_not_installed_alert(self)
+            elif item['needs_auth']:
+                dialog = OpenVPNAuthDialog(
+                    ident,
+                    display_name,
+                    initial_user=item['extra'],
+                    on_submit=lambda p, u, pw, dn=display_name: self._connect_ovpn(
+                        p, u, pw, dn
+                    ),
+                )
+                dialog.set_transient_for(self)
+                dialog.show_all()
+            else:
+                self._connect_ovpn(ident, None, None, display_name)
+
+    def _connect_ovpn(self, pid, username, password, display_name):
+        if not is_openvpn_installed():
+            show_openvpn_not_installed_alert(self)
+            return
+        ok, err_msg = enable_openvpn(pid, username=username, password=password)
+        self._notify_changed()
+        if not ok:
+            if err_msg == OPENVPN_NOT_INSTALLED_MSG:
+                show_openvpn_not_installed_alert(self)
+            else:
+                self._show_error(err_msg)
+            return
+        show_connection_notification(display_name or pid, True)
+
+    def _show_error(self, message):
+        dialog = Gtk.MessageDialog(
+            transient_for=self,
+            modal=True,
+            message_type=Gtk.MessageType.ERROR,
+            buttons=Gtk.ButtonsType.OK,
+            text="Connection Error",
+        )
+        dialog.format_secondary_text(message)
+        dialog.run()
+        dialog.destroy()
+
+    def on_delete_clicked(self, _widget):
+        """Delete the selected VPN profile."""
+        item = self._selected_item()
+        if not item or item['category'] != 'vpn':
+            return
+        pid = item['id']
+        if item['subtype'] == 'wireguard':
+            delete_wireguard_config(pid)
+        elif item['subtype'] == 'ipsec':
+            delete_ipsec_config(pid)
+        else:
+            delete_openvpn_config(pid)
+        self._notify_changed()
+
+
+def open_network_settings(on_changed=None):
+    """Open the unified NetworkManager-style Network Connections / Settings window."""
+    win = NetworkSettingsWindow(on_changed=on_changed)
+    win.show_all()
+    win.set_keep_above(True)
+    if Gtk.main_level() == 0:
+        win.connect("destroy", Gtk.main_quit)
+        Gtk.main()
+    return win
+
+
 def open_configuration(default_int):
     """Open the configuration window for one interface and run GTK.
 
@@ -1125,16 +1992,18 @@ def open_configuration(default_int):
         default_int (str): the interface to select when the window opens.
     """
     win = NetCardConfigWindow(default_int)
-    win.connect("destroy", Gtk.main_quit)
     win.show_all()
     win.set_keep_above(True)
-    Gtk.main()
+    if Gtk.main_level() == 0:
+        win.connect("destroy", Gtk.main_quit)
+        Gtk.main()
 
 
 def open_default_configuration():
     """Open the configuration window on the default interface and run GTK."""
     win = NetCardConfigWindow()
-    win.connect("destroy", Gtk.main_quit)
     win.show_all()
     win.set_keep_above(True)
-    Gtk.main()
+    if Gtk.main_level() == 0:
+        win.connect("destroy", Gtk.main_quit)
+        Gtk.main()

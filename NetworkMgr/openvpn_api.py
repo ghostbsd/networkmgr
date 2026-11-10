@@ -1128,8 +1128,11 @@ def delete_openvpn_config(profile_id):
 
 def openvpn_service_state():
     """Report whether rc.conf has openvpn_enable set to YES."""
-    result = run(['sysrc', '-n', 'openvpn_enable'],
-                 stdout=PIPE, stderr=PIPE, check=False, text=True)
+    try:
+        result = run(['sysrc', '-n', 'openvpn_enable'],
+                     stdout=PIPE, stderr=PIPE, check=False, text=True)
+    except OSError:
+        return 'NO'
     if result.returncode != 0:
         return 'NO'
     return result.stdout.strip() or 'NO'
