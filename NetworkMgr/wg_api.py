@@ -29,6 +29,7 @@ def default_wireguard_config(name='wg0'):
         'vpn_type': 'wireguard',
         'name': name,
         'profile_id': sanitize_wg_id(name),
+        'original_profile_id': None,
         'private_key': '',
         'address': '',
         'dns': '',
@@ -59,8 +60,15 @@ def parse_wireguard_config(filepath):
     if not os.path.isfile(filepath):
         raise ValueError(f'File not found: "{filepath}"')
 
+    base_dir = os.path.dirname(os.path.abspath(filepath))
     stem = os.path.splitext(os.path.basename(filepath))[0]
     cfg = default_wireguard_config(stem)
+    if os.path.exists(WG_CONFIG_PATH):
+        try:
+            if os.path.samefile(base_dir, WG_CONFIG_PATH):
+                cfg['original_profile_id'] = stem
+        except OSError:
+            pass
     cfg['allowed_ips'] = ''
     section = None
 
@@ -200,6 +208,11 @@ def save_wireguard_config(cfg):
     with open(conf_file, 'w', encoding='utf-8') as handle:
         handle.write('\n'.join(lines) + '\n')
     os.chmod(conf_file, 0o600)
+
+    original_id = cfg.get('original_profile_id')
+    if original_id and original_id != profile_id:
+        delete_wireguard_config(original_id)
+
     return profile_id
 
 
@@ -295,7 +308,10 @@ def disable_wg(wgconfig):
     Args:
         wgconfig (str): the tunnel's configuration name, without .conf.
     """
-    run(['wg-quick', 'down', wgconfig], check=False)
+    try:
+        run(['wg-quick', 'down', wgconfig], check=False)
+    except OSError:
+        pass
 
 
 def enable_wg(wgconfig):
@@ -304,12 +320,18 @@ def enable_wg(wgconfig):
     Args:
         wgconfig (str): the tunnel's configuration name, without .conf.
     """
-    run(['wg-quick', 'up', wgconfig], check=False)
+    try:
+        run(['wg-quick', 'up', wgconfig], check=False)
+    except OSError:
+        pass
 
 
 def wg_status(wgconfig):
     """Function returning the WireGuard configuration (device) is connected or not."""
-    result = run(['wg', 'show', wgconfig], stdout=PIPE, stderr=PIPE, check=False)
+    try:
+        result = run(['wg', 'show', wgconfig], stdout=PIPE, stderr=PIPE, check=False)
+    except OSError:
+        return "Disconnected"
     out = result.stdout.decode('utf-8')
     error = result.stderr.decode('utf-8')
 

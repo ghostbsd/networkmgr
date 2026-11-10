@@ -52,14 +52,17 @@ from NetworkMgr.wg_api import (
     parse_wireguard_config
 )
 from NetworkMgr.openvpn_api import (
+    OPENVPN_NOT_INSTALLED_MSG,
     openvpn_dictionary,
     openvpn_service_state,
     disable_openvpn,
     enable_openvpn,
+    is_openvpn_installed,
     parse_openvpn_config
 )
 from NetworkMgr.vpn_dialog import (
     import_vpn_file_dialog,
+    show_openvpn_not_installed_alert,
     VPNConnectionDialog,
     OpenVPNAuthDialog
 )
@@ -197,7 +200,7 @@ class TrayIcon:
                     wg_item = Gtk.MenuItem(_("%s Connected") % connection_info)
                     wg_item.set_sensitive(False)
                     self.menu.append(wg_item)
-                    disconnectwg_item = Gtk.ImageMenuItem(_("Disable %s") % wg_dev)
+                    disconnectwg_item = Gtk.ImageMenuItem(_("Disable %s") % connection_info)
                     disconnectwg_item.connect("activate", self.disconnect_wg, wg_dev)
                     self.menu.append(disconnectwg_item)
                 else:
@@ -208,7 +211,7 @@ class TrayIcon:
                     wiredwg_item.connect("activate", self.connect_wg, wg_dev)
                     self.menu.append(wiredwg_item)
                 if wg_path:
-                    config_wg_item = Gtk.ImageMenuItem(_("Configure %s") % wg_dev)
+                    config_wg_item = Gtk.ImageMenuItem(_("Configure %s") % connection_info)
                     config_wg_item.connect("activate", self.configure_wg_profile, wg_path)
                     self.menu.append(config_wg_item)
             self.menu.append(Gtk.SeparatorMenuItem())
@@ -229,7 +232,7 @@ class TrayIcon:
                     ovpn_item = Gtk.MenuItem(_("%s Connected") % connection_info)
                     ovpn_item.set_sensitive(False)
                     self.menu.append(ovpn_item)
-                    disconnect_ovpn_item = Gtk.ImageMenuItem(_("Disable %s") % ovpn_dev)
+                    disconnect_ovpn_item = Gtk.ImageMenuItem(_("Disable %s") % connection_info)
                     disconnect_ovpn_item.connect(
                         "activate", self.disconnect_openvpn, ovpn_dev
                     )
@@ -244,7 +247,7 @@ class TrayIcon:
                     )
                     self.menu.append(enable_ovpn_item)
                 if ovpn_path:
-                    config_ovpn_item = Gtk.ImageMenuItem(_("Configure %s") % ovpn_dev)
+                    config_ovpn_item = Gtk.ImageMenuItem(_("Configure %s") % connection_info)
                     config_ovpn_item.connect(
                         "activate", self.configure_openvpn_profile, ovpn_path
                     )
@@ -611,6 +614,9 @@ class TrayIcon:
 
     def connect_openvpn(self, _widget, ovpn_dev, ovpn_meta):
         """Bring an OpenVPN tunnel up, prompting for credentials if required."""
+        if not is_openvpn_installed():
+            show_openvpn_not_installed_alert()
+            return
         if ovpn_meta.get('needs_auth'):
             dialog = OpenVPNAuthDialog(
                 ovpn_dev,
@@ -624,9 +630,15 @@ class TrayIcon:
 
     def _do_connect_openvpn(self, ovpn_dev, username, password):
         """Start OpenVPN and report any startup failure."""
+        if not is_openvpn_installed():
+            show_openvpn_not_installed_alert()
+            return
         ok, err_msg = enable_openvpn(ovpn_dev, username=username, password=password)
         self.update_info()
         if not ok:
+            if err_msg == OPENVPN_NOT_INSTALLED_MSG:
+                show_openvpn_not_installed_alert()
+                return
             dialog = Gtk.MessageDialog(
                 None, 0, Gtk.MessageType.WARNING, Gtk.ButtonsType.CLOSE,
                 _("Could not connect to %s") % ovpn_dev

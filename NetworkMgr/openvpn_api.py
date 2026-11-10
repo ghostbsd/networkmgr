@@ -10,6 +10,7 @@ tls-crypt / tls-crypt-v2, ciphers, compression, proxies, and daemon lifecycle
 management.
 """
 
+from ipaddress import IPv4Address, IPv4Network, IPv6Interface, IPv6Network
 import os
 import re
 import shutil
@@ -23,6 +24,12 @@ PREFIX = '/usr/local' if system() in ('FreeBSD', 'MidnightBSD', 'DragonFly') els
 OPENVPN_CONFIG_PATH = f'{PREFIX}/etc/openvpn/'
 OPENVPN_CERTS_PATH = f'{PREFIX}/etc/openvpn/certs/'
 OPENVPN_PID_DIR = '/var/run'
+
+OPENVPN_NOT_INSTALLED_MSG = (
+    "OpenVPN is not installed on this system.\n\n"
+    "Please install the openvpn package first "
+    "(for example: sudo pkg install openvpn)."
+)
 
 # Safe identifier for filenames and rc/pid names.
 PROFILE_ID_REGEX = re.compile(r'[^A-Za-z0-9_-]+')
@@ -77,13 +84,32 @@ def sanitize_profile_id(name):
 
 
 def _openvpn_binary():
-    """Locate the openvpn executable on BSD/Linux."""
+    """Locate the openvpn executable on BSD/Linux, or return None if not installed."""
     for candidate in (f'{PREFIX}/sbin/openvpn', '/usr/local/sbin/openvpn',
                       '/usr/sbin/openvpn', '/sbin/openvpn'):
-        if os.path.exists(candidate):
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
             return candidate
-    found = shutil.which('openvpn')
-    return found or f'{PREFIX}/sbin/openvpn'
+    return shutil.which('openvpn')
+
+
+def is_openvpn_installed():
+    """Report whether the openvpn binary is available on this system."""
+    return _openvpn_binary() is not None
+
+
+def _normalize_ipv4_netmask(mask_or_prefix):
+    """Convert a CIDR prefix ('24' or '/24') or dotted mask into a dotted IPv4 netmask."""
+    val = str(mask_or_prefix).strip().lstrip('/')
+    if not val:
+        return '255.255.255.255'
+    if val.isdigit():
+        plen = int(val)
+        if 0 <= plen <= 32:
+            return str(IPv4Network(f'0.0.0.0/{plen}').netmask)
+    try:
+        return str(IPv4Address(val))
+    except ValueError:
+        return val
 
 
 def detect_vpn_file_type(filepath):
@@ -168,6 +194,7 @@ def default_openvpn_config(name='openvpn'):
         'vpn_type': 'openvpn',
         'name': name,
         'profile_id': sanitize_profile_id(name),
+        'original_profile_id': None,
         'client': True,
         'remotes': [],
         'gateway': '',
@@ -195,8 +222,14 @@ def default_openvpn_config(name='openvpn'):
         'secret_path': '',
         'secret_inline': '',
         'secret_direction': '',
+        'ipv4_method': 'auto',  # 'auto' or 'manual'
         'ifconfig_local': '',
         'ifconfig_remote': '',
+        'route_gateway': '',
+        'ipv6_method': 'auto',  # 'auto', 'manual', or 'disabled'
+        'ifconfig_ipv6_local': '',
+        'ifconfig_ipv6_prefix': '64',
+        'ifconfig_ipv6_remote': '',
         'auth_user_pass': False,
         'auth_user_pass_path': '',
         'username': '',
@@ -225,6 +258,7 @@ def default_openvpn_config(name='openvpn'):
         'redirect_gateway_flags': 'def1',
         'route_nopull': False,
         'routes': [],
+        'routes_ipv6': [],
         'dns_servers': [],
         'search_domains': [],
         'nobind': True,
@@ -322,6 +356,14 @@ def parse_openvpn_config(filepath):
     base_dir = os.path.dirname(os.path.abspath(filepath))
     stem = os.path.splitext(os.path.basename(filepath))[0]
     cfg = default_openvpn_config(stem)
+    # If the file being loaded is already inside OPENVPN_CONFIG_PATH, record its
+    # original_profile_id so renaming it in the editor cleans up the old file.
+    if os.path.exists(OPENVPN_CONFIG_PATH):
+        try:
+            if os.path.samefile(base_dir, OPENVPN_CONFIG_PATH):
+                cfg['original_profile_id'] = stem
+        except OSError:
+            pass
     # Reset defaults that should reflect the file's explicit contents
     cfg['remote_cert_tls'] = ''
     cfg['nobind'] = False
@@ -462,8 +504,27 @@ def parse_openvpn_config(filepath):
             if len(args) >= 2 and args[1] in ('0', '1'):
                 cfg['secret_direction'] = args[1]
         elif directive == 'ifconfig' and len(args) >= 2:
+            cfg['ipv4_method'] = 'manual'
             cfg['ifconfig_local'] = args[0]
             cfg['ifconfig_remote'] = args[1]
+        elif directive == 'route-gateway' and len(args) >= 1:
+            cfg['route_gateway'] = args[0]
+        elif directive == 'ifconfig-ipv6' and len(args) >= 1:
+            cfg['ipv6_method'] = 'manual'
+            addr_part = args[0]
+            if '/' in addr_part:
+                loc6, plen6 = addr_part.split('/', 1)
+                cfg['ifconfig_ipv6_local'] = loc6.strip()
+                cfg['ifconfig_ipv6_prefix'] = plen6.strip() or '64'
+            else:
+                cfg['ifconfig_ipv6_local'] = addr_part.strip()
+            if len(args) >= 2:
+                cfg['ifconfig_ipv6_remote'] = args[1].strip()
+        elif directive == 'pull-filter' and len(args) >= 2:
+            if args[0].lower() == 'ignore' and 'ipv6' in args[1].lower():
+                cfg['ipv6_method'] = 'disabled'
+            else:
+                cfg['extra_lines'].append(raw_line.rstrip('\r\n'))
         elif directive == 'auth-user-pass':
             cfg['auth_user_pass'] = True
             if len(args) >= 1 and args[0] != '[inline]':
@@ -522,11 +583,25 @@ def parse_openvpn_config(filepath):
         elif directive == 'route-nopull':
             cfg['route_nopull'] = True
         elif directive == 'route' and len(args) >= 1:
+            net_arg = args[0]
+            mask_arg = args[1] if len(args) >= 2 else '255.255.255.255'
+            if '/' in net_arg and len(args) == 1:
+                net_part, plen_part = net_arg.split('/', 1)
+                net_arg = net_part
+                mask_arg = _normalize_ipv4_netmask(plen_part)
+            else:
+                mask_arg = _normalize_ipv4_netmask(mask_arg)
             cfg['routes'].append({
-                'network': args[0],
-                'netmask': args[1] if len(args) >= 2 else '255.255.255.255',
+                'network': net_arg,
+                'netmask': mask_arg,
                 'gateway': args[2] if len(args) >= 3 else 'vpn_gateway',
                 'metric': args[3] if len(args) >= 4 else '',
+            })
+        elif directive == 'route-ipv6' and len(args) >= 1:
+            cfg['routes_ipv6'].append({
+                'network': args[0],
+                'gateway': args[1] if len(args) >= 2 else '',
+                'metric': args[2] if len(args) >= 3 else '',
             })
         elif directive == 'dhcp-option' and len(args) >= 2:
             opt_kind = args[0].upper()
@@ -689,7 +764,8 @@ def save_openvpn_config(cfg):
     if not display_name:
         raise ValueError('Connection name is required.')
 
-    profile_id = sanitize_profile_id(cfg.get('profile_id') or display_name)
+    profile_id = sanitize_profile_id(display_name)
+    original_id = cfg.get('original_profile_id')
     gateway = cfg.get('gateway', '').strip()
     if not gateway and not cfg.get('remotes'):
         raise ValueError('Gateway (remote server address) is required.')
@@ -821,6 +897,29 @@ def save_openvpn_config(cfg):
             lines.append(f'extra-certs {extra_certs_file}')
         if cfg.get('crl_verify_path'):
             lines.append(f"crl-verify {cfg['crl_verify_path']}")
+        if cfg.get('ipv4_method') == 'manual' and cfg.get('ifconfig_local'):
+            remote_or_mask = _normalize_ipv4_netmask(
+                cfg.get('ifconfig_remote') or '255.255.255.0'
+            )
+            lines.append(f"ifconfig {cfg['ifconfig_local'].strip()} {remote_or_mask}")
+        if cfg.get('route_gateway', '').strip():
+            lines.append(f"route-gateway {cfg['route_gateway'].strip()}")
+
+    # IPv6 configuration
+    ipv6_method = cfg.get('ipv6_method', 'auto')
+    if ipv6_method == 'manual' and cfg.get('ifconfig_ipv6_local', '').strip():
+        loc6 = cfg['ifconfig_ipv6_local'].strip()
+        plen6 = str(cfg.get('ifconfig_ipv6_prefix', '64')).strip().lstrip('/') or '64'
+        if '/' not in loc6:
+            loc6 = f'{loc6}/{plen6}'
+        rem6 = cfg.get('ifconfig_ipv6_remote', '').strip()
+        if rem6:
+            lines.append(f'ifconfig-ipv6 {loc6} {rem6}')
+        else:
+            lines.append(f'ifconfig-ipv6 {loc6}')
+    elif ipv6_method == 'disabled':
+        lines.append('pull-filter ignore "ifconfig-ipv6 "')
+        lines.append('pull-filter ignore "route-ipv6 "')
 
     # Private key password (askpass)
     key_password = cfg.get('key_password', '')
@@ -920,10 +1019,29 @@ def save_openvpn_config(cfg):
     for rt in cfg.get('routes', []):
         net = rt.get('network', '').strip()
         if net:
-            mask = rt.get('netmask', '255.255.255.255').strip()
-            gw = rt.get('gateway', 'vpn_gateway').strip()
+            if '/' in net and not rt.get('netmask', '').strip():
+                net_part, plen_part = net.split('/', 1)
+                net = net_part.strip()
+                mask = _normalize_ipv4_netmask(plen_part)
+            else:
+                mask = _normalize_ipv4_netmask(rt.get('netmask') or '255.255.255.255')
+            gw = rt.get('gateway', '').strip() or 'vpn_gateway'
             metric = rt.get('metric', '').strip()
             lines.append(f'route {net} {mask} {gw} {metric}'.strip())
+
+    for rt6 in cfg.get('routes_ipv6', []):
+        net6 = rt6.get('network', '').strip()
+        if net6:
+            if '/' not in net6:
+                net6 = f'{net6}/128'
+            gw6 = rt6.get('gateway', '').strip()
+            metric6 = rt6.get('metric', '').strip()
+            if gw6 and metric6:
+                lines.append(f'route-ipv6 {net6} {gw6} {metric6}')
+            elif gw6:
+                lines.append(f'route-ipv6 {net6} {gw6}')
+            else:
+                lines.append(f'route-ipv6 {net6}')
 
     for dns in cfg.get('dns_servers', []):
         if dns.strip():
@@ -970,6 +1088,10 @@ def save_openvpn_config(cfg):
 
     conf_file = os.path.join(OPENVPN_CONFIG_PATH, f'{profile_id}.conf')
     _write_secure_file(conf_file, '\n'.join(lines), 0o600)
+
+    if original_id and original_id != profile_id:
+        delete_openvpn_config(original_id)
+
     return profile_id
 
 
@@ -1144,6 +1266,10 @@ def enable_openvpn(profile_id, username=None, password=None, key_password=None):
     Returns:
         tuple[bool, str]: (success, error_message).
     """
+    openvpn_bin = _openvpn_binary()
+    if openvpn_bin is None:
+        return False, OPENVPN_NOT_INSTALLED_MSG
+
     conf_path = None
     for ext in ('.conf', '.ovpn'):
         candidate = os.path.join(OPENVPN_CONFIG_PATH, f'{profile_id}{ext}')
@@ -1165,7 +1291,7 @@ def enable_openvpn(profile_id, username=None, password=None, key_password=None):
     log_file = f'{OPENVPN_PID_DIR}/openvpn_{profile_id}.log'
 
     cmd = [
-        _openvpn_binary(),
+        openvpn_bin,
         '--daemon', f'openvpn_{profile_id}',
         '--writepid', pid_file,
         '--status', status_file, '5',
@@ -1188,7 +1314,12 @@ def enable_openvpn(profile_id, username=None, password=None, key_password=None):
         _write_secure_file(askpass_file, key_password, 0o600)
         cmd.extend(['--askpass', askpass_file])
 
-    result = run(cmd, stdout=PIPE, stderr=PIPE, check=False, text=True)
+    try:
+        result = run(cmd, stdout=PIPE, stderr=PIPE, check=False, text=True)
+    except FileNotFoundError:
+        return False, OPENVPN_NOT_INSTALLED_MSG
+    except OSError as exc:
+        return False, f'Failed to execute OpenVPN: {exc}'
     if result.returncode != 0:
         err = (result.stderr or result.stdout or '').strip()
         if not err and os.path.isfile(log_file):

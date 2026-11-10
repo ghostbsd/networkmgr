@@ -3,9 +3,9 @@
 """GTK dialogs for importing, editing, and authenticating VPN connections.
 
 Provides a NetworkManager-style file importer (.ovpn and .conf), a tabbed VPN
-connection editor for OpenVPN and WireGuard, and a credentials dialog for
-OpenVPN connections that require username/password authentication at connect
-time.
+connection editor for OpenVPN and WireGuard (including IPv4/IPv6 static
+addresses and static routes), and a credentials dialog for OpenVPN connections
+that require username/password authentication at connect time.
 """
 
 import gettext
@@ -18,14 +18,17 @@ from gi.repository import Gtk, Pango
 from NetworkMgr.openvpn_api import (
     AUTH_DIGEST_OPTIONS,
     CIPHER_OPTIONS,
+    OPENVPN_NOT_INSTALLED_MSG,
     default_openvpn_config,
     detect_vpn_file_type,
+    is_openvpn_installed,
     parse_openvpn_config,
     save_openvpn_config,
 )
 from NetworkMgr.wg_api import (
     default_wireguard_config,
     parse_wireguard_config,
+    sanitize_wg_id,
     save_wireguard_config,
 )
 
@@ -61,6 +64,20 @@ def _show_error_dialog(parent, title, message):
         text=title,
     )
     dialog.format_secondary_text(message)
+    dialog.run()
+    dialog.destroy()
+
+
+def show_openvpn_not_installed_alert(parent=None):
+    """Show an English alert dialog informing the user that OpenVPN is not installed."""
+    dialog = Gtk.MessageDialog(
+        transient_for=parent,
+        modal=True,
+        message_type=Gtk.MessageType.WARNING,
+        buttons=Gtk.ButtonsType.OK,
+        text="OpenVPN is not installed",
+    )
+    dialog.format_secondary_text(OPENVPN_NOT_INSTALLED_MSG)
     dialog.run()
     dialog.destroy()
 
@@ -117,6 +134,8 @@ def import_vpn_file_dialog(parent=None, on_saved=None):
         if vpn_type == 'wireguard':
             cfg = parse_wireguard_config(filepath)
         else:
+            if not is_openvpn_installed():
+                show_openvpn_not_installed_alert(parent)
             cfg = parse_openvpn_config(filepath)
     except ValueError as err:
         _show_error_dialog(
@@ -164,7 +183,7 @@ class VPNConnectionDialog(Gtk.Window):
         if parent is not None:
             self.set_transient_for(parent)
         self.set_position(Gtk.WindowPosition.CENTER)
-        self.set_default_size(600, 520)
+        self.set_default_size(660, 560)
         self.set_border_width(12)
 
         self.cfg = cfg if cfg is not None else default_openvpn_config()
@@ -173,6 +192,7 @@ class VPNConnectionDialog(Gtk.Window):
         self.auth_rows = {}
         self.tls_key_rows = ()
         self.proxy_rows = ()
+        self._wg_id_auto = True
 
         main_box = Gtk.VBox(spacing=10)
         self.add(main_box)
@@ -200,6 +220,7 @@ class VPNConnectionDialog(Gtk.Window):
 
         if self.vpn_type == 'wireguard':
             self._build_wireguard_notebook(main_box)
+            self.name_entry.connect("changed", self._on_wg_name_changed)
         else:
             self._build_openvpn_notebook(main_box)
 
@@ -215,6 +236,17 @@ class VPNConnectionDialog(Gtk.Window):
         save_btn = Gtk.Button(label=_("Save"))
         save_btn.connect("clicked", self.on_save_clicked)
         btn_box.pack_start(save_btn, False, False, 0)
+
+    def _on_wg_name_changed(self, entry):
+        """Sync WireGuard tunnel ID when Connection Name changes unless manually edited."""
+        if self._wg_id_auto and hasattr(self, 'wg_id_entry'):
+            self.wg_id_entry.handler_block_by_func(self._on_wg_id_edited)
+            self.wg_id_entry.set_text(sanitize_wg_id(entry.get_text()))
+            self.wg_id_entry.handler_unblock_by_func(self._on_wg_id_edited)
+
+    def _on_wg_id_edited(self, _entry):
+        """Mark WireGuard tunnel ID as manually edited."""
+        self._wg_id_auto = False
 
     def _cert_picker_row(self, grid, row, label_text, path_key, inline_key, patterns):
         """Create a row with a status/file chooser for a certificate or key."""
@@ -266,7 +298,7 @@ class VPNConnectionDialog(Gtk.Window):
         return (lbl, hbox)
 
     def _build_openvpn_notebook(self, main_box):
-        """Build the 4-tab OpenVPN configuration notebook."""
+        """Build the OpenVPN configuration notebook (VPN, IPv4, IPv6, Advanced, Security, Proxies)."""
         notebook = Gtk.Notebook()
         main_box.pack_start(notebook, True, True, 0)
 
@@ -375,26 +407,18 @@ class VPNConnectionDialog(Gtk.Window):
             gen_grid, row, _("Static Key:"), 'secret_path', 'secret_inline',
             ("*.key", "*.pem", "*.txt"),
         )
-        row += 1
-
-        # Static Key IP addresses
-        static_ip_lbl = _field_label(_("Local / Remote IP:"))
-        gen_grid.attach(static_ip_lbl, 0, row, 1, 1)
-        static_ip_box = Gtk.HBox(spacing=6)
-        self.ifconfig_local_entry = Gtk.Entry()
-        self.ifconfig_local_entry.set_placeholder_text("10.8.0.2")
-        self.ifconfig_local_entry.set_text(self.cfg.get('ifconfig_local', ''))
-        self.ifconfig_remote_entry = Gtk.Entry()
-        self.ifconfig_remote_entry.set_placeholder_text("10.8.0.1")
-        self.ifconfig_remote_entry.set_text(self.cfg.get('ifconfig_remote', ''))
-        static_ip_box.pack_start(self.ifconfig_local_entry, True, True, 0)
-        static_ip_box.pack_start(self.ifconfig_remote_entry, True, True, 0)
-        gen_grid.attach(static_ip_box, 1, row, 2, 1)
-        self.auth_rows['static_ips'] = (static_ip_lbl, static_ip_box)
 
         notebook.append_page(gen_grid, Gtk.Label(label=_("VPN")))
 
-        # --- Tab 2: Advanced / Tunnel ---
+        # --- Tab 2: IPv4 Settings (Static IPv4, DNS, Static Routes) ---
+        ipv4_box = self._build_ipv4_tab()
+        notebook.append_page(ipv4_box, Gtk.Label(label=_("IPv4 Settings")))
+
+        # --- Tab 3: IPv6 Settings (Static IPv6, Static Routes) ---
+        ipv6_box = self._build_ipv6_tab()
+        notebook.append_page(ipv6_box, Gtk.Label(label=_("IPv6 Settings")))
+
+        # --- Tab 4: Advanced / Tunnel ---
         tun_grid = Gtk.Grid()
         tun_grid.set_border_width(12)
         tun_grid.set_column_spacing(10)
@@ -457,20 +481,6 @@ class VPNConnectionDialog(Gtk.Window):
         tun_grid.attach(self.mssfix_check, 1, t_row, 2, 1)
         t_row += 1
 
-        self.redirect_gw_check = Gtk.CheckButton(
-            label=_("Route all traffic through VPN (redirect-gateway)")
-        )
-        self.redirect_gw_check.set_active(bool(self.cfg.get('redirect_gateway')))
-        tun_grid.attach(self.redirect_gw_check, 1, t_row, 2, 1)
-        t_row += 1
-
-        self.route_nopull_check = Gtk.CheckButton(
-            label=_("Ignore routes pushed by server (route-nopull)")
-        )
-        self.route_nopull_check.set_active(bool(self.cfg.get('route_nopull')))
-        tun_grid.attach(self.route_nopull_check, 1, t_row, 2, 1)
-        t_row += 1
-
         self.remote_random_check = Gtk.CheckButton(
             label=_("Randomize remote hosts (remote-random)")
         )
@@ -479,7 +489,7 @@ class VPNConnectionDialog(Gtk.Window):
 
         notebook.append_page(tun_grid, Gtk.Label(label=_("Advanced")))
 
-        # --- Tab 3: Security & TLS ---
+        # --- Tab 5: Security & TLS ---
         sec_grid = Gtk.Grid()
         sec_grid.set_border_width(12)
         sec_grid.set_column_spacing(10)
@@ -567,29 +577,12 @@ class VPNConnectionDialog(Gtk.Window):
 
         notebook.append_page(sec_grid, Gtk.Label(label=_("Security & TLS")))
 
-        # --- Tab 4: Proxies & DNS ---
+        # --- Tab 6: Proxies ---
         prx_grid = Gtk.Grid()
         prx_grid.set_border_width(12)
         prx_grid.set_column_spacing(10)
         prx_grid.set_row_spacing(8)
         p_row = 0
-
-        dns_lbl = _field_label(_("Custom DNS:"))
-        prx_grid.attach(dns_lbl, 0, p_row, 1, 1)
-        self.dns_entry = Gtk.Entry()
-        self.dns_entry.set_hexpand(True)
-        self.dns_entry.set_placeholder_text("1.1.1.1, 8.8.8.8")
-        self.dns_entry.set_text(', '.join(self.cfg.get('dns_servers', [])))
-        prx_grid.attach(self.dns_entry, 1, p_row, 2, 1)
-        p_row += 1
-
-        dom_lbl = _field_label(_("Search Domains:"))
-        prx_grid.attach(dom_lbl, 0, p_row, 1, 1)
-        self.domains_entry = Gtk.Entry()
-        self.domains_entry.set_hexpand(True)
-        self.domains_entry.set_text(', '.join(self.cfg.get('search_domains', [])))
-        prx_grid.attach(self.domains_entry, 1, p_row, 2, 1)
-        p_row += 1
 
         ptype_lbl = _field_label(_("Proxy Type:"))
         prx_grid.attach(ptype_lbl, 0, p_row, 1, 1)
@@ -605,6 +598,7 @@ class VPNConnectionDialog(Gtk.Window):
         psrv_lbl = _field_label(_("Proxy Server:"))
         prx_grid.attach(psrv_lbl, 0, p_row, 1, 1)
         self.proxy_srv_entry = Gtk.Entry()
+        self.proxy_srv_entry.set_hexpand(True)
         self.proxy_srv_entry.set_text(self.cfg.get('proxy_server', ''))
         prx_grid.attach(self.proxy_srv_entry, 1, p_row, 2, 1)
         p_row += 1
@@ -637,7 +631,292 @@ class VPNConnectionDialog(Gtk.Window):
             ppwd_lbl, self.proxy_pwd_entry,
         )
 
-        notebook.append_page(prx_grid, Gtk.Label(label=_("Proxies & DNS")))
+        notebook.append_page(prx_grid, Gtk.Label(label=_("Proxies")))
+
+    def _build_ipv4_tab(self):
+        """Build the IPv4 Settings tab with Manual/Auto IP, DNS, and Static Routes."""
+        vbox = Gtk.VBox(spacing=8)
+        vbox.set_border_width(12)
+
+        top_grid = Gtk.Grid()
+        top_grid.set_column_spacing(10)
+        top_grid.set_row_spacing(6)
+        vbox.pack_start(top_grid, False, False, 0)
+
+        top_grid.attach(_field_label(_("IPv4 Method:")), 0, 0, 1, 1)
+        self.ipv4_method_combo = Gtk.ComboBoxText()
+        self.ipv4_method_combo.append('auto', _("Automatic (VPN)"))
+        self.ipv4_method_combo.append('manual', _("Manual (Static IPv4)"))
+        init_m4 = 'manual' if (
+            self.cfg.get('ipv4_method') == 'manual' or self.cfg.get('ifconfig_local')
+        ) else 'auto'
+        self.ipv4_method_combo.set_active_id(init_m4)
+        self.ipv4_method_combo.connect("changed", lambda _c: self.refresh_dynamic_visibility())
+        top_grid.attach(self.ipv4_method_combo, 1, 0, 2, 1)
+
+        # Manual IPv4 fields: Address, Netmask / Remote IP, Gateway
+        addr_lbl = _field_label(_("IPv4 Address:"))
+        top_grid.attach(addr_lbl, 0, 1, 1, 1)
+        self.ifconfig_local_entry = Gtk.Entry()
+        self.ifconfig_local_entry.set_placeholder_text("10.8.0.2")
+        self.ifconfig_local_entry.set_text(self.cfg.get('ifconfig_local', ''))
+        top_grid.attach(self.ifconfig_local_entry, 1, 1, 2, 1)
+
+        mask_lbl = _field_label(_("Netmask / Peer IP:"))
+        top_grid.attach(mask_lbl, 0, 2, 1, 1)
+        self.ifconfig_remote_entry = Gtk.Entry()
+        self.ifconfig_remote_entry.set_placeholder_text("255.255.255.0 or 10.8.0.1")
+        self.ifconfig_remote_entry.set_text(self.cfg.get('ifconfig_remote', ''))
+        top_grid.attach(self.ifconfig_remote_entry, 1, 2, 2, 1)
+
+        rgw_lbl = _field_label(_("IPv4 Gateway:"))
+        top_grid.attach(rgw_lbl, 0, 3, 1, 1)
+        self.route_gw_entry = Gtk.Entry()
+        self.route_gw_entry.set_placeholder_text(_("Optional (e.g. 10.8.0.1)"))
+        self.route_gw_entry.set_text(self.cfg.get('route_gateway', ''))
+        top_grid.attach(self.route_gw_entry, 1, 3, 2, 1)
+
+        self.ipv4_manual_widgets = (
+            addr_lbl, self.ifconfig_local_entry,
+            mask_lbl, self.ifconfig_remote_entry,
+            rgw_lbl, self.route_gw_entry,
+        )
+
+        # DNS & Search Domains
+        dns_lbl = _field_label(_("DNS Servers:"))
+        top_grid.attach(dns_lbl, 0, 4, 1, 1)
+        self.dns_entry = Gtk.Entry()
+        self.dns_entry.set_hexpand(True)
+        self.dns_entry.set_placeholder_text("1.1.1.1, 8.8.8.8")
+        self.dns_entry.set_text(', '.join(self.cfg.get('dns_servers', [])))
+        top_grid.attach(self.dns_entry, 1, 4, 2, 1)
+
+        dom_lbl = _field_label(_("Search Domains:"))
+        top_grid.attach(dom_lbl, 0, 5, 1, 1)
+        self.domains_entry = Gtk.Entry()
+        self.domains_entry.set_hexpand(True)
+        self.domains_entry.set_text(', '.join(self.cfg.get('search_domains', [])))
+        top_grid.attach(self.domains_entry, 1, 5, 2, 1)
+
+        # Static Routes section
+        vbox.pack_start(_bold_label(_("Static Routes (IPv4)")), False, False, 2)
+
+        self.ipv4_routes_store = Gtk.ListStore(str, str, str, str)
+        for rt in self.cfg.get('routes', []):
+            self.ipv4_routes_store.append([
+                rt.get('network', ''),
+                rt.get('netmask', '255.255.255.0'),
+                rt.get('gateway', 'vpn_gateway'),
+                rt.get('metric', ''),
+            ])
+
+        self.ipv4_routes_tree = Gtk.TreeView(model=self.ipv4_routes_store)
+        r4_cols = [
+            (_("Address / Network"), 0, 140),
+            (_("Netmask / Prefix"), 1, 130),
+            (_("Gateway"), 2, 120),
+            (_("Metric"), 3, 70),
+        ]
+        for title, col_idx, width in r4_cols:
+            renderer = Gtk.CellRendererText()
+            renderer.set_property("editable", True)
+            renderer.connect("edited", self._on_ipv4_route_cell_edited, col_idx)
+            col = Gtk.TreeViewColumn(title, renderer, text=col_idx)
+            col.set_min_width(width)
+            col.set_resizable(True)
+            self.ipv4_routes_tree.append_column(col)
+
+        r4_scroll = Gtk.ScrolledWindow()
+        r4_scroll.set_shadow_type(Gtk.ShadowType.IN)
+        r4_scroll.set_size_request(-1, 110)
+        r4_scroll.add(self.ipv4_routes_tree)
+        vbox.pack_start(r4_scroll, True, True, 0)
+
+        # Quick-add route bar
+        r4_add_box = Gtk.HBox(spacing=4)
+        self.r4_net_entry = Gtk.Entry()
+        self.r4_net_entry.set_placeholder_text(_("Network (e.g. 192.168.10.0)"))
+        self.r4_mask_entry = Gtk.Entry()
+        self.r4_mask_entry.set_placeholder_text(_("Netmask (255.255.255.0 or 24)"))
+        self.r4_gw_entry = Gtk.Entry()
+        self.r4_gw_entry.set_placeholder_text(_("Gateway (vpn_gateway)"))
+        self.r4_metric_entry = Gtk.Entry()
+        self.r4_metric_entry.set_width_chars(6)
+        self.r4_metric_entry.set_placeholder_text(_("Metric"))
+
+        r4_add_btn = Gtk.Button(label=_("Add"))
+        r4_add_btn.connect("clicked", self._on_add_ipv4_route)
+        r4_del_btn = Gtk.Button(label=_("Remove"))
+        r4_del_btn.connect("clicked", self._on_remove_ipv4_route)
+
+        r4_add_box.pack_start(self.r4_net_entry, True, True, 0)
+        r4_add_box.pack_start(self.r4_mask_entry, True, True, 0)
+        r4_add_box.pack_start(self.r4_gw_entry, True, True, 0)
+        r4_add_box.pack_start(self.r4_metric_entry, False, False, 0)
+        r4_add_box.pack_start(r4_add_btn, False, False, 0)
+        r4_add_box.pack_start(r4_del_btn, False, False, 0)
+        vbox.pack_start(r4_add_box, False, False, 0)
+
+        self.redirect_gw_check = Gtk.CheckButton(
+            label=_("Route all traffic through VPN (redirect-gateway)")
+        )
+        self.redirect_gw_check.set_active(bool(self.cfg.get('redirect_gateway')))
+        vbox.pack_start(self.redirect_gw_check, False, False, 0)
+
+        self.route_nopull_check = Gtk.CheckButton(
+            label=_("Ignore automatically obtained routes (route-nopull)")
+        )
+        self.route_nopull_check.set_active(bool(self.cfg.get('route_nopull')))
+        vbox.pack_start(self.route_nopull_check, False, False, 0)
+
+        return vbox
+
+    def _on_ipv4_route_cell_edited(self, _renderer, path, new_text, col_idx):
+        self.ipv4_routes_store[path][col_idx] = new_text.strip()
+
+    def _on_add_ipv4_route(self, _widget):
+        net = self.r4_net_entry.get_text().strip()
+        if not net:
+            return
+        mask = self.r4_mask_entry.get_text().strip() or '255.255.255.0'
+        gw = self.r4_gw_entry.get_text().strip() or 'vpn_gateway'
+        metric = self.r4_metric_entry.get_text().strip()
+        self.ipv4_routes_store.append([net, mask, gw, metric])
+        self.r4_net_entry.set_text('')
+        self.r4_mask_entry.set_text('')
+        self.r4_gw_entry.set_text('')
+        self.r4_metric_entry.set_text('')
+
+    def _on_remove_ipv4_route(self, _widget):
+        selection = self.ipv4_routes_tree.get_selection()
+        model, tree_iter = selection.get_selected()
+        if tree_iter is not None:
+            model.remove(tree_iter)
+
+    def _build_ipv6_tab(self):
+        """Build the IPv6 Settings tab with Manual/Auto/Disabled IPv6 and Static Routes."""
+        vbox = Gtk.VBox(spacing=8)
+        vbox.set_border_width(12)
+
+        top_grid = Gtk.Grid()
+        top_grid.set_column_spacing(10)
+        top_grid.set_row_spacing(6)
+        vbox.pack_start(top_grid, False, False, 0)
+
+        top_grid.attach(_field_label(_("IPv6 Method:")), 0, 0, 1, 1)
+        self.ipv6_method_combo = Gtk.ComboBoxText()
+        self.ipv6_method_combo.append('auto', _("Automatic (VPN)"))
+        self.ipv6_method_combo.append('manual', _("Manual (Static IPv6)"))
+        self.ipv6_method_combo.append('disabled', _("Disabled / Ignore"))
+        init_m6 = self.cfg.get('ipv6_method', 'auto')
+        if init_m6 not in ('auto', 'manual', 'disabled'):
+            init_m6 = 'auto'
+        self.ipv6_method_combo.set_active_id(init_m6)
+        self.ipv6_method_combo.connect("changed", lambda _c: self.refresh_dynamic_visibility())
+        top_grid.attach(self.ipv6_method_combo, 1, 0, 2, 1)
+
+        addr6_lbl = _field_label(_("IPv6 Address:"))
+        top_grid.attach(addr6_lbl, 0, 1, 1, 1)
+        self.ifconfig_ipv6_local_entry = Gtk.Entry()
+        self.ifconfig_ipv6_local_entry.set_hexpand(True)
+        self.ifconfig_ipv6_local_entry.set_placeholder_text("fd00::2")
+        self.ifconfig_ipv6_local_entry.set_text(self.cfg.get('ifconfig_ipv6_local', ''))
+        top_grid.attach(self.ifconfig_ipv6_local_entry, 1, 1, 2, 1)
+
+        plen6_lbl = _field_label(_("Prefix Length:"))
+        top_grid.attach(plen6_lbl, 0, 2, 1, 1)
+        self.ifconfig_ipv6_prefix_entry = Gtk.Entry()
+        self.ifconfig_ipv6_prefix_entry.set_placeholder_text("64")
+        self.ifconfig_ipv6_prefix_entry.set_text(str(self.cfg.get('ifconfig_ipv6_prefix', '64')))
+        top_grid.attach(self.ifconfig_ipv6_prefix_entry, 1, 2, 1, 1)
+
+        gw6_lbl = _field_label(_("IPv6 Gateway / Peer:"))
+        top_grid.attach(gw6_lbl, 0, 3, 1, 1)
+        self.ifconfig_ipv6_remote_entry = Gtk.Entry()
+        self.ifconfig_ipv6_remote_entry.set_placeholder_text("fd00::1")
+        self.ifconfig_ipv6_remote_entry.set_text(self.cfg.get('ifconfig_ipv6_remote', ''))
+        top_grid.attach(self.ifconfig_ipv6_remote_entry, 1, 3, 2, 1)
+
+        self.ipv6_manual_widgets = (
+            addr6_lbl, self.ifconfig_ipv6_local_entry,
+            plen6_lbl, self.ifconfig_ipv6_prefix_entry,
+            gw6_lbl, self.ifconfig_ipv6_remote_entry,
+        )
+
+        # Static Routes (IPv6)
+        vbox.pack_start(_bold_label(_("Static Routes (IPv6)")), False, False, 2)
+
+        self.ipv6_routes_store = Gtk.ListStore(str, str, str)
+        for rt6 in self.cfg.get('routes_ipv6', []):
+            self.ipv6_routes_store.append([
+                rt6.get('network', ''),
+                rt6.get('gateway', ''),
+                rt6.get('metric', ''),
+            ])
+
+        self.ipv6_routes_tree = Gtk.TreeView(model=self.ipv6_routes_store)
+        r6_cols = [
+            (_("Destination (CIDR)"), 0, 200),
+            (_("Gateway"), 1, 160),
+            (_("Metric"), 2, 80),
+        ]
+        for title, col_idx, width in r6_cols:
+            renderer = Gtk.CellRendererText()
+            renderer.set_property("editable", True)
+            renderer.connect("edited", self._on_ipv6_route_cell_edited, col_idx)
+            col = Gtk.TreeViewColumn(title, renderer, text=col_idx)
+            col.set_min_width(width)
+            col.set_resizable(True)
+            self.ipv6_routes_tree.append_column(col)
+
+        r6_scroll = Gtk.ScrolledWindow()
+        r6_scroll.set_shadow_type(Gtk.ShadowType.IN)
+        r6_scroll.set_size_request(-1, 110)
+        r6_scroll.add(self.ipv6_routes_tree)
+        vbox.pack_start(r6_scroll, True, True, 0)
+
+        r6_add_box = Gtk.HBox(spacing=4)
+        self.r6_net_entry = Gtk.Entry()
+        self.r6_net_entry.set_placeholder_text(_("Network (e.g. fd00:10::/64)"))
+        self.r6_gw_entry = Gtk.Entry()
+        self.r6_gw_entry.set_placeholder_text(_("Gateway (optional)"))
+        self.r6_metric_entry = Gtk.Entry()
+        self.r6_metric_entry.set_width_chars(6)
+        self.r6_metric_entry.set_placeholder_text(_("Metric"))
+
+        r6_add_btn = Gtk.Button(label=_("Add"))
+        r6_add_btn.connect("clicked", self._on_add_ipv6_route)
+        r6_del_btn = Gtk.Button(label=_("Remove"))
+        r6_del_btn.connect("clicked", self._on_remove_ipv6_route)
+
+        r6_add_box.pack_start(self.r6_net_entry, True, True, 0)
+        r6_add_box.pack_start(self.r6_gw_entry, True, True, 0)
+        r6_add_box.pack_start(self.r6_metric_entry, False, False, 0)
+        r6_add_box.pack_start(r6_add_btn, False, False, 0)
+        r6_add_box.pack_start(r6_del_btn, False, False, 0)
+        vbox.pack_start(r6_add_box, False, False, 0)
+
+        return vbox
+
+    def _on_ipv6_route_cell_edited(self, _renderer, path, new_text, col_idx):
+        self.ipv6_routes_store[path][col_idx] = new_text.strip()
+
+    def _on_add_ipv6_route(self, _widget):
+        net6 = self.r6_net_entry.get_text().strip()
+        if not net6:
+            return
+        gw6 = self.r6_gw_entry.get_text().strip()
+        metric6 = self.r6_metric_entry.get_text().strip()
+        self.ipv6_routes_store.append([net6, gw6, metric6])
+        self.r6_net_entry.set_text('')
+        self.r6_gw_entry.set_text('')
+        self.r6_metric_entry.set_text('')
+
+    def _on_remove_ipv6_route(self, _widget):
+        selection = self.ipv6_routes_tree.get_selection()
+        model, tree_iter = selection.get_selected()
+        if tree_iter is not None:
+            model.remove(tree_iter)
 
     def _build_wireguard_notebook(self, main_box):
         """Build the WireGuard configuration tabs."""
@@ -656,13 +935,14 @@ class VPNConnectionDialog(Gtk.Window):
         grid.attach(_field_label(_("Tunnel Name:")), 0, row, 1, 1)
         self.wg_id_entry = Gtk.Entry()
         self.wg_id_entry.set_text(self.cfg.get('profile_id', 'wg0'))
+        self.wg_id_entry.connect("changed", self._on_wg_id_edited)
         grid.attach(self.wg_id_entry, 1, row, 2, 1)
         row += 1
 
-        grid.attach(_field_label(_("Addresses:")), 0, row, 1, 1)
+        grid.attach(_field_label(_("IPv4 / IPv6 Addresses:")), 0, row, 1, 1)
         self.wg_addr_entry = Gtk.Entry()
         self.wg_addr_entry.set_hexpand(True)
-        self.wg_addr_entry.set_placeholder_text("10.0.0.2/32")
+        self.wg_addr_entry.set_placeholder_text("10.0.0.2/32, fd00::2/64")
         self.wg_addr_entry.set_text(self.cfg.get('address', ''))
         grid.attach(self.wg_addr_entry, 1, row, 2, 1)
         row += 1
@@ -692,7 +972,7 @@ class VPNConnectionDialog(Gtk.Window):
         grid.attach(self.wg_mtu_entry, 1, row, 1, 1)
         row += 1
 
-        grid.attach(_bold_label(_("Peer")), 0, row, 3, 1)
+        grid.attach(_bold_label(_("Peer & Routed Networks")), 0, row, 3, 1)
         row += 1
 
         grid.attach(_field_label(_("Public Key:")), 0, row, 1, 1)
@@ -722,7 +1002,7 @@ class VPNConnectionDialog(Gtk.Window):
         grid.attach(self.wg_endpoint_entry, 1, row, 2, 1)
         row += 1
 
-        grid.attach(_field_label(_("Allowed IPs:")), 0, row, 1, 1)
+        grid.attach(_field_label(_("Allowed IPs (Routes):")), 0, row, 1, 1)
         self.wg_allowed_entry = Gtk.Entry()
         self.wg_allowed_entry.set_text(self.cfg.get('allowed_ips', '0.0.0.0/0, ::/0'))
         grid.attach(self.wg_allowed_entry, 1, row, 2, 1)
@@ -736,7 +1016,7 @@ class VPNConnectionDialog(Gtk.Window):
         notebook.append_page(grid, Gtk.Label(label="WireGuard"))
 
     def refresh_dynamic_visibility(self):
-        """Show only the fields relevant to the selected authentication/TLS/proxy mode."""
+        """Show only the fields relevant to the selected authentication/IP/TLS/proxy mode."""
         if self.vpn_type == 'wireguard':
             return
         auth_type = self.auth_type_combo.get_active_id() or 'tls'
@@ -748,11 +1028,21 @@ class VPNConnectionDialog(Gtk.Window):
             'username': auth_type in ('password', 'tls-password'),
             'password': auth_type in ('password', 'tls-password'),
             'secret': auth_type == 'static-key',
-            'static_ips': auth_type == 'static-key',
         }
         for key, visible in visibility.items():
             for widget in self.auth_rows.get(key, ()):
                 widget.set_visible(visible)
+
+        ipv4_manual = (self.ipv4_method_combo.get_active_id() == 'manual') or (
+            auth_type == 'static-key'
+        )
+        for widget in getattr(self, 'ipv4_manual_widgets', ()):
+            widget.set_sensitive(ipv4_manual)
+
+        ipv6_mode = self.ipv6_method_combo.get_active_id() or 'auto'
+        ipv6_manual = ipv6_mode == 'manual'
+        for widget in getattr(self, 'ipv6_manual_widgets', ()):
+            widget.set_sensitive(ipv6_manual)
 
         tls_mode = self.tls_mode_combo.get_active_id() or 'none'
         tls_visible = tls_mode != 'none'
@@ -782,6 +1072,12 @@ class VPNConnectionDialog(Gtk.Window):
                 self.cfg['persistent_keepalive'] = self.wg_keepalive_entry.get_text().strip()
                 saved_id = save_wireguard_config(self.cfg)
             else:
+                # Commit any typed but un-added route from the quick-add bar
+                if self.r4_net_entry.get_text().strip():
+                    self._on_add_ipv4_route(None)
+                if self.r6_net_entry.get_text().strip():
+                    self._on_add_ipv6_route(None)
+
                 self.cfg['gateway'] = self.gateway_entry.get_text().strip()
                 self.cfg['auth_type'] = self.auth_type_combo.get_active_id() or 'tls'
                 self.cfg['auth_user_pass'] = self.cfg['auth_type'] in (
@@ -790,8 +1086,39 @@ class VPNConnectionDialog(Gtk.Window):
                 self.cfg['key_password'] = self.key_pwd_entry.get_text()
                 self.cfg['username'] = self.username_entry.get_text().strip()
                 self.cfg['password'] = self.password_entry.get_text()
+
+                self.cfg['ipv4_method'] = self.ipv4_method_combo.get_active_id() or 'auto'
                 self.cfg['ifconfig_local'] = self.ifconfig_local_entry.get_text().strip()
                 self.cfg['ifconfig_remote'] = self.ifconfig_remote_entry.get_text().strip()
+                self.cfg['route_gateway'] = self.route_gw_entry.get_text().strip()
+                self.cfg['routes'] = [
+                    {
+                        'network': row[0].strip(),
+                        'netmask': row[1].strip() or '255.255.255.0',
+                        'gateway': row[2].strip() or 'vpn_gateway',
+                        'metric': row[3].strip(),
+                    }
+                    for row in self.ipv4_routes_store
+                    if row[0].strip()
+                ]
+
+                self.cfg['ipv6_method'] = self.ipv6_method_combo.get_active_id() or 'auto'
+                self.cfg['ifconfig_ipv6_local'] = self.ifconfig_ipv6_local_entry.get_text().strip()
+                self.cfg['ifconfig_ipv6_prefix'] = (
+                    self.ifconfig_ipv6_prefix_entry.get_text().strip() or '64'
+                )
+                self.cfg['ifconfig_ipv6_remote'] = (
+                    self.ifconfig_ipv6_remote_entry.get_text().strip()
+                )
+                self.cfg['routes_ipv6'] = [
+                    {
+                        'network': row[0].strip(),
+                        'gateway': row[1].strip(),
+                        'metric': row[2].strip(),
+                    }
+                    for row in self.ipv6_routes_store
+                    if row[0].strip()
+                ]
 
                 self.cfg['port'] = self.port_entry.get_text().strip() or '1194'
                 self.cfg['proto'] = self.proto_combo.get_active_id() or 'udp'

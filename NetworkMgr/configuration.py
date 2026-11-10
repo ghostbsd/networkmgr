@@ -33,10 +33,12 @@ from NetworkMgr.net_api import (
 from NetworkMgr.query import get_interface_settings, get_interface_settings_ipv6
 from NetworkMgr import validate
 from NetworkMgr.openvpn_api import (
+    OPENVPN_NOT_INSTALLED_MSG,
     default_openvpn_config,
     delete_openvpn_config,
     disable_openvpn,
     enable_openvpn,
+    is_openvpn_installed,
     openvpn_dictionary,
     parse_openvpn_config,
 )
@@ -52,6 +54,7 @@ from NetworkMgr.vpn_dialog import (
     OpenVPNAuthDialog,
     VPNConnectionDialog,
     import_vpn_file_dialog,
+    show_openvpn_not_installed_alert,
 )
 
 # What set_rc_conf lets into rc.conf: the characters an interface name,
@@ -1006,6 +1009,8 @@ class NetCardConfigWindow(Gtk.Window):
             if sel['state'] == 'Connected':
                 disable_openvpn(pid)
                 self.refresh_vpn_list()
+            elif not is_openvpn_installed():
+                show_openvpn_not_installed_alert(self)
             elif sel['needs_auth']:
                 dialog = OpenVPNAuthDialog(
                     pid,
@@ -1020,10 +1025,16 @@ class NetCardConfigWindow(Gtk.Window):
 
     def _connect_openvpn_from_tab(self, pid, username, password):
         """Start OpenVPN from the configuration tab and report errors."""
+        if not is_openvpn_installed():
+            show_openvpn_not_installed_alert(self)
+            return
         ok, err_msg = enable_openvpn(pid, username=username, password=password)
         self.refresh_vpn_list()
         if not ok:
-            self.show_invalid_entry(err_msg)
+            if err_msg == OPENVPN_NOT_INSTALLED_MSG:
+                show_openvpn_not_installed_alert(self)
+            else:
+                self.show_invalid_entry(err_msg)
 
     def on_delete_vpn_clicked(self, _widget):
         """Delete the selected VPN profile."""
