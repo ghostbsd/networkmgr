@@ -10,8 +10,9 @@ import os
 import re
 import shutil
 import sys
+import tempfile
 from platform import system
-from subprocess import PIPE, run
+from subprocess import DEVNULL, PIPE, Popen, TimeoutExpired, run
 
 PREFIX = '/usr/local' if system() in ('FreeBSD', 'MidnightBSD', 'DragonFly') else sys.prefix
 WG_CONFIG_PATH = f'{PREFIX}/etc/wireguard/'
@@ -335,6 +336,34 @@ def wg_dictionary(service_state):
     return maindictionary
 
 
+def _run_wg_quick(args, timeout=25):
+    """Run wg-quick without hanging on background subshells (route -n monitor).
+
+    On FreeBSD/GhostBSD, `wg-quick up` spawns a background `route -n monitor`
+    subshell (when AllowedIPs includes 0.0.0.0/0 or ::/0) and/or `wireguard-go`
+    that inherits stdout/stderr file descriptors. Using `subprocess.run` with
+    `stdout=PIPE, stderr=PIPE` blocks forever in `communicate()` waiting for
+    those background processes to close the pipe. Redirecting output to a
+    temporary file and waiting only on the `wg-quick` PID avoids the hang.
+    """
+    with tempfile.TemporaryFile() as tmp_out:
+        proc = Popen(
+            args,
+            stdin=DEVNULL,
+            stdout=tmp_out,
+            stderr=tmp_out,
+            close_fds=True,
+        )
+        try:
+            proc.wait(timeout=timeout)
+        except TimeoutExpired:
+            proc.kill()
+            return 1, 'Timed out waiting for wg-quick to finish.'
+        tmp_out.seek(0)
+        output = tmp_out.read().decode('utf-8', errors='replace').strip()
+        return proc.returncode, output
+
+
 def disable_wg(wgconfig):
     """Take the specified WireGuard configuration (device) down.
 
@@ -343,7 +372,7 @@ def disable_wg(wgconfig):
     """
     wg_quick_bin = _wg_quick_binary() or 'wg-quick'
     try:
-        run([wg_quick_bin, 'down', wgconfig], stdout=PIPE, stderr=PIPE, check=False)
+        _run_wg_quick([wg_quick_bin, 'down', wgconfig], timeout=15)
     except OSError:
         pass
 
@@ -361,17 +390,11 @@ def enable_wg(wgconfig):
         return False, WIREGUARD_NOT_INSTALLED_MSG
     wg_quick_bin = _wg_quick_binary()
     try:
-        res = run(
-            [wg_quick_bin, 'up', wgconfig],
-            stdout=PIPE,
-            stderr=PIPE,
-            text=True,
-            check=False,
-        )
+        returncode, output = _run_wg_quick([wg_quick_bin, 'up', wgconfig], timeout=25)
     except (FileNotFoundError, OSError):
         return False, WIREGUARD_NOT_INSTALLED_MSG
-    if res.returncode != 0:
-        err = (res.stderr or res.stdout or 'wg-quick failed to start tunnel.').strip()
+    if returncode != 0:
+        err = output or 'wg-quick failed to start tunnel.'
         return False, err
     return True, ''
 

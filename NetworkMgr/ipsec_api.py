@@ -13,7 +13,8 @@ import json
 import os
 import re
 import shutil
-from subprocess import PIPE, Popen, run
+import tempfile
+from subprocess import DEVNULL, PIPE, Popen, TimeoutExpired, run
 from time import sleep
 
 IPSEC_DIR = '/usr/local/etc/networkmgr/ipsec'
@@ -741,6 +742,26 @@ def _apply_custom_routes(cfg):
                 pass
 
 
+def _run_daemon_cmd(args, timeout=15):
+    """Run a command that may spawn background daemons without hanging on PIPE EOF."""
+    with tempfile.TemporaryFile() as tmp_out:
+        proc = Popen(
+            args,
+            stdin=DEVNULL,
+            stdout=tmp_out,
+            stderr=tmp_out,
+            close_fds=True,
+        )
+        try:
+            proc.wait(timeout=timeout)
+        except TimeoutExpired:
+            proc.kill()
+            return 1, 'Command timed out.'
+        tmp_out.seek(0)
+        output = tmp_out.read().decode('utf-8', errors='replace').strip()
+        return proc.returncode, output
+
+
 def enable_ipsec(profile_id, target_dir=IPSEC_DIR):
     """Start an IPsec (IKEv2/IKEv1) or L2TP/IPsec connection.
 
@@ -767,30 +788,20 @@ def enable_ipsec(profile_id, target_dir=IPSEC_DIR):
     ipsec_bin = _strongswan_binary()
     try:
         # Ensure strongSwan charon/starter is running and reload configs
-        status_proc = run(
-            [ipsec_bin, 'status'],
-            stdout=PIPE,
-            stderr=PIPE,
-            universal_newlines=True,
-            check=False,
-        )
-        if status_proc.returncode != 0:
-            run([ipsec_bin, 'start'], stdout=PIPE, stderr=PIPE, check=False)
+        status_rc, _ = _run_daemon_cmd([ipsec_bin, 'status'], timeout=5)
+        if status_rc != 0:
+            _run_daemon_cmd([ipsec_bin, 'start'], timeout=10)
             sleep(1.0)
         else:
-            run([ipsec_bin, 'reload'], stdout=PIPE, stderr=PIPE, check=False)
-            run([ipsec_bin, 'rereadsecrets'], stdout=PIPE, stderr=PIPE, check=False)
+            _run_daemon_cmd([ipsec_bin, 'reload'], timeout=5)
+            _run_daemon_cmd([ipsec_bin, 'rereadsecrets'], timeout=5)
             sleep(0.4)
 
-        up_proc = run(
+        up_rc, output_text = _run_daemon_cmd(
             [ipsec_bin, 'up', f'nm-{profile_id}'],
-            stdout=PIPE,
-            stderr=PIPE,
-            universal_newlines=True,
-            check=False,
+            timeout=20,
         )
-        output_text = (up_proc.stdout or '') + '\n' + (up_proc.stderr or '')
-        if up_proc.returncode != 0 and 'established' not in output_text.lower():
+        if up_rc != 0 and 'established' not in output_text.lower():
             return False, (output_text.strip() or 'StrongSwan failed to establish IPsec SA.')
     except OSError as exc:
         return False, str(exc)
@@ -800,7 +811,7 @@ def enable_ipsec(profile_id, target_dir=IPSEC_DIR):
         mpd_dir = _write_mpd5_config(profile_id, cfg)
         pid_file = os.path.join(RUN_DIR, f'{profile_id}.pid')
         try:
-            proc = Popen(
+            mpd_rc, err = _run_daemon_cmd(
                 [
                     mpd_bin,
                     '-b',
@@ -809,12 +820,9 @@ def enable_ipsec(profile_id, target_dir=IPSEC_DIR):
                     '-s', f'networkmgr_{profile_id}',
                     'l2tp_client',
                 ],
-                stdout=PIPE,
-                stderr=PIPE,
-                universal_newlines=True,
+                timeout=10,
             )
-            _, err = proc.communicate(timeout=5)
-            if proc.returncode not in (0, None):
+            if mpd_rc not in (0, None):
                 return False, (err or 'mpd5 failed to start L2TP session.').strip()
         except Exception as exc:
             return False, str(exc)
