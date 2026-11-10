@@ -54,6 +54,7 @@ from NetworkMgr.vpn_dialog import (
     OpenVPNAuthDialog,
     VPNConnectionDialog,
     import_vpn_file_dialog,
+    show_connection_notification,
     show_openvpn_not_installed_alert,
 )
 
@@ -999,31 +1000,38 @@ class NetCardConfigWindow(Gtk.Window):
         if not sel:
             return
         pid = sel['profile_id']
+        display_name = sel['name'] or pid
         if sel['vpn_type'] == 'wireguard':
             if sel['state'] == 'Connected':
                 disable_wg(pid)
+                self.refresh_vpn_list()
+                show_connection_notification(display_name, False)
             else:
                 enable_wg(pid)
-            self.refresh_vpn_list()
+                self.refresh_vpn_list()
+                show_connection_notification(display_name, True)
         else:
             if sel['state'] == 'Connected':
                 disable_openvpn(pid)
                 self.refresh_vpn_list()
+                show_connection_notification(display_name, False)
             elif not is_openvpn_installed():
                 show_openvpn_not_installed_alert(self)
             elif sel['needs_auth']:
                 dialog = OpenVPNAuthDialog(
                     pid,
-                    sel['name'],
+                    display_name,
                     initial_user=sel['username'],
-                    on_submit=self._connect_openvpn_from_tab,
+                    on_submit=lambda p, u, pw, dn=display_name: self._connect_openvpn_from_tab(
+                        p, u, pw, dn
+                    ),
                 )
                 dialog.set_transient_for(self)
                 dialog.show_all()
             else:
-                self._connect_openvpn_from_tab(pid, None, None)
+                self._connect_openvpn_from_tab(pid, None, None, display_name)
 
-    def _connect_openvpn_from_tab(self, pid, username, password):
+    def _connect_openvpn_from_tab(self, pid, username, password, display_name=None):
         """Start OpenVPN from the configuration tab and report errors."""
         if not is_openvpn_installed():
             show_openvpn_not_installed_alert(self)
@@ -1035,6 +1043,8 @@ class NetCardConfigWindow(Gtk.Window):
                 show_openvpn_not_installed_alert(self)
             else:
                 self.show_invalid_entry(err_msg)
+            return
+        show_connection_notification(display_name or pid, True)
 
     def on_delete_vpn_clicked(self, _widget):
         """Delete the selected VPN profile."""

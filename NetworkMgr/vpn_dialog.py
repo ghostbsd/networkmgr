@@ -12,8 +12,9 @@ import gettext
 import os
 import gi
 gi.require_version('Gtk', '3.0')
+gi.require_version('GdkPixbuf', '2.0')
 # pylint: disable=wrong-import-position
-from gi.repository import Gtk, Pango
+from gi.repository import Gtk, Gdk, GdkPixbuf, GLib, Pango
 
 from NetworkMgr.openvpn_api import (
     AUTH_DIGEST_OPTIONS,
@@ -80,6 +81,182 @@ def show_openvpn_not_installed_alert(parent=None):
     dialog.format_secondary_text(OPENVPN_NOT_INSTALLED_MSG)
     dialog.run()
     dialog.destroy()
+
+
+_TOAST_CHECK_SVG = b"""<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">
+  <circle cx="11" cy="11" r="10" fill="#2ecc71" fill-opacity="0.22" stroke="#2ecc71" stroke-width="1.6"/>
+  <path d="M6.2 11.4 L9.5 14.7 L15.8 7.6" fill="none" stroke="#2ecc71" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>"""
+
+_TOAST_RED_X_SVG = b"""<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">
+  <circle cx="11" cy="11" r="10" fill="#e74c3c" fill-opacity="0.22" stroke="#ff5252" stroke-width="1.6"/>
+  <path d="M7.2 7.2 L14.8 14.8 M14.8 7.2 L7.2 14.8" fill="none" stroke="#ff5252" stroke-width="2.3" stroke-linecap="round"/>
+</svg>"""
+
+_TOAST_CSS_LOADED = False
+_ACTIVE_TOAST_WINDOW = None
+
+
+def _ensure_toast_css():
+    """Load the CSS styles for the desktop connection popup notification."""
+    global _TOAST_CSS_LOADED
+    if _TOAST_CSS_LOADED:
+        return
+    _TOAST_CSS_LOADED = True
+    try:
+        screen = Gdk.Screen.get_default()
+        if screen is None:
+            return
+        provider = Gtk.CssProvider()
+        provider.load_from_data(
+            b"""
+            .nm-toast-window {
+                background-color: #262b31;
+                color: #f0f6fc;
+                border-radius: 6px;
+                border: 1px solid #3d444d;
+            }
+            .nm-toast-connected {
+                border-left: 4px solid #2ecc71;
+            }
+            .nm-toast-disconnected {
+                border-left: 4px solid #ff5252;
+            }
+            .nm-toast-name {
+                color: #ffffff;
+                font-weight: bold;
+            }
+            .nm-toast-action-ok {
+                color: #2ecc71;
+                font-weight: 600;
+            }
+            .nm-toast-action-off {
+                color: #ff6b6b;
+                font-weight: 600;
+            }
+            """
+        )
+        Gtk.StyleContext.add_provider_for_screen(
+            screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+    except Exception:
+        pass
+
+
+def _toast_svg_image(svg_bytes, size=22):
+    """Render an inline SVG icon into a Gtk.Image for the notification toast."""
+    try:
+        loader = GdkPixbuf.PixbufLoader.new_with_type("svg")
+        loader.set_size(size, size)
+        loader.write(svg_bytes)
+        loader.close()
+        return Gtk.Image.new_from_pixbuf(loader.get_pixbuf())
+    except Exception:
+        return Gtk.Image.new_from_icon_name(
+            "network-transmit-receive", Gtk.IconSize.LARGE_TOOLBAR
+        )
+
+
+def show_connection_notification(name, connected=True):
+    """Show a non-blocking top-right popup toast: <icon> <Nome> <acao>.
+
+    - <icon>: Green checkmark when connected, Red X when disconnected.
+    - <Nome>: Connection name (e.g. 'Datacube', 'em0', 'HomeWiFi').
+    - <acao>: 'Connected' or 'Disconnected'.
+    """
+    global _ACTIVE_TOAST_WINDOW
+    _ensure_toast_css()
+
+    if _ACTIVE_TOAST_WINDOW is not None:
+        try:
+            _ACTIVE_TOAST_WINDOW.destroy()
+        except Exception:
+            pass
+        _ACTIVE_TOAST_WINDOW = None
+
+    popup = Gtk.Window(type=Gtk.WindowType.TOPLEVEL)
+    popup.set_type_hint(Gdk.WindowTypeHint.NOTIFICATION)
+    popup.set_decorated(False)
+    popup.set_keep_above(True)
+    popup.set_accept_focus(False)
+    popup.set_focus_on_map(False)
+    popup.set_skip_taskbar_hint(True)
+    popup.set_skip_pager_hint(True)
+    popup.set_resizable(False)
+
+    style_ctx = popup.get_style_context()
+    style_ctx.add_class("nm-toast-window")
+    style_ctx.add_class(
+        "nm-toast-connected" if connected else "nm-toast-disconnected"
+    )
+
+    event_box = Gtk.EventBox()
+    event_box.set_visible_window(False)
+    hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+    hbox.set_margin_top(10)
+    hbox.set_margin_bottom(10)
+    hbox.set_margin_start(14)
+    hbox.set_margin_end(16)
+
+    icon_img = _toast_svg_image(
+        _TOAST_CHECK_SVG if connected else _TOAST_RED_X_SVG, size=22
+    )
+    hbox.pack_start(icon_img, False, False, 0)
+
+    name_label = Gtk.Label(label=str(name))
+    name_label.set_xalign(0.0)
+    name_label.get_style_context().add_class("nm-toast-name")
+    name_attrs = Pango.AttrList()
+    name_attrs.insert(Pango.attr_weight_new(Pango.Weight.BOLD))
+    name_label.set_attributes(name_attrs)
+    hbox.pack_start(name_label, False, False, 0)
+
+    action_text = _("Connected") if connected else _("Disconnected")
+    action_label = Gtk.Label(label=action_text)
+    action_label.set_xalign(0.0)
+    action_label.get_style_context().add_class(
+        "nm-toast-action-ok" if connected else "nm-toast-action-off"
+    )
+    hbox.pack_start(action_label, False, False, 0)
+
+    event_box.add(hbox)
+    popup.add(event_box)
+
+    def _dismiss(*_args):
+        global _ACTIVE_TOAST_WINDOW
+        if _ACTIVE_TOAST_WINDOW is popup:
+            _ACTIVE_TOAST_WINDOW = None
+        try:
+            popup.destroy()
+        except Exception:
+            pass
+        return False
+
+    event_box.connect("button-press-event", _dismiss)
+    popup.show_all()
+
+    # Position the toast in the top-right corner of the primary monitor,
+    # right below the GhostBSD top panel.
+    try:
+        req_min, req_nat = popup.get_preferred_size()
+        width = max(req_nat.width, 180)
+        display = Gdk.Display.get_default()
+        if display is not None and hasattr(display, "get_primary_monitor"):
+            monitor = display.get_primary_monitor() or display.get_monitor(0)
+            geom = monitor.get_geometry()
+            x_pos = geom.x + geom.width - width - 16
+            y_pos = geom.y + 34
+        else:
+            screen = Gdk.Screen.get_default()
+            x_pos = (screen.get_width() if screen else 1280) - width - 16
+            y_pos = 34
+        popup.move(max(0, x_pos), max(0, y_pos))
+    except Exception:
+        popup.move(20, 34)
+
+    _ACTIVE_TOAST_WINDOW = popup
+    GLib.timeout_add(3000, _dismiss)
+    return False
 
 
 def import_vpn_file_dialog(parent=None, on_saved=None):

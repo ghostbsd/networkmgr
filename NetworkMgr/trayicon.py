@@ -63,6 +63,7 @@ from NetworkMgr.openvpn_api import (
 )
 from NetworkMgr.vpn_dialog import (
     import_vpn_file_dialog,
+    show_connection_notification,
     show_openvpn_not_installed_alert,
     VPNConnectionDialog,
     OpenVPNAuthDialog
@@ -395,7 +396,11 @@ class TrayIcon:
                 ovpn_path = ovpn_meta.get('path', '')
                 is_connected = connection_state == "Connected"
                 toggle_cb = (
-                    (lambda dev=ovpn_dev: self.disconnect_openvpn(None, dev))
+                    (
+                        lambda dev=ovpn_dev, info=connection_info: self.disconnect_openvpn(
+                            None, dev, info
+                        )
+                    )
                     if is_connected
                     else (
                         lambda dev=ovpn_dev, meta=ovpn_meta: self.connect_openvpn(
@@ -697,8 +702,15 @@ class TrayIcon:
             _widget (Gtk.Widget): the menu item, unused.
             wifi_card (str): wireless interface name.
         """
+        ssid = wifi_card
+        if self.cardinfo and wifi_card in self.cardinfo.get('cards', {}):
+            ssid = (
+                self.cardinfo['cards'][wifi_card]['state'].get('ssid')
+                or wifi_card
+            )
         disconnect_wifi(wifi_card)
         self.update_info()
+        show_connection_notification(ssid, False)
 
     def disable_wifi(self, _widget, wifi_card):
         """Take a wireless interface down.
@@ -709,6 +721,7 @@ class TrayIcon:
         """
         disable_wifi(wifi_card)
         self.update_info()
+        show_connection_notification(wifi_card, False)
 
     def enable_wifi(self, _widget, wifi_card):
         """Bring a wireless interface back up.
@@ -719,6 +732,7 @@ class TrayIcon:
         """
         enable_wifi(wifi_card)
         self.update_info()
+        show_connection_notification(wifi_card, True)
 
     def enable_card(self, _widget, netcard):
         """Start a wired interface.
@@ -729,6 +743,7 @@ class TrayIcon:
         """
         start_network_card(netcard)
         self.update_info()
+        show_connection_notification(netcard, True)
 
     def disable_card(self, _widget, netcard):
         """Stop a wired interface.
@@ -739,6 +754,7 @@ class TrayIcon:
         """
         stop_network_card(netcard)
         self.update_info()
+        show_connection_notification(netcard, False)
 
     def connect_wg(self, _widget, wg_device):
         """Bring a WireGuard tunnel up.
@@ -749,6 +765,7 @@ class TrayIcon:
         """
         enable_wg(wg_device)
         self.update_info()
+        show_connection_notification(wg_device, True)
 
     def disconnect_wg(self, _widget, wg_device):
         """Take a WireGuard tunnel down.
@@ -759,28 +776,33 @@ class TrayIcon:
         """
         disable_wg(wg_device)
         self.update_info()
+        show_connection_notification(wg_device, False)
 
     def connect_openvpn(self, _widget, ovpn_dev, ovpn_meta):
         """Bring an OpenVPN tunnel up, prompting for credentials if required."""
         if not is_openvpn_installed():
             show_openvpn_not_installed_alert()
             return
+        display_name = ovpn_meta.get('info', ovpn_dev)
         if ovpn_meta.get('needs_auth'):
             dialog = OpenVPNAuthDialog(
                 ovpn_dev,
-                ovpn_meta.get('info', ovpn_dev),
+                display_name,
                 initial_user=ovpn_meta.get('username', ''),
-                on_submit=self._do_connect_openvpn,
+                on_submit=lambda dev, u, p, dn=display_name: self._do_connect_openvpn(
+                    dev, u, p, dn
+                ),
             )
             dialog.show_all()
             return
-        self._do_connect_openvpn(ovpn_dev, None, None)
+        self._do_connect_openvpn(ovpn_dev, None, None, display_name)
 
-    def _do_connect_openvpn(self, ovpn_dev, username, password):
+    def _do_connect_openvpn(self, ovpn_dev, username, password, display_name=None):
         """Start OpenVPN and report any startup failure."""
         if not is_openvpn_installed():
             show_openvpn_not_installed_alert()
             return
+        label_name = display_name or ovpn_dev
         ok, err_msg = enable_openvpn(ovpn_dev, username=username, password=password)
         self.update_info()
         if not ok:
@@ -789,16 +811,19 @@ class TrayIcon:
                 return
             dialog = Gtk.MessageDialog(
                 None, 0, Gtk.MessageType.WARNING, Gtk.ButtonsType.CLOSE,
-                _("Could not connect to %s") % ovpn_dev
+                _("Could not connect to %s") % label_name
             )
             dialog.format_secondary_text(err_msg)
             dialog.run()
             dialog.destroy()
+            return
+        show_connection_notification(label_name, True)
 
-    def disconnect_openvpn(self, _widget, ovpn_dev):
+    def disconnect_openvpn(self, _widget, ovpn_dev, display_name=None):
         """Take an OpenVPN tunnel down."""
         disable_openvpn(ovpn_dev)
         self.update_info()
+        show_connection_notification(display_name or ovpn_dev, False)
 
     def import_vpn_configuration(self, _widget):
         """Open the VPN file importer dialog from the tray menu."""
@@ -1069,6 +1094,7 @@ class TrayIcon:
                 # It works, so now it is worth keeping. Until this point the
                 # network existed only in the daemon.
                 wpa_save_config(card)
+                GLib.idle_add(show_connection_notification, ssid, True)
             else:
                 self.connect_attempts += 1
                 if network is not None and self.connect_attempts < MAX_ATTEMPTS:
