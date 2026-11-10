@@ -48,7 +48,20 @@ from NetworkMgr.wg_api import (
     wg_dictionary,
     wg_service_state,
     disable_wg,
-    enable_wg
+    enable_wg,
+    parse_wireguard_config
+)
+from NetworkMgr.openvpn_api import (
+    openvpn_dictionary,
+    openvpn_service_state,
+    disable_openvpn,
+    enable_openvpn,
+    parse_openvpn_config
+)
+from NetworkMgr.vpn_dialog import (
+    import_vpn_file_dialog,
+    VPNConnectionDialog,
+    OpenVPNAuthDialog
 )
 
 gettext.bindtextdomain('NetworkMgr', '/usr/local/share/locale')
@@ -114,6 +127,7 @@ class TrayIcon:
         self.traystate = tray_state()
         # Read once: 13 ms of shell, and it only changes on an rc.conf edit.
         self.wg_service = wg_service_state()
+        self.openvpn_service = openvpn_service_state()
         self.window = None
         self.password = None
         self.eap_window = None
@@ -178,6 +192,7 @@ class TrayIcon:
             for wg_dev in wg_devices:
                 connection_state = wg_devices[wg_dev]['state']
                 connection_info = wg_devices[wg_dev]['info']
+                wg_path = wg_devices[wg_dev].get('path', '')
                 if connection_state == "Connected":
                     wg_item = Gtk.MenuItem(_("%s Connected") % connection_info)
                     wg_item.set_sensitive(False)
@@ -192,6 +207,48 @@ class TrayIcon:
                     wiredwg_item = Gtk.MenuItem(_("Enable"))
                     wiredwg_item.connect("activate", self.connect_wg, wg_dev)
                     self.menu.append(wiredwg_item)
+                if wg_path:
+                    config_wg_item = Gtk.ImageMenuItem(_("Configure %s") % wg_dev)
+                    config_wg_item.connect("activate", self.configure_wg_profile, wg_path)
+                    self.menu.append(config_wg_item)
+            self.menu.append(Gtk.SeparatorMenuItem())
+
+        ovpn_info = openvpn_dictionary(self.openvpn_service)
+        if len(ovpn_info['configs']) > 0:
+            ovpn_title = Gtk.MenuItem()
+            ovpn_title.set_label(_("OpenVPN"))
+            ovpn_title.set_sensitive(False)
+            self.menu.append(ovpn_title)
+            self.menu.append(Gtk.SeparatorMenuItem())
+            ovpn_devices = ovpn_info['configs']
+            for ovpn_dev, ovpn_meta in ovpn_devices.items():
+                connection_state = ovpn_meta['state']
+                connection_info = ovpn_meta['info']
+                ovpn_path = ovpn_meta.get('path', '')
+                if connection_state == "Connected":
+                    ovpn_item = Gtk.MenuItem(_("%s Connected") % connection_info)
+                    ovpn_item.set_sensitive(False)
+                    self.menu.append(ovpn_item)
+                    disconnect_ovpn_item = Gtk.ImageMenuItem(_("Disable %s") % ovpn_dev)
+                    disconnect_ovpn_item.connect(
+                        "activate", self.disconnect_openvpn, ovpn_dev
+                    )
+                    self.menu.append(disconnect_ovpn_item)
+                else:
+                    notonline_ovpn = Gtk.MenuItem(_("%s Disconnected") % connection_info)
+                    notonline_ovpn.set_sensitive(False)
+                    self.menu.append(notonline_ovpn)
+                    enable_ovpn_item = Gtk.MenuItem(_("Enable"))
+                    enable_ovpn_item.connect(
+                        "activate", self.connect_openvpn, ovpn_dev, ovpn_meta
+                    )
+                    self.menu.append(enable_ovpn_item)
+                if ovpn_path:
+                    config_ovpn_item = Gtk.ImageMenuItem(_("Configure %s") % ovpn_dev)
+                    config_ovpn_item.connect(
+                        "activate", self.configure_openvpn_profile, ovpn_path
+                    )
+                    self.menu.append(config_ovpn_item)
             self.menu.append(Gtk.SeparatorMenuItem())
 
         e_title = Gtk.MenuItem()
@@ -284,6 +341,10 @@ class TrayIcon:
                 self.menu.append(Gtk.SeparatorMenuItem())
                 wifinum += 1
 
+        import_vpn_item = Gtk.MenuItem(_("Import VPN Configuration..."))
+        import_vpn_item.connect("activate", self.import_vpn_configuration)
+        self.menu.append(import_vpn_item)
+        self.menu.append(Gtk.SeparatorMenuItem())
         open_item = Gtk.MenuItem(_("Restart Networking"))
         open_item.connect("activate", restart_all_nics)
         self.menu.append(open_item)
@@ -547,6 +608,72 @@ class TrayIcon:
         """
         disable_wg(wg_device)
         self.update_info()
+
+    def connect_openvpn(self, _widget, ovpn_dev, ovpn_meta):
+        """Bring an OpenVPN tunnel up, prompting for credentials if required."""
+        if ovpn_meta.get('needs_auth'):
+            dialog = OpenVPNAuthDialog(
+                ovpn_dev,
+                ovpn_meta.get('info', ovpn_dev),
+                initial_user=ovpn_meta.get('username', ''),
+                on_submit=self._do_connect_openvpn,
+            )
+            dialog.show_all()
+            return
+        self._do_connect_openvpn(ovpn_dev, None, None)
+
+    def _do_connect_openvpn(self, ovpn_dev, username, password):
+        """Start OpenVPN and report any startup failure."""
+        ok, err_msg = enable_openvpn(ovpn_dev, username=username, password=password)
+        self.update_info()
+        if not ok:
+            dialog = Gtk.MessageDialog(
+                None, 0, Gtk.MessageType.WARNING, Gtk.ButtonsType.CLOSE,
+                _("Could not connect to %s") % ovpn_dev
+            )
+            dialog.format_secondary_text(err_msg)
+            dialog.run()
+            dialog.destroy()
+
+    def disconnect_openvpn(self, _widget, ovpn_dev):
+        """Take an OpenVPN tunnel down."""
+        disable_openvpn(ovpn_dev)
+        self.update_info()
+
+    def import_vpn_configuration(self, _widget):
+        """Open the VPN file importer dialog from the tray menu."""
+        import_vpn_file_dialog(
+            parent=None,
+            on_saved=lambda _pid, _vtype: self.update_info(),
+        )
+
+    def configure_wg_profile(self, _widget, wg_path):
+        """Open the VPN editor for an existing WireGuard configuration."""
+        try:
+            cfg = parse_wireguard_config(wg_path)
+        except ValueError:
+            return
+        editor = VPNConnectionDialog(
+            cfg,
+            parent=None,
+            on_saved=lambda _pid, _vtype: self.update_info(),
+        )
+        editor.show_all()
+        editor.refresh_dynamic_visibility()
+
+    def configure_openvpn_profile(self, _widget, ovpn_path):
+        """Open the VPN editor for an existing OpenVPN configuration."""
+        try:
+            cfg = parse_openvpn_config(ovpn_path)
+        except ValueError:
+            return
+        editor = VPNConnectionDialog(
+            cfg,
+            parent=None,
+            on_saved=lambda _pid, _vtype: self.update_info(),
+        )
+        editor.show_all()
+        editor.refresh_dynamic_visibility()
 
     def signal_icon_name(self, signal, suffix):
         """Pick the signal icon name for a strength percentage.

@@ -32,6 +32,27 @@ from NetworkMgr.net_api import (
 )
 from NetworkMgr.query import get_interface_settings, get_interface_settings_ipv6
 from NetworkMgr import validate
+from NetworkMgr.openvpn_api import (
+    default_openvpn_config,
+    delete_openvpn_config,
+    disable_openvpn,
+    enable_openvpn,
+    openvpn_dictionary,
+    parse_openvpn_config,
+)
+from NetworkMgr.wg_api import (
+    delete_wireguard_config,
+    disable_wg,
+    enable_wg,
+    parse_wireguard_config,
+    wg_dictionary,
+    wg_service_state,
+)
+from NetworkMgr.vpn_dialog import (
+    OpenVPNAuthDialog,
+    VPNConnectionDialog,
+    import_vpn_file_dialog,
+)
 
 # What set_rc_conf lets into rc.conf: the characters an interface name,
 # address, netmask or keyword such as "WPA DHCP" can hold. No quote, $,
@@ -476,6 +497,12 @@ class NetCardConfigWindow(Gtk.Window):
         # Apply Tab 2 content and formatting to the notebook
         nb.append_page(grid_one6)
         nb.set_tab_label_text(grid_one6, "IPv6 Settings")
+
+        # Apply Tab 3 (VPN Settings) to the notebook
+        vpn_tab = self._build_vpn_tab()
+        nb.append_page(vpn_tab)
+        nb.set_tab_label_text(vpn_tab, "VPN Settings")
+
         # Put all the widgets together into one window
         main_box = Gtk.Box(orientation=1, spacing=0)
         main_box.pack_start(nb, True, True, 0)
@@ -813,6 +840,202 @@ class NetCardConfigWindow(Gtk.Window):
                 or not RC_CONF_SAFE_REGEX.fullmatch(value):
             raise ValueError(f'Refusing to write {name!r}={value!r} to rc.conf.')
         run(['sysrc', f'{name}={value}'], check=False)
+
+    def _build_vpn_tab(self):
+        """Build the VPN Settings tab listing OpenVPN and WireGuard profiles."""
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        vbox.set_border_width(12)
+
+        # Columns: display_name, type_label, gateway, status,
+        #          profile_id, vpn_type, config_path, needs_auth, username
+        self.vpn_store = Gtk.ListStore(
+            str, str, str, str, str, str, str, bool, str
+        )
+        self.vpn_tree = Gtk.TreeView(model=self.vpn_store)
+        self.vpn_tree.set_headers_visible(True)
+
+        columns = [
+            ("Name", 0, 150),
+            ("Type", 1, 90),
+            ("Gateway", 2, 160),
+            ("Status", 3, 100),
+        ]
+        for title, col_idx, min_width in columns:
+            renderer = Gtk.CellRendererText()
+            column = Gtk.TreeViewColumn(title, renderer, text=col_idx)
+            column.set_min_width(min_width)
+            column.set_resizable(True)
+            self.vpn_tree.append_column(column)
+
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_vexpand(True)
+        scroll.set_hexpand(True)
+        scroll.set_shadow_type(Gtk.ShadowType.IN)
+        scroll.add(self.vpn_tree)
+        vbox.pack_start(scroll, True, True, 0)
+
+        btn_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        vbox.pack_start(btn_bar, False, False, 0)
+
+        import_btn = Gtk.Button(label="Import VPN...")
+        import_btn.connect("clicked", self.on_import_vpn_clicked)
+        btn_bar.pack_start(import_btn, False, False, 0)
+
+        new_btn = Gtk.Button(label="New OpenVPN")
+        new_btn.connect("clicked", self.on_new_vpn_clicked)
+        btn_bar.pack_start(new_btn, False, False, 0)
+
+        edit_btn = Gtk.Button(label="Edit")
+        edit_btn.connect("clicked", self.on_edit_vpn_clicked)
+        btn_bar.pack_start(edit_btn, False, False, 0)
+
+        toggle_btn = Gtk.Button(label="Connect / Disconnect")
+        toggle_btn.connect("clicked", self.on_toggle_vpn_clicked)
+        btn_bar.pack_start(toggle_btn, False, False, 0)
+
+        delete_btn = Gtk.Button(label="Delete")
+        delete_btn.connect("clicked", self.on_delete_vpn_clicked)
+        btn_bar.pack_end(delete_btn, False, False, 0)
+
+        self.refresh_vpn_list()
+        return vbox
+
+    def refresh_vpn_list(self):
+        """Reload all OpenVPN and WireGuard profiles into the VPN tab store."""
+        if not hasattr(self, 'vpn_store'):
+            return
+        self.vpn_store.clear()
+
+        ovpn_info = openvpn_dictionary()
+        for pid, meta in ovpn_info.get('configs', {}).items():
+            self.vpn_store.append([
+                meta.get('info', pid),
+                'OpenVPN',
+                meta.get('gateway', ''),
+                meta.get('state', 'Disconnected'),
+                pid,
+                'openvpn',
+                meta.get('path', ''),
+                bool(meta.get('needs_auth', False)),
+                meta.get('username', ''),
+            ])
+
+        wg_info = wg_dictionary(wg_service_state())
+        for pid, meta in wg_info.get('configs', {}).items():
+            self.vpn_store.append([
+                meta.get('info', pid),
+                'WireGuard',
+                meta.get('gateway', ''),
+                meta.get('state', 'Disconnected'),
+                pid,
+                'wireguard',
+                meta.get('path', ''),
+                False,
+                '',
+            ])
+
+    def _selected_vpn_row(self):
+        """Return the currently selected row from the VPN TreeView, or None."""
+        selection = self.vpn_tree.get_selection()
+        model, tree_iter = selection.get_selected()
+        if tree_iter is None:
+            return None
+        return {
+            'name': model[tree_iter][0],
+            'type_label': model[tree_iter][1],
+            'gateway': model[tree_iter][2],
+            'state': model[tree_iter][3],
+            'profile_id': model[tree_iter][4],
+            'vpn_type': model[tree_iter][5],
+            'path': model[tree_iter][6],
+            'needs_auth': model[tree_iter][7],
+            'username': model[tree_iter][8],
+        }
+
+    def on_import_vpn_clicked(self, _widget):
+        """Import an OpenVPN (.ovpn/.conf) or WireGuard (.conf) file."""
+        import_vpn_file_dialog(
+            parent=self,
+            on_saved=lambda _pid, _vtype: self.refresh_vpn_list(),
+        )
+
+    def on_new_vpn_clicked(self, _widget):
+        """Open the VPN editor to create a new OpenVPN profile from scratch."""
+        editor = VPNConnectionDialog(
+            default_openvpn_config('New VPN'),
+            parent=self,
+            on_saved=lambda _pid, _vtype: self.refresh_vpn_list(),
+        )
+        editor.show_all()
+        editor.refresh_dynamic_visibility()
+
+    def on_edit_vpn_clicked(self, _widget):
+        """Open the VPN editor for the selected VPN profile."""
+        sel = self._selected_vpn_row()
+        if not sel or not sel['path']:
+            return
+        try:
+            if sel['vpn_type'] == 'wireguard':
+                cfg = parse_wireguard_config(sel['path'])
+            else:
+                cfg = parse_openvpn_config(sel['path'])
+        except ValueError as err:
+            self.show_invalid_entry(str(err))
+            return
+        editor = VPNConnectionDialog(
+            cfg,
+            parent=self,
+            on_saved=lambda _pid, _vtype: self.refresh_vpn_list(),
+        )
+        editor.show_all()
+        editor.refresh_dynamic_visibility()
+
+    def on_toggle_vpn_clicked(self, _widget):
+        """Connect or disconnect the selected VPN profile."""
+        sel = self._selected_vpn_row()
+        if not sel:
+            return
+        pid = sel['profile_id']
+        if sel['vpn_type'] == 'wireguard':
+            if sel['state'] == 'Connected':
+                disable_wg(pid)
+            else:
+                enable_wg(pid)
+            self.refresh_vpn_list()
+        else:
+            if sel['state'] == 'Connected':
+                disable_openvpn(pid)
+                self.refresh_vpn_list()
+            elif sel['needs_auth']:
+                dialog = OpenVPNAuthDialog(
+                    pid,
+                    sel['name'],
+                    initial_user=sel['username'],
+                    on_submit=self._connect_openvpn_from_tab,
+                )
+                dialog.set_transient_for(self)
+                dialog.show_all()
+            else:
+                self._connect_openvpn_from_tab(pid, None, None)
+
+    def _connect_openvpn_from_tab(self, pid, username, password):
+        """Start OpenVPN from the configuration tab and report errors."""
+        ok, err_msg = enable_openvpn(pid, username=username, password=password)
+        self.refresh_vpn_list()
+        if not ok:
+            self.show_invalid_entry(err_msg)
+
+    def on_delete_vpn_clicked(self, _widget):
+        """Delete the selected VPN profile."""
+        sel = self._selected_vpn_row()
+        if not sel:
+            return
+        pid = sel['profile_id']
+        if sel['vpn_type'] == 'wireguard':
+            delete_wireguard_config(pid)
+        else:
+            delete_openvpn_config(pid)
+        self.refresh_vpn_list()
 
 
 def open_configuration(default_int):
