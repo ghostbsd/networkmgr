@@ -13,7 +13,8 @@ import threading
 import _thread
 import gi
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, GObject, GLib, Pango
+gi.require_version('GdkPixbuf', '2.0')
+from gi.repository import Gtk, Gdk, GdkPixbuf, GObject, GLib, Pango
 from time import sleep
 from NetworkMgr.net_api import (
     stop_network_card,
@@ -76,6 +77,81 @@ GObject.threads_init()
 # Attempts on one network before its saved block is removed. One failure is
 # not proof of a wrong password (issue #81); three is enough either way.
 MAX_ATTEMPTS = 3
+
+# Crisp inline SVG icons for the single-row connection items:
+#   <Nome>   <botao1 (Connect / Red X Disconnect)><botao2 (Gear Configure)>
+_STATUS_CONNECTED_SVG = b"""<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10">
+  <circle cx="5" cy="5" r="4" fill="#2ecc71"/>
+</svg>"""
+
+_STATUS_DISCONNECTED_SVG = b"""<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10">
+  <circle cx="5" cy="5" r="3.5" fill="none" stroke="#8b949e" stroke-width="1.5"/>
+</svg>"""
+
+_CONNECT_ICON_SVG = b"""<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <circle cx="8" cy="8" r="7" fill="#2ecc71" fill-opacity="0.18" stroke="#2ecc71" stroke-width="1.3"/>
+  <path d="M6.4 4.8 L11.4 8 L6.4 11.2 Z" fill="#2ecc71"/>
+</svg>"""
+
+_DISCONNECT_RED_X_SVG = b"""<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <circle cx="8" cy="8" r="7" fill="#e74c3c" fill-opacity="0.22" stroke="#ff5252" stroke-width="1.3"/>
+  <path d="M5.3 5.3 L10.7 10.7 M10.7 5.3 L5.3 10.7" stroke="#ff5252" stroke-width="2.0" stroke-linecap="round"/>
+</svg>"""
+
+_CONFIGURE_GEAR_SVG = b"""<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path fill="#c9d1d9" d="M6.9 1.5h2.2l.35 1.72c.42.14.81.37 1.15.65l1.67-.58 1.1 1.9-1.32 1.14c.06.22.1.44.1.67s-.04.45-.1.67l1.32 1.14-1.1 1.9-1.67-.58c-.34.28-.73.51-1.15.65L9.1 14.5H6.9l-.35-1.72a4.6 4.6 0 0 1-1.15-.65l-1.67.58-1.1-1.9 1.32-1.14A3.8 3.8 0 0 1 3.85 8c0-.23.04-.45.1-.67L2.63 6.19l1.1-1.9 1.67.58c.34-.28.73-.51 1.15-.65L6.9 1.5zm1.1 4.2A2.3 2.3 0 1 0 8 10.3 2.3 2.3 0 0 0 8 5.7z"/>
+</svg>"""
+
+_MENU_ROW_CSS_LOADED = False
+
+
+def _ensure_menu_row_css():
+    """Install compact icon-button styling for single-row menu items."""
+    global _MENU_ROW_CSS_LOADED
+    if _MENU_ROW_CSS_LOADED:
+        return
+    _MENU_ROW_CSS_LOADED = True
+    try:
+        screen = Gdk.Screen.get_default()
+        if screen is None:
+            return
+        provider = Gtk.CssProvider()
+        provider.load_from_data(
+            b"""
+            .nm-row-action-btn {
+                min-width: 22px;
+                min-height: 22px;
+                padding: 2px 4px;
+                margin: 0px;
+                border-radius: 4px;
+                border: 1px solid rgba(255, 255, 255, 0.14);
+                background: rgba(255, 255, 255, 0.05);
+            }
+            .nm-row-action-btn:hover {
+                background: rgba(255, 255, 255, 0.16);
+                border-color: rgba(255, 255, 255, 0.28);
+            }
+            """
+        )
+        Gtk.StyleContext.add_provider_for_screen(
+            screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+    except Exception:
+        pass
+
+
+def _svg_icon(svg_bytes, size=16):
+    """Render an inline SVG byte string into a Gtk.Image of the given pixel size."""
+    try:
+        loader = GdkPixbuf.PixbufLoader.new_with_type("svg")
+        loader.set_size(size, size)
+        loader.write(svg_bytes)
+        loader.close()
+        return Gtk.Image.new_from_pixbuf(loader.get_pixbuf())
+    except Exception:
+        return Gtk.Image.new_from_icon_name(
+            "preferences-system-symbolic", Gtk.IconSize.MENU
+        )
 
 
 
@@ -167,6 +243,97 @@ class TrayIcon:
         position = Gtk.StatusIcon.position_menu
         self.build_menu().popup(None, None, position, status_icon, button, time)
 
+    def _connection_menu_row(self, name, is_connected, on_toggle, on_configure=None):
+        """Build a compact single-row menu item: <Nome>   <botao1><botao2>.
+
+        - <Nome>: Connection name with a subtle status indicator dot.
+        - <botao1>: Connect icon when disconnected, or Red X icon when connected.
+        - <botao2>: Gear icon to open the connection's configuration window.
+        """
+        _ensure_menu_row_css()
+        menu_item = Gtk.MenuItem()
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        row.set_margin_top(2)
+        row.set_margin_bottom(2)
+
+        status_dot = _svg_icon(
+            _STATUS_CONNECTED_SVG if is_connected else _STATUS_DISCONNECTED_SVG,
+            size=10,
+        )
+        row.pack_start(status_dot, False, False, 0)
+
+        name_label = Gtk.Label(label=name)
+        name_label.set_xalign(0.0)
+        name_label.set_hexpand(True)
+        name_label.set_margin_end(16)
+        if is_connected:
+            attrs = Pango.AttrList()
+            attrs.insert(Pango.attr_weight_new(Pango.Weight.SEMIBOLD))
+            name_label.set_attributes(attrs)
+        row.pack_start(name_label, True, True, 0)
+
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+
+        btn1 = Gtk.Button()
+        btn1.set_relief(Gtk.ReliefStyle.NONE)
+        btn1.set_can_focus(False)
+        btn1.get_style_context().add_class("nm-row-action-btn")
+        btn1.set_image(
+            _svg_icon(
+                _DISCONNECT_RED_X_SVG if is_connected else _CONNECT_ICON_SVG,
+                size=16,
+            )
+        )
+        btn1.set_always_show_image(True)
+        btn1.set_tooltip_text(
+            _("Disconnect %s") % name if is_connected else _("Connect %s") % name
+        )
+        btn_box.pack_start(btn1, False, False, 0)
+
+        btn2 = None
+        if on_configure is not None:
+            btn2 = Gtk.Button()
+            btn2.set_relief(Gtk.ReliefStyle.NONE)
+            btn2.set_can_focus(False)
+            btn2.get_style_context().add_class("nm-row-action-btn")
+            btn2.set_image(_svg_icon(_CONFIGURE_GEAR_SVG, size=16))
+            btn2.set_always_show_image(True)
+            btn2.set_tooltip_text(_("Configure %s") % name)
+            btn_box.pack_start(btn2, False, False, 0)
+
+        row.pack_end(btn_box, False, False, 0)
+        menu_item.add(row)
+
+        action_fired = {"done": False}
+
+        def _invoke(callback):
+            if action_fired["done"] or callback is None:
+                return
+            action_fired["done"] = True
+            if self.menu is not None:
+                self.menu.popdown()
+            GLib.idle_add(lambda: (callback(), False)[1])
+
+        btn1.connect("clicked", lambda _b: _invoke(on_toggle))
+        if btn2 is not None:
+            btn2.connect("clicked", lambda _b: _invoke(on_configure))
+
+        def _on_button_release(_item, event):
+            # Gtk.Menu holds a pointer grab while open, so button-release-event
+            # is delivered to the Gtk.MenuItem in the menu window's coordinate
+            # space. Check if the click landed on <botao2> (gear) or <botao1>.
+            if btn2 is not None:
+                alloc2 = btn2.get_allocation()
+                if alloc2.width > 0 and event.x >= alloc2.x - 2:
+                    _invoke(on_configure)
+                    return True
+            _invoke(on_toggle)
+            return True
+
+        menu_item.connect("button-release-event", _on_button_release)
+        menu_item.connect("activate", lambda _item: _invoke(on_toggle))
+        return menu_item
+
     def build_menu(self):
         """Build the whole tray menu.
 
@@ -196,24 +363,22 @@ class TrayIcon:
                 connection_state = wg_devices[wg_dev]['state']
                 connection_info = wg_devices[wg_dev]['info']
                 wg_path = wg_devices[wg_dev].get('path', '')
-                if connection_state == "Connected":
-                    wg_item = Gtk.MenuItem(_("%s Connected") % connection_info)
-                    wg_item.set_sensitive(False)
-                    self.menu.append(wg_item)
-                    disconnectwg_item = Gtk.ImageMenuItem(_("Disable %s") % connection_info)
-                    disconnectwg_item.connect("activate", self.disconnect_wg, wg_dev)
-                    self.menu.append(disconnectwg_item)
-                else:
-                    notonlinewg = Gtk.MenuItem(_("%s Disconnected") % connection_info)
-                    notonlinewg.set_sensitive(False)
-                    self.menu.append(notonlinewg)
-                    wiredwg_item = Gtk.MenuItem(_("Enable"))
-                    wiredwg_item.connect("activate", self.connect_wg, wg_dev)
-                    self.menu.append(wiredwg_item)
-                if wg_path:
-                    config_wg_item = Gtk.ImageMenuItem(_("Configure %s") % connection_info)
-                    config_wg_item.connect("activate", self.configure_wg_profile, wg_path)
-                    self.menu.append(config_wg_item)
+                is_connected = connection_state == "Connected"
+                toggle_cb = (
+                    (lambda dev=wg_dev: self.disconnect_wg(None, dev))
+                    if is_connected
+                    else (lambda dev=wg_dev: self.connect_wg(None, dev))
+                )
+                config_cb = (
+                    (lambda path=wg_path: self.configure_wg_profile(None, path))
+                    if wg_path
+                    else None
+                )
+                self.menu.append(
+                    self._connection_menu_row(
+                        connection_info, is_connected, toggle_cb, config_cb
+                    )
+                )
             self.menu.append(Gtk.SeparatorMenuItem())
 
         ovpn_info = openvpn_dictionary(self.openvpn_service)
@@ -228,30 +393,26 @@ class TrayIcon:
                 connection_state = ovpn_meta['state']
                 connection_info = ovpn_meta['info']
                 ovpn_path = ovpn_meta.get('path', '')
-                if connection_state == "Connected":
-                    ovpn_item = Gtk.MenuItem(_("%s Connected") % connection_info)
-                    ovpn_item.set_sensitive(False)
-                    self.menu.append(ovpn_item)
-                    disconnect_ovpn_item = Gtk.ImageMenuItem(_("Disable %s") % connection_info)
-                    disconnect_ovpn_item.connect(
-                        "activate", self.disconnect_openvpn, ovpn_dev
+                is_connected = connection_state == "Connected"
+                toggle_cb = (
+                    (lambda dev=ovpn_dev: self.disconnect_openvpn(None, dev))
+                    if is_connected
+                    else (
+                        lambda dev=ovpn_dev, meta=ovpn_meta: self.connect_openvpn(
+                            None, dev, meta
+                        )
                     )
-                    self.menu.append(disconnect_ovpn_item)
-                else:
-                    notonline_ovpn = Gtk.MenuItem(_("%s Disconnected") % connection_info)
-                    notonline_ovpn.set_sensitive(False)
-                    self.menu.append(notonline_ovpn)
-                    enable_ovpn_item = Gtk.MenuItem(_("Enable"))
-                    enable_ovpn_item.connect(
-                        "activate", self.connect_openvpn, ovpn_dev, ovpn_meta
+                )
+                config_cb = (
+                    (lambda path=ovpn_path: self.configure_openvpn_profile(None, path))
+                    if ovpn_path
+                    else None
+                )
+                self.menu.append(
+                    self._connection_menu_row(
+                        connection_info, is_connected, toggle_cb, config_cb
                     )
-                    self.menu.append(enable_ovpn_item)
-                if ovpn_path:
-                    config_ovpn_item = Gtk.ImageMenuItem(_("Configure %s") % connection_info)
-                    config_ovpn_item.connect(
-                        "activate", self.configure_openvpn_profile, ovpn_path
-                    )
-                    self.menu.append(config_ovpn_item)
+                )
             self.menu.append(Gtk.SeparatorMenuItem())
 
         e_title = Gtk.MenuItem()
@@ -265,35 +426,22 @@ class TrayIcon:
         for netcard in cards:
             connection_state = cards[netcard]['state']["connection"]
             if "wlan" not in netcard:
-                if connection_state == "Disabled":
-                    wd_title = Gtk.MenuItem(_("Wired %s Disabled") % cardnum)
-                    wd_title.set_sensitive(False)
-                    self.menu.append(wd_title)
-                    wired_item = Gtk.MenuItem(_("Enable"))
-                    wired_item.connect("activate", self.enable_card, netcard)
-                    self.menu.append(wired_item)
-                elif connection_state == "Connected":
-                    wired_item = Gtk.MenuItem(_("Wired %s Connected") % cardnum)
-                    wired_item.set_sensitive(False)
-                    self.menu.append(wired_item)
-                    disconnect_item = Gtk.ImageMenuItem(_("Disable %s") % netcard)
-                    disconnect_item.connect("activate", self.disable_card,
-                                            netcard)
-                    self.menu.append(disconnect_item)
-                    configure_item = Gtk.ImageMenuItem(_("Configure %s") % netcard)
-                    configure_item.connect("activate", self.configuration_window_open, netcard)
-                    self.menu.append(configure_item)
-                elif connection_state == "Disconnected":
-                    notonline = Gtk.MenuItem(_("Wired %s Disconnected") % cardnum)
-                    notonline.set_sensitive(False)
-                    self.menu.append(notonline)
-                    disconnect_item = Gtk.ImageMenuItem(_("Disable %s") % netcard)
-                    disconnect_item.connect("activate", self.disable_card,
-                                            netcard)
-                    self.menu.append(disconnect_item)
-                    configure_item = Gtk.ImageMenuItem(_("Configure %s") % netcard)
-                    configure_item.connect("activate", self.configuration_window_open, netcard)
-                    self.menu.append(configure_item)
+                wired_label = _("Wired %s (%s)") % (cardnum, netcard)
+                if connection_state in ("Connected", "Disabled", "Disconnected"):
+                    is_connected = connection_state == "Connected"
+                    toggle_cb = (
+                        (lambda nc=netcard: self.disable_card(None, nc))
+                        if is_connected
+                        else (lambda nc=netcard: self.enable_card(None, nc))
+                    )
+                    config_cb = (
+                        lambda nc=netcard: self.configuration_window_open(None, nc)
+                    )
+                    self.menu.append(
+                        self._connection_menu_row(
+                            wired_label, is_connected, toggle_cb, config_cb
+                        )
+                    )
                 else:
                     disconnected = Gtk.MenuItem(_("Wired %s Unplug") % cardnum)
                     disconnected.set_sensitive(False)
