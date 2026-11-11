@@ -42,3 +42,27 @@ if os.path.exists(f'/var/run/link-down-{nic}'):
     os.remove(f'/var/run/link-down-{nic}')
 else:
     run(['service', 'dhclient', 'quietstart', nic], check=False)
+
+rc_nic = re.sub(r'[^A-Za-z0-9_]', '_', nic)
+routes_file = f'/usr/local/etc/networkmgr/routes/{rc_nic}.routes'
+if os.path.isfile(routes_file):
+    try:
+        with open(routes_file, 'r', encoding='utf-8', errors='replace') as fh:
+            for line in fh:
+                sline = line.strip()
+                if not sline or sline.startswith('#') or '=' not in sline:
+                    continue
+                k, v = [p.strip() for p in sline.split('=', 1)]
+                parts = [p.strip() for p in v.split(',')]
+                if k == 'ipv4_route' and len(parts) >= 3:
+                    run(
+                        ['route', '-n', 'add', '-net', parts[0], parts[2], parts[1]],
+                        check=False,
+                    )
+                elif k == 'ipv6_route' and len(parts) >= 3:
+                    run(
+                        ['route', '-n', 'add', '-inet6', f'{parts[0]}/{parts[1]}', parts[2]],
+                        check=False,
+                    )
+    except OSError:
+        pass
