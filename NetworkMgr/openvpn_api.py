@@ -1328,11 +1328,125 @@ def _profile_pid(profile_id):
     return None
 
 
+def _clean_openvpn_log_line(line):
+    """Strip timestamp and bracketed prefixes from an OpenVPN log line."""
+    return re.sub(
+        r'^(?:\w{3}\s+\w{3}\s+\d+\s+\d+:\d+:\d+\s+\d{4}|\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})(?:\s+\[[^\]]+\])?\s*',
+        '',
+        line.strip(),
+    ).strip()
+
+
+def _extract_openvpn_error_from_text(content):
+    """Detect known fatal/restart errors in OpenVPN log text."""
+    if not content:
+        return ''
+    if 'AUTH_FAILED' in content or 'auth-failure' in content:
+        return 'Authentication failed: invalid username, password, or certificates.'
+    if 'TLS Error: TLS handshake failed' in content or 'TLS key negotiation failed' in content:
+        return 'TLS handshake failed: VPN server unreachable or certificates invalid.'
+    if 'Cannot allocate TUN/TAP' in content or 'Cannot open TUN/TAP' in content:
+        return 'Failed to allocate TUN/TAP device. Verify system permissions or tun module.'
+    if 'VERIFY ERROR' in content:
+        return 'TLS certificate verification failed.'
+    match = re.search(r'RESOLVE:\s*Cannot resolve host address:\s*(\S+)', content)
+    if match:
+        return f'Could not resolve VPN server address: {match.group(1)}'
+    match = re.search(r'(Options error:[^\n]+)', content)
+    if match:
+        return _clean_openvpn_log_line(match.group(1))
+    return ''
+
+
+def _extract_openvpn_log_error(log_file):
+    """Read the most descriptive error message from OpenVPN\'s log file."""
+    if not os.path.isfile(log_file):
+        return ''
+    try:
+        with open(log_file, 'r', encoding='utf-8', errors='replace') as handle:
+            lines = handle.readlines()
+    except OSError:
+        return ''
+
+    content = ''.join(lines)
+    known = _extract_openvpn_error_from_text(content)
+    if known:
+        return known
+
+    # Look backwards for lines reporting errors
+    for raw in reversed(lines):
+        cleaned = _clean_openvpn_log_line(raw)
+        if not cleaned:
+            continue
+        lower = cleaned.lower()
+        if any(tok in lower for tok in ('error', 'fatal', 'failed', 'cannot', 'sigterm', 'exit')):
+            if not lower.startswith('note:') and 'suppress' not in lower:
+                return cleaned
+
+    # Fallback to last non-empty line
+    for raw in reversed(lines):
+        cleaned = _clean_openvpn_log_line(raw)
+        if cleaned:
+            return cleaned
+    return ''
+
+
+def _tun_device_has_address(dev_name):
+    """Check if the given TUN/TAP interface exists and has an IPv4/IPv6 address assigned."""
+    if not dev_name or not re.match(r'^[a-zA-Z0-9_.-]+$', dev_name):
+        return False
+    try:
+        res = run(['ifconfig', dev_name], stdout=PIPE, stderr=DEVNULL, text=True, check=False)
+        if res.returncode == 0 and ('inet ' in res.stdout or 'inet6 ' in res.stdout):
+            return True
+    except OSError:
+        pass
+    try:
+        res = run(['ip', '-o', 'addr', 'show', 'dev', dev_name], stdout=PIPE, stderr=DEVNULL, text=True, check=False)
+        if res.returncode == 0 and ('inet ' in res.stdout or 'inet6 ' in res.stdout):
+            return True
+    except OSError:
+        pass
+    return False
+
+
 def openvpn_status(profile_id):
-    """Return 'Connected' or 'Disconnected' for an OpenVPN profile."""
-    if _profile_pid(profile_id) is not None:
+    """Return 'Connected', 'Connecting', or 'Disconnected' for an OpenVPN profile."""
+    pid = _profile_pid(profile_id)
+    if pid is None:
+        return 'Disconnected'
+
+    log_file = f'{OPENVPN_PID_DIR}/openvpn_{profile_id}.log'
+    if not os.path.isfile(log_file):
         return 'Connected'
-    return 'Disconnected'
+
+    try:
+        with open(log_file, 'r', encoding='utf-8', errors='replace') as handle:
+            content = handle.read()
+    except OSError:
+        return 'Connected'
+
+    if 'Initialization Sequence Completed' not in content:
+        return 'Connecting'
+
+    last_init_idx = content.rfind('Initialization Sequence Completed')
+    after_init = content[last_init_idx:]
+    error_markers = (
+        'AUTH_FAILED',
+        'auth-failure',
+        'SIGTERM',
+        'SIGUSR1',
+        'process restarting',
+        'process exiting',
+        'Connection reset',
+        'Connection refused',
+        'Fatal error',
+        'ERROR:',
+    )
+    if any(marker in after_init for marker in error_markers):
+        return 'Connecting'
+
+    return 'Connected'
 
 
 def openvpn_dictionary(service_state=None):
@@ -1417,14 +1531,15 @@ def _ensure_tun_module():
             run(['kldload', 'if_tun'], stderr=DEVNULL, check=False)
 
 
-def enable_openvpn(profile_id, username=None, password=None, key_password=None):
-    """Bring the specified OpenVPN tunnel up.
+def enable_openvpn(profile_id, username=None, password=None, key_password=None, timeout=12):
+    """Bring the specified OpenVPN tunnel up and confirm successful connection.
 
     Args:
         profile_id (str): the profile identifier without extension.
         username (str or None): optional username if prompted at connect time.
         password (str or None): optional password if prompted at connect time.
         key_password (str or None): optional private key passphrase.
+        timeout (int or float): maximum seconds to wait for connection.
 
     Returns:
         tuple[bool, str]: (success, error_message).
@@ -1443,7 +1558,7 @@ def enable_openvpn(profile_id, username=None, password=None, key_password=None):
     if not conf_path:
         return False, f'Configuration for "{profile_id}" was not found.'
 
-    if _profile_pid(profile_id) is not None:
+    if openvpn_status(profile_id) == 'Connected':
         return True, ''
 
     _ensure_tun_module()
@@ -1451,6 +1566,14 @@ def enable_openvpn(profile_id, username=None, password=None, key_password=None):
     pid_file = f'{OPENVPN_PID_DIR}/openvpn_{profile_id}.pid'
     status_file = f'{OPENVPN_PID_DIR}/openvpn_{profile_id}.status'
     log_file = f'{OPENVPN_PID_DIR}/openvpn_{profile_id}.log'
+
+    # Remove stale runtime files from prior sessions
+    for stale_path in (pid_file, status_file, log_file):
+        if os.path.exists(stale_path):
+            try:
+                os.remove(stale_path)
+            except OSError:
+                pass
 
     cmd = [
         openvpn_bin,
@@ -1460,6 +1583,7 @@ def enable_openvpn(profile_id, username=None, password=None, key_password=None):
         '--log', log_file,
         '--cd', OPENVPN_CONFIG_PATH,
         '--config', conf_path,
+        '--auth-retry', 'nointeract',
     ]
 
     tmp_dir = (
@@ -1498,27 +1622,55 @@ def enable_openvpn(profile_id, username=None, password=None, key_password=None):
         if result.returncode != 0:
             err = (result.stderr or result.stdout or '').strip()
             if not err and os.path.isfile(log_file):
-                try:
-                    with open(log_file, 'r', encoding='utf-8', errors='replace') as handle:
-                        err = ''.join(handle.readlines()[-10:]).strip()
-                except OSError:
-                    pass
+                err = _extract_openvpn_log_error(log_file)
             return False, err or 'OpenVPN failed to start.'
 
-        # Wait briefly to confirm daemon stays alive
-        for _ in range(10):
-            sleep(0.2)
-            if _profile_pid(profile_id) is not None:
-                return True, ''
+        # Poll the daemon log to verify the tunnel actually finishes initialization
+        step = 0.3
+        max_attempts = max(1, int(timeout / step))
+        connected = False
+        last_error = ''
 
-        err = ''
-        if os.path.isfile(log_file):
-            try:
-                with open(log_file, 'r', encoding='utf-8', errors='replace') as handle:
-                    err = ''.join(handle.readlines()[-10:]).strip()
-            except OSError:
-                pass
-        return False, err or 'OpenVPN exited immediately after start.'
+        for _ in range(max_attempts):
+            sleep(step)
+            pid = _profile_pid(profile_id)
+            if pid is None:
+                last_error = (
+                    _extract_openvpn_log_error(log_file)
+                    or 'OpenVPN process exited unexpectedly.'
+                )
+                break
+
+            log_content = ''
+            if os.path.isfile(log_file):
+                try:
+                    with open(log_file, 'r', encoding='utf-8', errors='replace') as handle:
+                        log_content = handle.read()
+                except OSError:
+                    pass
+
+            if log_content:
+                detected_err = _extract_openvpn_error_from_text(log_content)
+                if detected_err:
+                    last_error = detected_err
+                    disable_openvpn(profile_id)
+                    break
+
+                if 'Initialization Sequence Completed' in log_content:
+                    connected = True
+                    break
+
+        if not connected:
+            if _profile_pid(profile_id) is not None:
+                disable_openvpn(profile_id)
+            if not last_error:
+                last_error = (
+                    _extract_openvpn_log_error(log_file)
+                    or 'Connection timed out waiting for OpenVPN tunnel to initialize.'
+                )
+            return False, last_error
+
+        return True, ''
     finally:
         for tmp_path in temp_files:
             if os.path.exists(tmp_path):

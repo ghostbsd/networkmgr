@@ -2065,7 +2065,7 @@ class NetworkSettingsWindow(Gtk.Window):
 
         ident = item['id']
         display_name = item['name'] or ident
-        is_connected = item['state'].startswith('Connected')
+        is_connected = item['state'].startswith('Connected') or item['state'] == 'Connecting'
 
         if item['category'] == 'nic':
             if item['subtype'] == 'wifi':

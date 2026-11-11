@@ -412,13 +412,14 @@ class TrayIcon:
                 connection_info = ovpn_meta['info']
                 ovpn_path = ovpn_meta.get('path', '')
                 is_connected = connection_state == "Connected"
+                is_active = is_connected or connection_state == "Connecting"
                 toggle_cb = (
                     (
                         lambda dev=ovpn_dev, info=connection_info: self.disconnect_openvpn(
                             None, dev, info
                         )
                     )
-                    if is_connected
+                    if is_active
                     else (
                         lambda dev=ovpn_dev, meta=ovpn_meta: self.connect_openvpn(
                             None, dev, meta
@@ -432,7 +433,7 @@ class TrayIcon:
                 )
                 self.menu.append(
                     self._connection_menu_row(
-                        connection_info, is_connected, toggle_cb, config_cb
+                        connection_info, is_connected, toggle_cb, config_cb, is_enabled=is_active
                     )
                 )
             self.menu.append(Gtk.SeparatorMenuItem())
@@ -449,13 +450,14 @@ class TrayIcon:
                 connection_info = ipsec_meta['info']
                 ipsec_path = ipsec_meta.get('path', '')
                 is_connected = connection_state == "Connected"
+                is_active = is_connected or connection_state == "Connecting"
                 toggle_cb = (
                     (
                         lambda dev=ipsec_dev, info=connection_info: self.disconnect_ipsec(
                             None, dev, info
                         )
                     )
-                    if is_connected
+                    if is_active
                     else (
                         lambda dev=ipsec_dev, meta=ipsec_meta: self.connect_ipsec(
                             None, dev, meta
@@ -469,7 +471,7 @@ class TrayIcon:
                 )
                 self.menu.append(
                     self._connection_menu_row(
-                        connection_info, is_connected, toggle_cb, config_cb
+                        connection_info, is_connected, toggle_cb, config_cb, is_enabled=is_active
                     )
                 )
             self.menu.append(Gtk.SeparatorMenuItem())
