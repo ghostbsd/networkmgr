@@ -1315,16 +1315,17 @@ def _profile_pid(profile_id):
                 pass
 
     # Fallback: check pgrep for an openvpn process using this config
-    pattern = rf'openvpn.*( |/){re.escape(profile_id)}\.(conf|ovpn)( |$)'
-    result = run(
-        ['pgrep', '-f', pattern],
-        stdout=PIPE, stderr=DEVNULL, check=False, text=True
-    )
-    if result.returncode == 0 and result.stdout.strip():
-        try:
-            return int(result.stdout.strip().splitlines()[0])
-        except ValueError:
-            pass
+    if re.fullmatch(r'[A-Za-z0-9_-]+', profile_id):
+        pattern = rf'openvpn.*( |/){profile_id}\.(conf|ovpn)( |$)'
+        result = run(
+            ['pgrep', '-f', pattern],
+            stdout=PIPE, stderr=DEVNULL, check=False, text=True
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            try:
+                return int(result.stdout.strip().splitlines()[0])
+            except ValueError:
+                pass
     return None
 
 
@@ -1558,7 +1559,7 @@ def enable_openvpn(profile_id, username=None, password=None, key_password=None, 
     if not conf_path:
         return False, f'Configuration for "{profile_id}" was not found.'
 
-    if openvpn_status(profile_id) == 'Connected':
+    if _profile_pid(profile_id) is not None:
         return True, ''
 
     _ensure_tun_module()
@@ -1583,7 +1584,6 @@ def enable_openvpn(profile_id, username=None, password=None, key_password=None, 
         '--log', log_file,
         '--cd', OPENVPN_CONFIG_PATH,
         '--config', conf_path,
-        '--auth-retry', 'nointeract',
     ]
 
     tmp_dir = (

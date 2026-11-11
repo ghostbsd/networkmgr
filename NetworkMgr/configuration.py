@@ -11,6 +11,7 @@ checked by NetworkMgr.validate first, since rc.conf runs as shell code.
 
 import os
 import re
+import threading
 from subprocess import DEVNULL, run
 
 import gi
@@ -144,9 +145,10 @@ def _sync_rc_conf_routes(rc_nic, valid_r4, valid_r6):
         )
         cur4 = (res4.stdout or '').strip().split() if res4.returncode == 0 else []
         prefix4 = f'nm_{rc_nic}_'
+        route_pattern4 = re.compile(rf'^nm_{re.escape(rc_nic)}_\d+$')
         kept4 = []
         for tok in cur4:
-            if tok.startswith(prefix4):
+            if route_pattern4.fullmatch(tok):
                 run(['sysrc', '-x', f'route_{tok}'], stdout=DEVNULL, stderr=DEVNULL, check=False)
             else:
                 kept4.append(tok)
@@ -179,9 +181,10 @@ def _sync_rc_conf_routes(rc_nic, valid_r4, valid_r6):
         )
         cur6 = (res6.stdout or '').strip().split() if res6.returncode == 0 else []
         prefix6 = f'nm6_{rc_nic}_'
+        route_pattern6 = re.compile(rf'^nm6_{re.escape(rc_nic)}_\d+$')
         kept6 = []
         for tok in cur6:
-            if tok.startswith(prefix6):
+            if route_pattern6.fullmatch(tok):
                 run(
                     ['sysrc', '-x', f'ipv6_route_{tok}'],
                     stdout=DEVNULL,
@@ -1559,11 +1562,19 @@ class NetCardConfigWindow(Gtk.Window):
                 self._connect_openvpn_from_tab(pid, None, None, display_name)
 
     def _connect_openvpn_from_tab(self, pid, username, password, display_name=None):
-        """Start OpenVPN from the configuration tab and report errors."""
+        """Start OpenVPN from the configuration tab in background and report errors."""
         if not is_openvpn_installed():
             show_openvpn_not_installed_alert(self)
             return
-        ok, err_msg = enable_openvpn(pid, username=username, password=password)
+
+        def _worker():
+            ok, err_msg = enable_openvpn(pid, username=username, password=password)
+            GLib.idle_add(self._on_openvpn_from_tab_done, pid, display_name, ok, err_msg)
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_openvpn_from_tab_done(self, pid, display_name, ok, err_msg):
+        """Handle completion of OpenVPN connection attempt on the GTK main thread."""
         self.refresh_vpn_list()
         if not ok:
             if err_msg == OPENVPN_NOT_INSTALLED_MSG:
@@ -2143,7 +2154,14 @@ class NetworkSettingsWindow(Gtk.Window):
         if not is_openvpn_installed():
             show_openvpn_not_installed_alert(self)
             return
-        ok, err_msg = enable_openvpn(pid, username=username, password=password)
+
+        def _worker():
+            ok, err_msg = enable_openvpn(pid, username=username, password=password)
+            GLib.idle_add(self._on_ovpn_done, pid, display_name, ok, err_msg)
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_ovpn_done(self, pid, display_name, ok, err_msg):
         self._notify_changed()
         if not ok:
             if err_msg == OPENVPN_NOT_INSTALLED_MSG:

@@ -349,7 +349,24 @@ class TrayIcon:
                 return True
             return True
 
+        def _on_activate(_item):
+            # Handle keyboard activation (e.g. Enter / Space key).
+            # If the activation was triggered by a mouse button event, ignore it here
+            # so clicks on the row label do not unintentionally toggle the connection.
+            evt = Gtk.get_current_event()
+            if evt is not None:
+                evt_type = evt.get_event_type()
+                if evt_type in (
+                    Gdk.EventType.BUTTON_RELEASE,
+                    Gdk.EventType.BUTTON_PRESS,
+                    Gdk.EventType._2BUTTON_PRESS,
+                    Gdk.EventType._3BUTTON_PRESS,
+                ):
+                    return
+            _invoke(on_toggle)
+
         menu_item.connect("button-release-event", _on_button_release)
+        menu_item.connect("activate", _on_activate)
         return menu_item
 
     def build_menu(self):
@@ -882,12 +899,20 @@ class TrayIcon:
         self._do_connect_openvpn(ovpn_dev, None, None, display_name)
 
     def _do_connect_openvpn(self, ovpn_dev, username, password, display_name=None):
-        """Start OpenVPN and report any startup failure."""
+        """Start OpenVPN in a background thread and report any startup failure."""
         if not is_openvpn_installed():
             show_openvpn_not_installed_alert()
             return
         label_name = display_name or ovpn_dev
-        ok, err_msg = enable_openvpn(ovpn_dev, username=username, password=password)
+
+        def _worker():
+            ok, err_msg = enable_openvpn(ovpn_dev, username=username, password=password)
+            GLib.idle_add(self._on_openvpn_connected, label_name, ok, err_msg)
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_openvpn_connected(self, label_name, ok, err_msg):
+        """Handle OpenVPN connection result on the GTK main thread."""
         self.update_info()
         if not ok:
             if err_msg == OPENVPN_NOT_INSTALLED_MSG:
