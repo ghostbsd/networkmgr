@@ -1628,6 +1628,10 @@ class VPNConnectionDialog(Gtk.Window):
             else:
                 target_id = sanitize_profile_id(self.cfg['name'])
                 target_path = os.path.join(OPENVPN_CONFIG_PATH, f'{target_id}.conf')
+                if not os.path.exists(target_path):
+                    ovpn_candidate = os.path.join(OPENVPN_CONFIG_PATH, f'{target_id}.ovpn')
+                    if os.path.exists(ovpn_candidate):
+                        target_path = ovpn_candidate
                 if not self._confirm_overwrite_if_exists(target_path, target_id, orig_id):
                     return
                 # Commit any typed but un-added route from the quick-add bar

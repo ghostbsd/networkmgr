@@ -89,7 +89,10 @@ RC_CONF_NAME_REGEX = re.compile(r'[A-Za-z_][A-Za-z0-9_]*')
 INTERFACE_ROUTES_DIR = '/usr/local/etc/networkmgr/routes'
 
 
-def load_interface_routes(nic):
+_PENDING_REMOVED_ROUTES = {}
+
+
+def load_interface_routes(nic, target_dir=INTERFACE_ROUTES_DIR):
     """Load saved IPv4 and IPv6 static routes for `nic`.
 
     Returns:
@@ -100,7 +103,7 @@ def load_interface_routes(nic):
     if not nic:
         return ipv4_routes, ipv6_routes
     rc_nic = validate.rc_conf_interface(nic)
-    path = os.path.join(INTERFACE_ROUTES_DIR, f'{rc_nic}.routes')
+    path = os.path.join(target_dir, f'{rc_nic}.routes')
     if not os.path.isfile(path):
         return ipv4_routes, ipv6_routes
     try:
@@ -128,17 +131,105 @@ def load_interface_routes(nic):
     return ipv4_routes, ipv6_routes
 
 
+def _sync_rc_conf_routes(rc_nic, valid_r4, valid_r6):
+    """Synchronize per-interface static routes with FreeBSD `/etc/rc.conf`."""
+    try:
+        # IPv4 static_routes
+        res4 = run(
+            ['sysrc', '-n', 'static_routes'],
+            stdout=PIPE,
+            stderr=DEVNULL,
+            universal_newlines=True,
+            check=False,
+        )
+        cur4 = (res4.stdout or '').strip().split() if res4.returncode == 0 else []
+        prefix4 = f'nm_{rc_nic}_'
+        kept4 = []
+        for tok in cur4:
+            if tok.startswith(prefix4):
+                run(['sysrc', '-x', f'route_{tok}'], stdout=DEVNULL, stderr=DEVNULL, check=False)
+            else:
+                kept4.append(tok)
+        for idx, (net_ok, mask_ok, gw_ok) in enumerate(valid_r4):
+            rname = f'{prefix4}{idx}'
+            run(
+                ['sysrc', f'route_{rname}=-net {net_ok} {gw_ok} {mask_ok}'],
+                stdout=DEVNULL,
+                stderr=DEVNULL,
+                check=False,
+            )
+            kept4.append(rname)
+        if kept4:
+            run(
+                ['sysrc', f'static_routes={" ".join(kept4)}'],
+                stdout=DEVNULL,
+                stderr=DEVNULL,
+                check=False,
+            )
+        elif cur4:
+            run(['sysrc', '-x', 'static_routes'], stdout=DEVNULL, stderr=DEVNULL, check=False)
+
+        # IPv6 ipv6_static_routes
+        res6 = run(
+            ['sysrc', '-n', 'ipv6_static_routes'],
+            stdout=PIPE,
+            stderr=DEVNULL,
+            universal_newlines=True,
+            check=False,
+        )
+        cur6 = (res6.stdout or '').strip().split() if res6.returncode == 0 else []
+        prefix6 = f'nm6_{rc_nic}_'
+        kept6 = []
+        for tok in cur6:
+            if tok.startswith(prefix6):
+                run(
+                    ['sysrc', '-x', f'ipv6_route_{tok}'],
+                    stdout=DEVNULL,
+                    stderr=DEVNULL,
+                    check=False,
+                )
+            else:
+                kept6.append(tok)
+        for idx, (net6_ok, plen_ok, gw6_ok) in enumerate(valid_r6):
+            rname6 = f'{prefix6}{idx}'
+            run(
+                ['sysrc', f'ipv6_route_{rname6}={net6_ok}/{plen_ok} {gw6_ok}'],
+                stdout=DEVNULL,
+                stderr=DEVNULL,
+                check=False,
+            )
+            kept6.append(rname6)
+        if kept6:
+            run(
+                ['sysrc', f'ipv6_static_routes={" ".join(kept6)}'],
+                stdout=DEVNULL,
+                stderr=DEVNULL,
+                check=False,
+            )
+        elif cur6:
+            run(
+                ['sysrc', '-x', 'ipv6_static_routes'],
+                stdout=DEVNULL,
+                stderr=DEVNULL,
+                check=False,
+            )
+    except OSError:
+        pass
+
+
 def save_interface_routes(nic, ipv4_routes, ipv6_routes, target_dir=INTERFACE_ROUTES_DIR):
     """Persist validated IPv4 and IPv6 static routes for `nic`."""
     if not nic:
         return
     rc_nic = validate.rc_conf_interface(nic)
+    old_r4, old_r6 = load_interface_routes(nic, target_dir=target_dir)
     os.makedirs(target_dir, exist_ok=True)
     try:
         os.chmod(target_dir, 0o700)
     except OSError:
         pass
     lines = [f'# Static routes for {rc_nic}']
+    valid_r4 = []
     for rt in ipv4_routes or []:
         net = (rt.get('network') or '').strip()
         mask = (rt.get('netmask') or '').strip()
@@ -147,7 +238,9 @@ def save_interface_routes(nic, ipv4_routes, ipv6_routes, target_dir=INTERFACE_RO
             net_ok = validate.ipv4_address(net, 'Static Route Network')
             mask_ok = validate.ipv4_netmask(mask)
             gw_ok = validate.ipv4_address(gw, 'Static Route Gateway')
+            valid_r4.append((net_ok, mask_ok, gw_ok))
             lines.append(f'ipv4_route = {net_ok},{mask_ok},{gw_ok}')
+    valid_r6 = []
     for rt6 in ipv6_routes or []:
         net6 = (rt6.get('network') or '').strip()
         plen = (rt6.get('prefixlen') or '64').strip().lstrip('/')
@@ -156,6 +249,7 @@ def save_interface_routes(nic, ipv4_routes, ipv6_routes, target_dir=INTERFACE_RO
             net6_ok = validate.ipv6_address(net6.split('/')[0], 'IPv6 Static Route Prefix')
             plen_ok = validate.ipv6_prefixlen(plen)
             gw6_ok = validate.ipv6_address(gw6, 'IPv6 Static Route Gateway', allow_scope=True)
+            valid_r6.append((net6_ok, plen_ok, gw6_ok))
             lines.append(f'ipv6_route = {net6_ok},{plen_ok},{gw6_ok}')
     lines.append('')
     path = os.path.join(target_dir, f'{rc_nic}.routes')
@@ -166,9 +260,64 @@ def save_interface_routes(nic, ipv4_routes, ipv6_routes, target_dir=INTERFACE_RO
     with os.fdopen(fd, 'w', encoding='utf-8') as fh:
         fh.write('\n'.join(lines))
 
+    new_r4_set = set(valid_r4)
+    new_r6_set = set(valid_r6)
+    removed_r4 = [
+        r for r in old_r4
+        if (r.get('network'), r.get('netmask'), r.get('gateway')) not in new_r4_set
+    ]
+    removed_r6 = [
+        r for r in old_r6
+        if (r.get('network'), r.get('prefixlen'), r.get('gateway')) not in new_r6_set
+    ]
+    _PENDING_REMOVED_ROUTES[rc_nic] = (removed_r4, removed_r6)
 
-def apply_interface_routes(nic, ipv4_routes, ipv6_routes):
+    if target_dir == INTERFACE_ROUTES_DIR:
+        _sync_rc_conf_routes(rc_nic, valid_r4, valid_r6)
+
+
+def apply_interface_routes(
+    nic, ipv4_routes, ipv6_routes, old_ipv4_routes=None, old_ipv6_routes=None
+):
     """Apply validated IPv4 and IPv6 static routes for `nic` to the live routing table."""
+    rc_nic = validate.rc_conf_interface(nic) if nic else ''
+    pending_r4, pending_r6 = _PENDING_REMOVED_ROUTES.pop(rc_nic, ([], []))
+    del_r4 = old_ipv4_routes if old_ipv4_routes is not None else pending_r4
+    del_r6 = old_ipv6_routes if old_ipv6_routes is not None else pending_r6
+
+    for rt in del_r4 or []:
+        net = (rt.get('network') or '').strip()
+        mask = (rt.get('netmask') or '').strip()
+        gw = (rt.get('gateway') or '').strip()
+        if net and mask and gw:
+            try:
+                net_ok = validate.ipv4_address(net, 'Static Route Network')
+                mask_ok = validate.ipv4_netmask(mask)
+                gw_ok = validate.ipv4_address(gw, 'Static Route Gateway')
+                run(
+                    ['route', '-n', 'delete', '-net', net_ok, gw_ok, mask_ok],
+                    stderr=DEVNULL,
+                    check=False,
+                )
+            except ValueError:
+                pass
+    for rt6 in del_r6 or []:
+        net6 = (rt6.get('network') or '').strip()
+        plen = (rt6.get('prefixlen') or '64').strip().lstrip('/')
+        gw6 = (rt6.get('gateway') or '').strip()
+        if net6 and gw6:
+            try:
+                net6_ok = validate.ipv6_address(net6.split('/')[0], 'IPv6 Static Route Prefix')
+                plen_ok = validate.ipv6_prefixlen(plen)
+                gw6_ok = validate.ipv6_address(gw6, 'IPv6 Static Route Gateway', allow_scope=True)
+                run(
+                    ['route', '-n', 'delete', '-inet6', f'{net6_ok}/{plen_ok}', gw6_ok],
+                    stderr=DEVNULL,
+                    check=False,
+                )
+            except ValueError:
+                pass
+
     for rt in ipv4_routes or []:
         net = (rt.get('network') or '').strip()
         mask = (rt.get('netmask') or '').strip()

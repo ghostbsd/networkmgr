@@ -164,7 +164,7 @@ def default_ipsec_config(name=''):
         'vpn_type': 'ipsec',
         'name': name or '',
         'profile_id': profile_id,
-        'original_profile_id': profile_id,
+        'original_profile_id': None,
         'protocol': 'l2tp-ipsec',
         # Gateway & Identification
         'gateway': '',
@@ -246,10 +246,18 @@ def parse_ipsec_config(filepath):
     except OSError as exc:
         raise ValueError(f'Could not read {filepath}: {exc}') from exc
 
+    base_dir = os.path.dirname(os.path.abspath(filepath))
     base = os.path.splitext(os.path.basename(filepath))[0]
     cfg = default_ipsec_config(base)
     cfg['profile_id'] = sanitize_ipsec_id(base)
-    cfg['original_profile_id'] = cfg['profile_id']
+    is_internal_profile = False
+    if os.path.exists(IPSEC_DIR):
+        try:
+            if os.path.samefile(base_dir, IPSEC_DIR):
+                cfg['original_profile_id'] = cfg['profile_id']
+                is_internal_profile = True
+        except OSError:
+            pass
 
     # Case 1: StrongSwan Android/desktop .sswan JSON profile
     stripped = raw_text.lstrip()
@@ -282,6 +290,8 @@ def parse_ipsec_config(filepath):
         conn_match = re.search(r'(?m)^\s*conn\s+([^\s#]+)', raw_text)
         if conn_match and conn_match.group(1) != '%default':
             cfg['name'] = conn_match.group(1)
+            if not is_internal_profile:
+                cfg['profile_id'] = sanitize_ipsec_id(cfg['name'])
         keyex = 'ikev2'
         leftauth = ''
         conn_type = 'tunnel'
@@ -358,8 +368,17 @@ def parse_ipsec_config(filepath):
             continue
         if key in bool_keys:
             cfg[key] = val.lower() in ('1', 'true', 'yes', 'on')
-        elif key in cfg:
+        elif key in cfg and key not in (
+            'vpn_type',
+            'profile_id',
+            'original_profile_id',
+            'ipv4_routes',
+            'ipv6_routes',
+        ):
             cfg[key] = val
+
+    if not is_internal_profile and cfg.get('name'):
+        cfg['profile_id'] = sanitize_ipsec_id(cfg['name'])
 
     return cfg
 
@@ -376,7 +395,8 @@ def save_ipsec_config(cfg, target_dir=IPSEC_DIR):
     """
     display_name = _clean_line(cfg.get('name') or cfg.get('profile_id') or '')
     profile_id = sanitize_ipsec_id(display_name)
-    old_profile_id = _clean_line(cfg.get('original_profile_id') or '')
+    raw_old_id = _clean_line(cfg.get('original_profile_id') or '')
+    old_profile_id = sanitize_ipsec_id(raw_old_id) if raw_old_id else ''
     cfg['profile_id'] = profile_id
     if not cfg.get('name'):
         cfg['name'] = profile_id
@@ -408,14 +428,6 @@ def save_ipsec_config(cfg, target_dir=IPSEC_DIR):
         os.chmod(target_dir, 0o700)
     except OSError:
         pass
-    if old_profile_id and old_profile_id != profile_id:
-        old_path = os.path.join(target_dir, f'{ sanitize_ipsec_id(old_profile_id) }.conf')
-        if os.path.isfile(old_path):
-            try:
-                os.remove(old_path)
-            except OSError:
-                pass
-    cfg['original_profile_id'] = profile_id
 
     lines = [
         '# networkmgr-ipsec configuration',
@@ -492,6 +504,10 @@ def save_ipsec_config(cfg, target_dir=IPSEC_DIR):
     lines.append('')
     conf_path = os.path.join(target_dir, f'{profile_id}.conf')
     _write_secure_ipsec_file(conf_path, '\n'.join(lines), 0o600)
+
+    if old_profile_id and old_profile_id != profile_id:
+        delete_ipsec_config(old_profile_id, target_dir=target_dir)
+    cfg['original_profile_id'] = profile_id
     return conf_path
 
 
@@ -505,11 +521,26 @@ def delete_ipsec_config(profile_id, target_dir=IPSEC_DIR):
             os.remove(conf_path)
         except OSError:
             pass
+    removed_ss = False
     for ext in ('conf', 'secrets'):
         ss_file = os.path.join(STRONGSWAN_CONF_DIR, f'nm-{profile_id}.{ext}')
         if os.path.isfile(ss_file):
             try:
                 os.remove(ss_file)
+                removed_ss = True
+            except OSError:
+                pass
+    mpd_dir = os.path.join(RUN_DIR, profile_id)
+    if os.path.isdir(mpd_dir):
+        shutil.rmtree(mpd_dir, ignore_errors=True)
+    if removed_ss:
+        ipsec_bin = _strongswan_binary()
+        if ipsec_bin:
+            try:
+                status_rc, _ = _run_daemon_cmd([ipsec_bin, 'status'], timeout=5)
+                if status_rc == 0:
+                    _run_daemon_cmd([ipsec_bin, 'reload'], timeout=5)
+                    _run_daemon_cmd([ipsec_bin, 'rereadsecrets'], timeout=5)
             except OSError:
                 pass
 
@@ -793,13 +824,19 @@ def _write_mpd5_config(profile_id, cfg):
         except ValueError:
             pass
 
-    auth_lines = []
+    accepted_auth = []
     if cfg.get('ppp_mschapv2', True):
-        auth_lines.append('    set link accept mschapv2')
+        accepted_auth.append('chap-msv2')
     if cfg.get('ppp_chap', True):
-        auth_lines.append('    set link accept chap-md5 chap-msv1 chap-msv2')
+        for proto in ('chap-md5', 'chap-msv1', 'chap-msv2'):
+            if proto not in accepted_auth:
+                accepted_auth.append(proto)
     if cfg.get('ppp_pap', False):
-        auth_lines.append('    set link accept pap')
+        accepted_auth.append('pap')
+
+    auth_lines = []
+    if accepted_auth:
+        auth_lines.append(f'    set link accept {" ".join(accepted_auth)}')
 
     ccp_lines = ['    set bundle enable compression', '    set ccp yes mppc']
     if cfg.get('mppe_required', False):

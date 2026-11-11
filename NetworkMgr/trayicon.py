@@ -255,13 +255,17 @@ class TrayIcon:
         position = Gtk.StatusIcon.position_menu
         self.build_menu().popup(None, None, position, status_icon, button, time)
 
-    def _connection_menu_row(self, name, is_connected, on_toggle, on_configure=None):
+    def _connection_menu_row(
+        self, name, is_connected, on_toggle, on_configure=None, is_enabled=None
+    ):
         """Build a compact single-row menu item: <Nome>   <botao1><botao2>.
 
         - <Nome>: Connection name with a subtle status indicator dot.
-        - <botao1>: Connect icon when disconnected, or Red X icon when connected.
+        - <botao1>: Connect icon when disabled/disconnected, or Red X icon when active.
         - <botao2>: Gear icon to open the connection's configuration window.
         """
+        if is_enabled is None:
+            is_enabled = is_connected
         _ensure_menu_row_css()
         menu_item = Gtk.MenuItem()
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
@@ -292,13 +296,13 @@ class TrayIcon:
         btn1.get_style_context().add_class("nm-row-action-btn")
         btn1.set_image(
             _svg_icon(
-                _DISCONNECT_RED_X_SVG if is_connected else _CONNECT_ICON_SVG,
+                _DISCONNECT_RED_X_SVG if is_enabled else _CONNECT_ICON_SVG,
                 size=16,
             )
         )
         btn1.set_always_show_image(True)
         btn1.set_tooltip_text(
-            _("Disconnect %s") % name if is_connected else _("Connect %s") % name
+            _("Disconnect %s") % name if is_enabled else _("Connect %s") % name
         )
         btn_box.pack_start(btn1, False, False, 0)
 
@@ -333,17 +337,19 @@ class TrayIcon:
         def _on_button_release(_item, event):
             # Gtk.Menu holds a pointer grab while open, so button-release-event
             # is delivered to the Gtk.MenuItem in the menu window's coordinate
-            # space. Check if the click landed on <botao2> (gear) or <botao1>.
+            # space. Only trigger actions when the click lands on <botao2> or <botao1>.
             if btn2 is not None:
                 alloc2 = btn2.get_allocation()
-                if alloc2.width > 0 and event.x >= alloc2.x - 2:
+                if alloc2.width > 0 and (alloc2.x - 2) <= event.x <= (alloc2.x + alloc2.width + 2):
                     _invoke(on_configure)
                     return True
-            _invoke(on_toggle)
+            alloc1 = btn1.get_allocation()
+            if alloc1.width > 0 and (alloc1.x - 2) <= event.x <= (alloc1.x + alloc1.width + 2):
+                _invoke(on_toggle)
+                return True
             return True
 
         menu_item.connect("button-release-event", _on_button_release)
-        menu_item.connect("activate", lambda _item: _invoke(on_toggle))
         return menu_item
 
     def build_menu(self):
@@ -482,9 +488,10 @@ class TrayIcon:
                 wired_label = _("Wired %s (%s)") % (cardnum, netcard)
                 if connection_state in ("Connected", "Disabled", "Disconnected"):
                     is_connected = connection_state == "Connected"
+                    is_enabled = connection_state in ("Connected", "Disconnected")
                     toggle_cb = (
                         (lambda nc=netcard: self.disable_card(None, nc))
-                        if is_connected
+                        if is_enabled
                         else (lambda nc=netcard: self.enable_card(None, nc))
                     )
                     config_cb = (
@@ -492,7 +499,11 @@ class TrayIcon:
                     )
                     self.menu.append(
                         self._connection_menu_row(
-                            wired_label, is_connected, toggle_cb, config_cb
+                            wired_label,
+                            is_connected,
+                            toggle_cb,
+                            config_cb,
+                            is_enabled=is_enabled,
                         )
                     )
                 else:

@@ -11,11 +11,14 @@ management.
 """
 
 from ipaddress import IPv4Address, IPv4Network, IPv6Interface, IPv6Network
+import base64
+import binascii
 import os
 import re
 import shutil
 import signal
 import sys
+import tempfile
 from platform import system
 from subprocess import DEVNULL, PIPE, run
 from time import sleep
@@ -795,6 +798,22 @@ def _write_secure_file(path, content, mode=0o600):
         pass
 
 
+def _write_secure_bytes(path, data, mode=0o600):
+    """Write binary bytes to a file with strict permissions and no symlink following."""
+    parent = os.path.dirname(path)
+    os.makedirs(parent, exist_ok=True)
+    if os.path.islink(path):
+        raise ValueError(f'Refusing to write to symlink: {path}')
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, 'O_NOFOLLOW', 0)
+    fd = os.open(path, flags, mode)
+    with os.fdopen(fd, 'wb') as handle:
+        handle.write(data)
+    try:
+        os.chmod(path, mode)
+    except OSError:
+        pass
+
+
 def _copy_or_keep_cert(src_path, dest_dir, dest_filename, mode=0o600):
     """Copy an external certificate/key into the profile's cert directory."""
     if not src_path:
@@ -904,7 +923,25 @@ def save_openvpn_config(cfg):
         key_file = _copy_or_keep_cert(cfg['key_path'], cert_dir, 'client.key', 0o600)
 
     pkcs12_file = ''
-    if cfg.get('pkcs12_path'):
+    if cfg.get('pkcs12_inline'):
+        pkcs12_file = os.path.join(cert_dir, 'client.p12')
+        raw_p12 = cfg['pkcs12_inline']
+        if isinstance(raw_p12, bytes):
+            _write_secure_bytes(pkcs12_file, raw_p12, 0o600)
+        else:
+            try:
+                p12_bytes = base64.b64decode(raw_p12.strip(), validate=True)
+                _write_secure_bytes(pkcs12_file, p12_bytes, 0o600)
+            except (binascii.Error, ValueError):
+                try:
+                    p12_bytes = base64.b64decode(raw_p12.strip(), validate=False)
+                    if p12_bytes:
+                        _write_secure_bytes(pkcs12_file, p12_bytes, 0o600)
+                    else:
+                        _write_secure_file(pkcs12_file, raw_p12, 0o600)
+                except (binascii.Error, ValueError):
+                    _write_secure_file(pkcs12_file, raw_p12, 0o600)
+    elif cfg.get('pkcs12_path'):
         pkcs12_file = _copy_or_keep_cert(cfg['pkcs12_path'], cert_dir, 'client.p12', 0o600)
 
     extra_certs_file = ''
@@ -1190,8 +1227,16 @@ def save_openvpn_config(cfg):
     conf_file = os.path.join(OPENVPN_CONFIG_PATH, f'{profile_id}.conf')
     _write_secure_file(conf_file, '\n'.join([_clean_ovpn_val(ln) for ln in lines]), 0o600)
 
+    legacy_ovpn = os.path.join(OPENVPN_CONFIG_PATH, f'{profile_id}.ovpn')
+    if os.path.exists(legacy_ovpn):
+        try:
+            os.remove(legacy_ovpn)
+        except OSError:
+            pass
+
     if original_id and original_id != profile_id:
         delete_openvpn_config(original_id)
+    cfg['original_profile_id'] = profile_id
 
     return profile_id
 
@@ -1270,8 +1315,9 @@ def _profile_pid(profile_id):
                 pass
 
     # Fallback: check pgrep for an openvpn process using this config
+    pattern = rf'openvpn.*( |/){re.escape(profile_id)}\.(conf|ovpn)( |$)'
     result = run(
-        ['pgrep', '-f', f'openvpn.*{profile_id}\\.(conf|ovpn)'],
+        ['pgrep', '-f', pattern],
         stdout=PIPE, stderr=DEVNULL, check=False, text=True
     )
     if result.returncode == 0 and result.stdout.strip():
@@ -1402,7 +1448,6 @@ def enable_openvpn(profile_id, username=None, password=None, key_password=None):
 
     _ensure_tun_module()
 
-    cert_dir = os.path.join(OPENVPN_CERTS_PATH, profile_id)
     pid_file = f'{OPENVPN_PID_DIR}/openvpn_{profile_id}.pid'
     status_file = f'{OPENVPN_PID_DIR}/openvpn_{profile_id}.status'
     log_file = f'{OPENVPN_PID_DIR}/openvpn_{profile_id}.log'
@@ -1417,50 +1462,70 @@ def enable_openvpn(profile_id, username=None, password=None, key_password=None):
         '--config', conf_path,
     ]
 
-    if username is not None and password is not None:
-        os.makedirs(cert_dir, exist_ok=True)
-        os.chmod(cert_dir, 0o700)
-        auth_file = os.path.join(cert_dir, 'auth.txt')
-        _write_secure_file(auth_file, f'{username}\n{password}', 0o600)
-        cmd.extend(['--auth-user-pass', auth_file])
-
-    if key_password is not None:
-        os.makedirs(cert_dir, exist_ok=True)
-        os.chmod(cert_dir, 0o700)
-        askpass_file = os.path.join(cert_dir, 'askpass.txt')
-        _write_secure_file(askpass_file, key_password, 0o600)
-        cmd.extend(['--askpass', askpass_file])
-
+    tmp_dir = (
+        OPENVPN_PID_DIR
+        if os.path.isdir(OPENVPN_PID_DIR) and os.access(OPENVPN_PID_DIR, os.W_OK)
+        else None
+    )
+    temp_files = []
     try:
-        result = run(cmd, stdout=PIPE, stderr=PIPE, check=False, text=True)
-    except FileNotFoundError:
-        return False, OPENVPN_NOT_INSTALLED_MSG
-    except OSError as exc:
-        return False, f'Failed to execute OpenVPN: {exc}'
-    if result.returncode != 0:
-        err = (result.stderr or result.stdout or '').strip()
-        if not err and os.path.isfile(log_file):
+        if username is not None and password is not None:
+            fd, tmp_auth = tempfile.mkstemp(
+                prefix=f'openvpn_{profile_id}_auth_',
+                dir=tmp_dir,
+            )
+            os.close(fd)
+            temp_files.append(tmp_auth)
+            _write_secure_file(tmp_auth, f'{username}\n{password}', 0o600)
+            cmd.extend(['--auth-user-pass', tmp_auth])
+
+        if key_password is not None:
+            fd, tmp_askpass = tempfile.mkstemp(
+                prefix=f'openvpn_{profile_id}_askpass_',
+                dir=tmp_dir,
+            )
+            os.close(fd)
+            temp_files.append(tmp_askpass)
+            _write_secure_file(tmp_askpass, key_password, 0o600)
+            cmd.extend(['--askpass', tmp_askpass])
+
+        try:
+            result = run(cmd, stdout=PIPE, stderr=PIPE, check=False, text=True)
+        except FileNotFoundError:
+            return False, OPENVPN_NOT_INSTALLED_MSG
+        except OSError as exc:
+            return False, f'Failed to execute OpenVPN: {exc}'
+        if result.returncode != 0:
+            err = (result.stderr or result.stdout or '').strip()
+            if not err and os.path.isfile(log_file):
+                try:
+                    with open(log_file, 'r', encoding='utf-8', errors='replace') as handle:
+                        err = ''.join(handle.readlines()[-10:]).strip()
+                except OSError:
+                    pass
+            return False, err or 'OpenVPN failed to start.'
+
+        # Wait briefly to confirm daemon stays alive
+        for _ in range(10):
+            sleep(0.2)
+            if _profile_pid(profile_id) is not None:
+                return True, ''
+
+        err = ''
+        if os.path.isfile(log_file):
             try:
                 with open(log_file, 'r', encoding='utf-8', errors='replace') as handle:
                     err = ''.join(handle.readlines()[-10:]).strip()
             except OSError:
                 pass
-        return False, err or 'OpenVPN failed to start.'
-
-    # Wait briefly to confirm daemon stays alive
-    for _ in range(10):
-        sleep(0.2)
-        if _profile_pid(profile_id) is not None:
-            return True, ''
-
-    err = ''
-    if os.path.isfile(log_file):
-        try:
-            with open(log_file, 'r', encoding='utf-8', errors='replace') as handle:
-                err = ''.join(handle.readlines()[-10:]).strip()
-        except OSError:
-            pass
-    return False, err or 'OpenVPN exited immediately after start.'
+        return False, err or 'OpenVPN exited immediately after start.'
+    finally:
+        for tmp_path in temp_files:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
 
 
 def disable_openvpn(profile_id):

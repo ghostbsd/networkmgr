@@ -106,6 +106,7 @@ def default_wireguard_config(name='wg0'):
         'endpoint': '',
         'allowed_ips': '0.0.0.0/0, ::/0',
         'persistent_keepalive': '',
+        'extra_peers': [],
     }
 
 
@@ -143,7 +144,7 @@ def parse_wireguard_config(filepath):
 
     addresses = []
     dns_list = []
-    allowed_list = []
+    peers = []
 
     for raw_line in lines:
         line = raw_line.strip()
@@ -159,6 +160,14 @@ def parse_wireguard_config(filepath):
         sec_match = re.match(r'^\[([A-Za-z]+)\]$', line)
         if sec_match:
             section = sec_match.group(1).lower()
+            if section == 'peer':
+                peers.append({
+                    'public_key': '',
+                    'preshared_key': '',
+                    'endpoint': '',
+                    'allowed_list': [],
+                    'persistent_keepalive': '',
+                })
             continue
 
         if '=' not in line:
@@ -181,31 +190,48 @@ def parse_wireguard_config(filepath):
             elif key == 'table':
                 cfg['table'] = val
             elif is_internal_profile and key == 'preup':
-                cfg['pre_up'] = val
+                cfg['pre_up'] = f"{cfg['pre_up']}\n{val}" if cfg['pre_up'] else val
             elif is_internal_profile and key == 'postup':
-                cfg['post_up'] = val
+                cfg['post_up'] = f"{cfg['post_up']}\n{val}" if cfg['post_up'] else val
             elif is_internal_profile and key == 'predown':
-                cfg['pre_down'] = val
+                cfg['pre_down'] = f"{cfg['pre_down']}\n{val}" if cfg['pre_down'] else val
             elif is_internal_profile and key == 'postdown':
-                cfg['post_down'] = val
-        elif section == 'peer':
+                cfg['post_down'] = f"{cfg['post_down']}\n{val}" if cfg['post_down'] else val
+        elif section == 'peer' and peers:
+            cur_peer = peers[-1]
             if key == 'publickey':
-                cfg['public_key'] = val
+                cur_peer['public_key'] = val
             elif key == 'presharedkey':
-                cfg['preshared_key'] = val
+                cur_peer['preshared_key'] = val
             elif key == 'endpoint':
-                cfg['endpoint'] = val
+                cur_peer['endpoint'] = val
             elif key == 'allowedips':
-                allowed_list.append(val)
+                cur_peer['allowed_list'].append(val)
             elif key == 'persistentkeepalive':
-                cfg['persistent_keepalive'] = val
+                cur_peer['persistent_keepalive'] = val
 
     if addresses:
         cfg['address'] = ', '.join(addresses)
     if dns_list:
         cfg['dns'] = ', '.join(dns_list)
-    if allowed_list:
-        cfg['allowed_ips'] = ', '.join(allowed_list)
+    if peers:
+        first = peers[0]
+        cfg['public_key'] = first['public_key']
+        cfg['preshared_key'] = first['preshared_key']
+        cfg['endpoint'] = first['endpoint']
+        cfg['allowed_ips'] = ', '.join(first['allowed_list'])
+        cfg['persistent_keepalive'] = first['persistent_keepalive']
+        cfg['extra_peers'] = [
+            {
+                'public_key': p['public_key'],
+                'preshared_key': p['preshared_key'],
+                'endpoint': p['endpoint'],
+                'allowed_ips': ', '.join(p['allowed_list']),
+                'persistent_keepalive': p['persistent_keepalive'],
+            }
+            for p in peers[1:]
+            if p.get('public_key')
+        ]
 
     return cfg
 
@@ -274,6 +300,22 @@ def save_wireguard_config(cfg):
     table_val = _clean_line(cfg.get('table', ''))
     if table_val and re.fullmatch(r'[A-Za-z0-9_-]+', table_val):
         lines.append(f'Table = {table_val}')
+    for hook_key, directive in (
+        ('pre_up', 'PreUp'),
+        ('post_up', 'PostUp'),
+        ('pre_down', 'PreDown'),
+        ('post_down', 'PostDown'),
+    ):
+        raw_hook = cfg.get(hook_key) or ''
+        hook_items = (
+            raw_hook
+            if isinstance(raw_hook, (list, tuple))
+            else str(raw_hook).splitlines()
+        )
+        for hook_line in hook_items:
+            cleaned_hook = _clean_line(hook_line)
+            if cleaned_hook:
+                lines.append(f'{directive} = {cleaned_hook}')
 
     lines.extend([
         '',
@@ -289,6 +331,36 @@ def save_wireguard_config(cfg):
     lines.append(f'AllowedIPs = {allowed_raw}')
     if keepalive_val:
         lines.append(f'PersistentKeepalive = {keepalive_val}')
+
+    for extra_peer in cfg.get('extra_peers') or []:
+        ep_pub = _clean_line(extra_peer.get('public_key', ''))
+        if not ep_pub:
+            continue
+        ep_allowed = _clean_line(extra_peer.get('allowed_ips', '')) or '0.0.0.0/0, ::/0'
+        for item in [a.strip() for a in ep_allowed.split(',') if a.strip()]:
+            try:
+                ip_network(item, strict=False)
+            except ValueError as exc:
+                raise ValueError(f'Invalid Allowed IP/Network "{item}": {exc}') from exc
+        ep_keepalive = _clean_line(extra_peer.get('persistent_keepalive', ''))
+        if ep_keepalive and (
+            not ep_keepalive.isdigit() or not (0 <= int(ep_keepalive) <= 65535)
+        ):
+            raise ValueError('PersistentKeepalive must be an integer between 0 and 65535.')
+        lines.extend([
+            '',
+            '[Peer]',
+            f'PublicKey = {ep_pub}',
+        ])
+        ep_psk = _clean_line(extra_peer.get('preshared_key', ''))
+        if ep_psk:
+            lines.append(f'PresharedKey = {ep_psk}')
+        ep_endpoint = _clean_line(extra_peer.get('endpoint', ''))
+        if ep_endpoint:
+            lines.append(f'Endpoint = {ep_endpoint}')
+        lines.append(f'AllowedIPs = {ep_allowed}')
+        if ep_keepalive:
+            lines.append(f'PersistentKeepalive = {ep_keepalive}')
 
     conf_file = os.path.join(WG_CONFIG_PATH, f'{profile_id}.conf')
     _write_secure_wg_file(conf_file, '\n'.join(lines), 0o600)
