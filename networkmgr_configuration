@@ -1,8 +1,13 @@
 #!/usr/bin/env python
 
 import signal
+import sys
 from NetworkMgr import configuration
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
-configuration.open_default_configuration()
+if '--card' in sys.argv or '-c' in sys.argv:
+    configuration.open_default_configuration()
+else:
+    configuration.open_network_settings()
+
