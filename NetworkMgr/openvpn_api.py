@@ -1483,7 +1483,12 @@ def openvpn_dictionary(service_state=None):
     if not os.path.exists(OPENVPN_CONFIG_PATH):
         return main_dict
 
-    for entry in sorted(os.listdir(OPENVPN_CONFIG_PATH)):
+    try:
+        entries = sorted(os.listdir(OPENVPN_CONFIG_PATH))
+    except (OSError, PermissionError):
+        entries = []
+
+    for entry in entries:
         if not entry.endswith(('.conf', '.ovpn')):
             continue
         full_path = os.path.join(OPENVPN_CONFIG_PATH, entry)

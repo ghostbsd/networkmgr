@@ -431,7 +431,10 @@ def wg_dictionary(service_state):
     configs = {}
 
     if os.path.exists(WG_CONFIG_PATH):
-        wgconfigs = sorted(os.listdir(WG_CONFIG_PATH))
+        try:
+            wgconfigs = sorted(os.listdir(WG_CONFIG_PATH))
+        except (OSError, PermissionError):
+            wgconfigs = []
         for wgconfig in wgconfigs:
             if not wgconfig.endswith('.conf'):
                 continue
@@ -442,12 +445,15 @@ def wg_dictionary(service_state):
             wg_state = wg_status(wg_device)
             wg_name = wg_device
             endpoint = ''
-            with open(full_path, encoding="utf-8", errors="replace") as content:
-                for line in content:
-                    if "# Name =" in line:
-                        wg_name = line.split('=', 1)[1].strip() or wg_device
-                    elif line.strip().lower().startswith('endpoint') and '=' in line:
-                        endpoint = line.split('=', 1)[1].strip()
+            try:
+                with open(full_path, encoding="utf-8", errors="replace") as content:
+                    for line in content:
+                        if "# Name =" in line:
+                            wg_name = line.split('=', 1)[1].strip() or wg_device
+                        elif line.strip().lower().startswith('endpoint') and '=' in line:
+                            endpoint = line.split('=', 1)[1].strip()
+            except (OSError, PermissionError):
+                pass
 
             seconddictionary = {
                 'state': wg_state,

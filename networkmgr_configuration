@@ -1,7 +1,17 @@
 #!/usr/bin/env python
 
+import os
 import signal
 import sys
+
+# Network configuration requires root privileges on FreeBSD / GhostBSD.
+# Automatically elevate with sudo if invoked by an operator user.
+if os.geteuid() != 0:
+    try:
+        os.execvp("sudo", ["sudo", "-E", sys.executable] + sys.argv)
+    except OSError:
+        pass
+
 from NetworkMgr import configuration
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
@@ -10,4 +20,5 @@ if '--card' in sys.argv or '-c' in sys.argv:
     configuration.open_default_configuration()
 else:
     configuration.open_network_settings()
+
 

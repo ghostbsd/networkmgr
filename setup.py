@@ -114,6 +114,7 @@ networkmgr_share = [
 
 data_files = [
     (f'{PREFIX}/etc/xdg/autostart', ['src/networkmgr.desktop']),
+    (f'{PREFIX}/share/applications', ['networkmgr.desktop']),
     (f'{PREFIX}/share/networkmgr', networkmgr_share),
     (f'{PREFIX}/etc/sudoers.d', ['src/sudoers.d/networkmgr']),
     (f'{PREFIX}/etc/devd', ['src/networkmgr.conf'])
