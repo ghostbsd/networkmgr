@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
 import os
+import shutil
 import signal
+import subprocess
 import sys
 
 # Network configuration requires root privileges on FreeBSD / GhostBSD.
@@ -12,6 +14,79 @@ if os.geteuid() != 0:
     except OSError:
         pass
 
+
+def is_networkmgr_tray_running():
+    """Return True if the NetworkMgr tray daemon is currently running."""
+    current_pid = os.getpid()
+    try:
+        res = subprocess.run(
+            ['ps', '-ax', '-o', 'pid,command'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            check=False
+        )
+        for line in res.stdout.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split(None, 1)
+            if not parts or not parts[0].isdigit():
+                continue
+            pid = int(parts[0])
+            if pid == current_pid:
+                continue
+            cmd = parts[1] if len(parts) > 1 else ''
+            if 'networkmgr_configuration' in cmd:
+                continue
+            for word in cmd.split():
+                if os.path.basename(word) == 'networkmgr':
+                    return True
+    except OSError:
+        pass
+    return False
+
+
+def ensure_networkmgr_tray_running():
+    """Ensure the NetworkMgr tray daemon is running in the background as a detached process."""
+    if is_networkmgr_tray_running():
+        return
+
+    tray_bin = None
+    script_dir = os.path.dirname(os.path.realpath(__file__))
+    candidates = (
+        '/usr/local/bin/networkmgr',
+        shutil.which('networkmgr'),
+        os.path.join(script_dir, 'networkmgr')
+    )
+    for path in candidates:
+        if path and os.path.isfile(path) and os.access(path, os.X_OK):
+            tray_bin = path
+            break
+
+    if not tray_bin:
+        return
+
+    cmd = [tray_bin]
+    if os.geteuid() != 0:
+        cmd = ['sudo', '-E', tray_bin]
+
+    try:
+        subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+            close_fds=True
+        )
+    except OSError:
+        pass
+
+
+# Restore the tray icon in the background if it was closed
+ensure_networkmgr_tray_running()
+
 from NetworkMgr import configuration
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
@@ -20,5 +95,6 @@ if '--card' in sys.argv or '-c' in sys.argv:
     configuration.open_default_configuration()
 else:
     configuration.open_network_settings()
+
 
 
