@@ -1,8 +1,190 @@
 #!/usr/bin/env python
 
+import os
+import shutil
 import signal
+import subprocess
+import sys
+
+# Network configuration requires root privileges on FreeBSD / GhostBSD.
+# Automatically elevate with sudo if invoked by an operator user.
+if os.geteuid() != 0:
+    script_path = shutil.which(sys.argv[0]) or os.path.realpath(__file__)
+    try:
+        os.execvp("sudo", ["sudo", script_path] + sys.argv[1:])
+    except OSError:
+        pass
+
+
+def _is_networkmgr_tray_cmd(cmd):
+    """Return True if command string is executing networkmgr as the main script."""
+    if not cmd or 'networkmgr_configuration' in cmd:
+        return False
+    words = cmd.split()
+    idx = 0
+    while idx < len(words):
+        w = os.path.basename(words[idx])
+        if w in ('sudo', 'env') or w.startswith('python'):
+            idx += 1
+            while idx < len(words) and words[idx].startswith('-'):
+                idx += 1
+        else:
+            break
+    if idx < len(words):
+        target = os.path.basename(words[idx])
+        return target == 'networkmgr'
+    return False
+
+
+def _get_process_env(pid):
+    """Retrieve environment variables dictionary for a given PID on Linux or FreeBSD."""
+    env = {}
+    proc_env = f'/proc/{pid}/environ'
+    if os.path.isfile(proc_env):
+        try:
+            with open(proc_env, 'rb') as fh:
+                raw = fh.read()
+            for entry in raw.split(b'\0'):
+                if b'=' in entry:
+                    k, v = entry.decode('utf-8', errors='replace').split('=', 1)
+                    env[k] = v
+            return env
+        except (OSError, PermissionError):
+            pass
+
+    try:
+        res = subprocess.run(
+            ['procstat', '-e', str(pid)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            check=False
+        )
+        if res.returncode == 0 and res.stdout:
+            for eline in res.stdout.splitlines():
+                parts = eline.strip().split(None, 2)
+                if len(parts) >= 3 and '=' in parts[2]:
+                    k, v = parts[2].split('=', 1)
+                    env[k] = v
+    except OSError:
+        pass
+
+    return env
+
+
+def is_networkmgr_tray_running():
+    """Return True if the NetworkMgr tray daemon is running for the current session/user."""
+    current_pid = os.getpid()
+    current_display = os.environ.get('DISPLAY', '').strip()
+    current_user = (
+        os.environ.get('SUDO_USER')
+        or os.environ.get('USER')
+        or os.environ.get('LOGNAME')
+        or ''
+    ).strip()
+
+    try:
+        res = subprocess.run(
+            ['ps', '-ax', '-o', 'pid,user,command'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            check=False
+        )
+        for line in res.stdout.splitlines():
+            sline = line.strip()
+            if not sline:
+                continue
+            parts = sline.split(None, 2)
+            if len(parts) < 3 or not parts[0].isdigit():
+                continue
+            pid = int(parts[0])
+            if pid == current_pid:
+                continue
+            proc_user = parts[1].strip()
+            cmd = parts[2].strip()
+
+            if not _is_networkmgr_tray_cmd(cmd):
+                continue
+
+            # Verify session and user isolation so another user/display's tray is not matched
+            env = _get_process_env(pid)
+            if env:
+                proc_display = env.get('DISPLAY', '').strip()
+                if current_display and proc_display and proc_display != current_display:
+                    continue
+                proc_user_name = (
+                    env.get('SUDO_USER')
+                    or env.get('USER')
+                    or env.get('LOGNAME')
+                    or ''
+                ).strip()
+                if current_user and proc_user_name and proc_user_name != current_user:
+                    continue
+                return True
+            else:
+                if current_user and proc_user not in (current_user, 'root'):
+                    continue
+                return True
+    except OSError:
+        pass
+    return False
+
+
+def ensure_networkmgr_tray_running():
+    """Ensure the NetworkMgr tray daemon is running in the background as a detached process."""
+    if is_networkmgr_tray_running():
+        return
+
+    tray_bin = None
+    script_dir = os.path.dirname(os.path.realpath(__file__))
+    candidates = (
+        '/usr/local/bin/networkmgr',
+        shutil.which('networkmgr'),
+        os.path.join(script_dir, 'networkmgr')
+    )
+    for path in candidates:
+        if path and os.path.isfile(path) and os.access(path, os.X_OK):
+            tray_bin = path
+            break
+
+    if not tray_bin:
+        return
+
+    cmd = [tray_bin]
+    if any(arg in sys.argv for arg in ('--verbose', '-v')):
+        cmd.append('--verbose')
+    if os.geteuid() != 0:
+        cmd = ['sudo'] + cmd
+
+    try:
+        subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+            close_fds=True
+        )
+    except OSError:
+        pass
+
+
+# Restore the tray icon in the background if it was closed
+ensure_networkmgr_tray_running()
+
 from NetworkMgr import configuration
+from NetworkMgr.logger import set_verbose
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
-configuration.open_default_configuration()
+if any(arg in sys.argv for arg in ('--verbose', '-v')):
+    set_verbose(True)
+
+if '--card' in sys.argv or '-c' in sys.argv:
+    configuration.open_default_configuration()
+else:
+    configuration.open_network_settings()
+
+
+

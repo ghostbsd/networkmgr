@@ -1,1 +1,1 @@
-%operator ALL=(ALL) NOPASSWD: /usr/local/bin/networkmgr
+%operator ALL=(ALL) NOPASSWD: /usr/local/bin/networkmgr, /usr/local/bin/networkmgr_configuration

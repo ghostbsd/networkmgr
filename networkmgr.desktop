@@ -1,0 +1,23 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Network Settings
+Name[pt]=Definições de Rede
+Name[pt_BR]=Configurações de Rede
+Name[es]=Configuración de red
+Name[fr]=Paramètres réseau
+Name[de]=Netzwerkeinstellungen
+Comment=Configure network interfaces, Wi-Fi, Ethernet and VPN connections
+Comment[pt]=Configurar interfaces de rede, Wi-Fi, Ethernet e ligações VPN
+Comment[pt_BR]=Configurar interfaces de rede, Wi-Fi, Ethernet e conexões VPN
+Comment[es]=Configurar interfaces de red, Wi-Fi, Ethernet y conexiones VPN
+Comment[fr]=Configurer les interfaces réseau, Wi-Fi, Ethernet et connexions VPN
+Comment[de]=Netzwerkschnittstellen, WLAN, Ethernet und VPN-Verbindungen konfigurieren
+Exec=sudo networkmgr_configuration
+Icon=preferences-system-network
+Terminal=false
+StartupNotify=true
+Categories=GNOME;GTK;Settings;Network;X-XFCE-SettingsDialog;X-XFCE-NetworkSettings;X-GNOME-NetworkSettings;
+Keywords=network;wireless;wifi;ethernet;vpn;wireguard;openvpn;ipsec;dns;ip;
+Keywords[pt_BR]=rede;conexoes;wifi;sem fio;ethernet;cabo;vpn;configuracao;ip;
+X-XFCE-SettingsDialog=true

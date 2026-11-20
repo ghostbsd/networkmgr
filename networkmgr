@@ -1,8 +1,32 @@
 #!/usr/bin/env python
 
+import argparse
 import signal
+import sys
+from NetworkMgr.logger import set_verbose, log_info
 from NetworkMgr.trayicon import TrayIcon
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
-TrayIcon().run()
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog='networkmgr',
+        description='GhostBSD / FreeBSD Network Manager Tray Icon',
+    )
+    parser.add_argument(
+        '-v', '--verbose',
+        action='store_true',
+        help='enable verbose debug logging to stdout during connection attempts',
+    )
+    args = parser.parse_args()
+
+    if args.verbose:
+        set_verbose(True)
+        log_info('Verbose mode enabled. Network and VPN connection events will be logged here.')
+
+    TrayIcon(verbose=args.verbose).run()
+
+
+if __name__ == '__main__':
+    main()

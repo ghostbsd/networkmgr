@@ -148,7 +148,7 @@ def nics_list(snapshot=None):
             devices such as lo, bridge, tun and wg removed.
     """
     not_nics_regex = r"(enc|lo|fwe|fwip|tap|plip|pfsync|pflog|ipfw|tun|sl|" \
-        r"faith|ppp|bridge|wg)[0-9]+(\s*)|vm-[a-z]+(\s*)"
+        r"faith|ppp|bridge|wg|ng|gre|gif|epair)[0-9]+[a-z]?(\s*)|vm-[a-z]+(\s*)"
     if snapshot is None:
         nics = _run('ifconfig', '-l').stdout.strip()
     else:
