@@ -1,0 +1,245 @@
+# Spanish translations for NetworkMgr package.
+# Copyright (C) 2026 THE NetworkMgr'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the NetworkMgr package.
+# Pedro Flores, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: NetworkMgr 7.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-09-11 21:33-0300\n"
+"PO-Revision-Date: 2026-11-19 10:00+0100\n"
+"Last-Translator: Pedro Flores\n"
+"Language-Team: Spanish\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: NetworkMgr/trayicon.py:173
+msgid "WireGuard VPN"
+msgstr "VPN WireGuard"
+
+#: NetworkMgr/trayicon.py:182
+#, python-format
+msgid "%s Connected"
+msgstr "%s: conectado"
+
+#: NetworkMgr/trayicon.py:185 NetworkMgr/trayicon.py:219
+#: NetworkMgr/trayicon.py:230
+#, python-format
+msgid "Disable %s"
+msgstr "Desactivar %s"
+
+#: NetworkMgr/trayicon.py:189
+#, python-format
+msgid "%s Disconnected"
+msgstr "%s: desconectado"
+
+#: NetworkMgr/trayicon.py:192 NetworkMgr/trayicon.py:212
+msgid "Enable"
+msgstr "Activar"
+
+#: NetworkMgr/trayicon.py:198
+msgid "Ethernet Network"
+msgstr "Red Ethernet"
+
+#: NetworkMgr/trayicon.py:209
+#, python-format
+msgid "Wired %s Disabled"
+msgstr "Red cableada %s desactivada"
+
+#: NetworkMgr/trayicon.py:216
+#, python-format
+msgid "Wired %s Connected"
+msgstr "Red cableada %s conectada"
+
+#: NetworkMgr/trayicon.py:223 NetworkMgr/trayicon.py:234
+#: NetworkMgr/trayicon.py:281
+#, python-format
+msgid "Configure %s"
+msgstr "Configurar %s"
+
+#: NetworkMgr/trayicon.py:227
+#, python-format
+msgid "Wired %s Disconnected"
+msgstr "Red cableada %s desconectada"
+
+#: NetworkMgr/trayicon.py:238
+#, python-format
+msgid "Wired %s Unplug"
+msgstr "Red cableada %s: cable desenchufado"
+
+#: NetworkMgr/trayicon.py:246
+#, python-format
+msgid "WiFi %s Disabled"
+msgstr "Wi-Fi %s desactivada"
+
+#: NetworkMgr/trayicon.py:249
+#, python-format
+msgid "Enable Wifi %s"
+msgstr "Activar Wi-Fi %s"
+
+#: NetworkMgr/trayicon.py:254
+#, python-format
+msgid "WiFi %s Disconnected"
+msgstr "Wi-Fi %s desconectada"
+
+#: NetworkMgr/trayicon.py:259 NetworkMgr/trayicon.py:278
+#, python-format
+msgid "Disable Wifi %s"
+msgstr "Desactivar Wi-Fi %s"
+
+#: NetworkMgr/trayicon.py:265
+#, python-format
+msgid "WiFi %s Connected"
+msgstr "Wi-Fi %s conectada"
+
+#: NetworkMgr/trayicon.py:271
+#, python-format
+msgid "Disconnect from %s"
+msgstr "Desconectar de %s"
+
+#: NetworkMgr/trayicon.py:287
+msgid "Restart Networking"
+msgstr "Reiniciar la red"
+
+#: NetworkMgr/trayicon.py:290
+msgid "Close Network Manager"
+msgstr "Cerrar Network Manager"
+
+#: NetworkMgr/trayicon.py:312
+#, python-format
+msgid "%s (WPA3 only)"
+msgstr "%s (solo WPA3)"
+
+#: NetworkMgr/trayicon.py:349
+msgid "Available Connections"
+msgstr "Conexiones disponibles"
+
+#: NetworkMgr/trayicon.py:367
+msgid "Forget Network"
+msgstr "Olvidar red"
+
+#: NetworkMgr/trayicon.py:835
+#, python-format
+msgid ""
+"%(card)s did not associate with %(ssid)s before timing out.\n"
+"\n"
+"A weak signal is the usual cause."
+msgstr ""
+"%(card)s no se asoció con %(ssid)s antes de agotarse el tiempo de espera.\n"
+"\n"
+"La causa más habitual es una señal débil."
+
+#: NetworkMgr/trayicon.py:839
+#, python-format
+msgid "wpa_supplicant did not accept the request on %s."
+msgstr "wpa_supplicant no aceptó la solicitud en %s."
+
+#: NetworkMgr/trayicon.py:842
+#, python-format
+msgid "Could not connect to %s"
+msgstr "No se pudo conectar a %s"
+
+#: NetworkMgr/trayicon.py:873
+msgid "Wi-Fi Network Authentication Required"
+msgstr "Se requiere autenticación de la red Wi-Fi"
+
+#: NetworkMgr/trayicon.py:886
+#, python-format
+msgid "Could not connect to %s. Try again."
+msgstr "No se pudo conectar a %s. Inténtalo de nuevo."
+
+#: NetworkMgr/trayicon.py:888
+#, python-format
+msgid "Authentication required by %s Wi-Fi Network"
+msgstr "La red Wi-Fi %s requiere autenticación"
+
+#: NetworkMgr/trayicon.py:890 NetworkMgr/trayicon.py:1086
+msgid "Password:"
+msgstr "Contraseña:"
+
+#: NetworkMgr/trayicon.py:893
+msgid "Show password"
+msgstr "Mostrar contraseña"
+
+#: NetworkMgr/trayicon.py:1014
+msgid "Enterprise Wi-Fi Authentication"
+msgstr "Autenticación Wi-Fi empresarial"
+
+#: NetworkMgr/trayicon.py:1023
+#, python-format
+msgid "%s Enterprise Authentication Failed"
+msgstr "Error de autenticación empresarial en %s"
+
+#: NetworkMgr/trayicon.py:1025
+#, python-format
+msgid "Enterprise Authentication for %s"
+msgstr "Autenticación empresarial para %s"
+
+#: NetworkMgr/trayicon.py:1029
+#, python-format
+msgid "Security: %s"
+msgstr "Seguridad: %s"
+
+#: NetworkMgr/trayicon.py:1041
+msgid "EAP Method:"
+msgstr "Método EAP:"
+
+#: NetworkMgr/trayicon.py:1054
+msgid "Inner Auth:"
+msgstr "Autenticación interna:"
+
+#: NetworkMgr/trayicon.py:1067
+msgid "Username:"
+msgstr "Nombre de usuario:"
+
+#: NetworkMgr/trayicon.py:1076
+msgid "Anonymous ID:"
+msgstr "Identidad anónima:"
+
+#: NetworkMgr/trayicon.py:1080
+msgid "Optional - for privacy"
+msgstr "Opcional, para mayor privacidad"
+
+#: NetworkMgr/trayicon.py:1094
+msgid "Show"
+msgstr "Mostrar"
+
+#: NetworkMgr/trayicon.py:1103
+msgid "CA Certificate:"
+msgstr "Certificado de CA:"
+
+#: NetworkMgr/trayicon.py:1108
+msgid "Select CA Certificate"
+msgstr "Seleccionar certificado de CA"
+
+#: NetworkMgr/trayicon.py:1116
+msgid "Certificates (*.pem, *.crt, *.cer)"
+msgstr "Certificados (*.pem, *.crt, *.cer)"
+
+#: NetworkMgr/trayicon.py:1128
+msgid "Client Cert:"
+msgstr "Certificado de cliente:"
+
+#: NetworkMgr/trayicon.py:1132
+msgid "Select Client Certificate"
+msgstr "Seleccionar certificado de cliente"
+
+#: NetworkMgr/trayicon.py:1143
+msgid "Private Key:"
+msgstr "Clave privada:"
+
+#: NetworkMgr/trayicon.py:1147
+msgid "Select Private Key"
+msgstr "Seleccionar clave privada"
+
+#: NetworkMgr/trayicon.py:1151
+msgid "Key files (*.pem, *.key, *.p12)"
+msgstr "Archivos de clave (*.pem, *.key, *.p12)"
+
+#: NetworkMgr/trayicon.py:1163
+msgid "Key Password:"
+msgstr "Contraseña de la clave:"
