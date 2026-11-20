@@ -15,6 +15,8 @@ import tempfile
 from platform import system
 from subprocess import DEVNULL, PIPE, Popen, TimeoutExpired, run
 
+from NetworkMgr.logger import log_debug, log_info, log_error
+
 PREFIX = '/usr/local' if system() in ('FreeBSD', 'MidnightBSD', 'DragonFly') else sys.prefix
 WG_CONFIG_PATH = f'{PREFIX}/etc/wireguard/'
 WG_ID_REGEX = re.compile(r'[^A-Za-z0-9_-]+')
@@ -501,11 +503,13 @@ def disable_wg(wgconfig):
     Args:
         wgconfig (str): the tunnel's configuration name, without .conf.
     """
+    log_info(f'[WireGuard] Taking down WireGuard interface "{wgconfig}"...')
     wg_quick_bin = _wg_quick_binary() or 'wg-quick'
     try:
-        _run_wg_quick([wg_quick_bin, 'down', wgconfig], timeout=15)
-    except OSError:
-        pass
+        rc, out = _run_wg_quick([wg_quick_bin, 'down', wgconfig], timeout=15)
+        log_debug(f'[WireGuard] wg-quick down output (rc={rc}): {out}')
+    except OSError as exc:
+        log_error(f'[WireGuard] Error executing wg-quick down: {exc}')
 
 
 def enable_wg(wgconfig):
@@ -517,16 +521,23 @@ def enable_wg(wgconfig):
     Returns:
         tuple[bool, str]: `(True, '')` on success, or `(False, error_message)`.
     """
+    log_info(f'[WireGuard] Bringing up WireGuard interface "{wgconfig}"...')
     if not is_wireguard_installed():
+        log_error(f'[WireGuard] wireguard-tools not installed')
         return False, WIREGUARD_NOT_INSTALLED_MSG
     wg_quick_bin = _wg_quick_binary()
     try:
+        log_debug(f'[WireGuard] Executing: {wg_quick_bin} up {wgconfig}')
         returncode, output = _run_wg_quick([wg_quick_bin, 'up', wgconfig], timeout=25)
-    except (FileNotFoundError, OSError):
+        log_debug(f'[WireGuard] wg-quick up output (rc={returncode}): {output}')
+    except (FileNotFoundError, OSError) as exc:
+        log_error(f'[WireGuard] Error executing {wg_quick_bin}: {exc}')
         return False, WIREGUARD_NOT_INSTALLED_MSG
     if returncode != 0:
         err = output or 'wg-quick failed to start tunnel.'
+        log_error(f'[WireGuard] wg-quick failed: {err}')
         return False, err
+    log_info(f'[WireGuard] Interface "{wgconfig}" is up and running')
     return True, ''
 
 

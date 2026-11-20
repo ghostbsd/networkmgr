@@ -21,6 +21,7 @@ from NetworkMgr.openvpn_api import (
     CIPHER_OPTIONS,
     OPENVPN_CONFIG_PATH,
     OPENVPN_NOT_INSTALLED_MSG,
+    _normalize_ipv4_netmask,
     default_openvpn_config,
     detect_vpn_file_type,
     is_openvpn_installed,
@@ -889,7 +890,9 @@ class VPNConnectionDialog(Gtk.Window):
         self.ipv4_method_combo.append('auto', _("Automatic (VPN)"))
         self.ipv4_method_combo.append('manual', _("Manual (Static IPv4)"))
         init_m4 = 'manual' if (
-            self.cfg.get('ipv4_method') == 'manual' or self.cfg.get('ifconfig_local')
+            str(self.cfg.get('ipv4_method', '')).lower() == 'manual'
+            or self.cfg.get('ifconfig_local')
+            or self.cfg.get('ipv4_address')
         ) else 'auto'
         self.ipv4_method_combo.set_active_id(init_m4)
         self.ipv4_method_combo.connect("changed", lambda _c: self.refresh_dynamic_visibility())
@@ -900,21 +903,21 @@ class VPNConnectionDialog(Gtk.Window):
         top_grid.attach(addr_lbl, 0, 1, 1, 1)
         self.ifconfig_local_entry = Gtk.Entry()
         self.ifconfig_local_entry.set_placeholder_text("10.8.0.2")
-        self.ifconfig_local_entry.set_text(self.cfg.get('ifconfig_local', ''))
+        self.ifconfig_local_entry.set_text(self.cfg.get('ifconfig_local') or self.cfg.get('ipv4_address') or '')
         top_grid.attach(self.ifconfig_local_entry, 1, 1, 2, 1)
 
         mask_lbl = _field_label(_("Netmask / Peer IP:"))
         top_grid.attach(mask_lbl, 0, 2, 1, 1)
         self.ifconfig_remote_entry = Gtk.Entry()
         self.ifconfig_remote_entry.set_placeholder_text("255.255.255.0 or 10.8.0.1")
-        self.ifconfig_remote_entry.set_text(self.cfg.get('ifconfig_remote', ''))
+        self.ifconfig_remote_entry.set_text(self.cfg.get('ifconfig_remote') or self.cfg.get('ipv4_netmask') or '')
         top_grid.attach(self.ifconfig_remote_entry, 1, 2, 2, 1)
 
         rgw_lbl = _field_label(_("IPv4 Gateway:"))
         top_grid.attach(rgw_lbl, 0, 3, 1, 1)
         self.route_gw_entry = Gtk.Entry()
         self.route_gw_entry.set_placeholder_text(_("Optional (e.g. 10.8.0.1)"))
-        self.route_gw_entry.set_text(self.cfg.get('route_gateway', ''))
+        self.route_gw_entry.set_text(self.cfg.get('route_gateway') or self.cfg.get('ipv4_gateway') or '')
         top_grid.attach(self.route_gw_entry, 1, 3, 2, 1)
 
         self.ipv4_manual_widgets = (
@@ -929,7 +932,11 @@ class VPNConnectionDialog(Gtk.Window):
         self.dns_entry = Gtk.Entry()
         self.dns_entry.set_hexpand(True)
         self.dns_entry.set_placeholder_text("1.1.1.1, 8.8.8.8")
-        self.dns_entry.set_text(', '.join(self.cfg.get('dns_servers', [])))
+        if isinstance(self.cfg.get('dns_servers'), list):
+            dns_val = ', '.join(self.cfg.get('dns_servers', []))
+        else:
+            dns_val = self.cfg.get('ipv4_dns', '') or ''
+        self.dns_entry.set_text(dns_val)
         top_grid.attach(self.dns_entry, 1, 4, 2, 1)
 
         dom_lbl = _field_label(_("Search Domains:"))
@@ -943,11 +950,12 @@ class VPNConnectionDialog(Gtk.Window):
         vbox.pack_start(_bold_label(_("Static Routes (IPv4)")), False, False, 2)
 
         self.ipv4_routes_store = Gtk.ListStore(str, str, str, str)
-        for rt in self.cfg.get('routes', []):
+        routes_list = self.cfg.get('routes') or self.cfg.get('ipv4_routes') or []
+        for rt in routes_list:
             self.ipv4_routes_store.append([
-                rt.get('network', ''),
+                rt.get('network') or rt.get('address') or '',
                 rt.get('netmask', '255.255.255.0'),
-                rt.get('gateway', 'vpn_gateway'),
+                rt.get('gateway', 'vpn_gateway' if self.vpn_type == 'openvpn' else ''),
                 rt.get('metric', ''),
             ])
 
@@ -1002,25 +1010,45 @@ class VPNConnectionDialog(Gtk.Window):
             label=_("Route all traffic through VPN (redirect-gateway)")
         )
         self.redirect_gw_check.set_active(bool(self.cfg.get('redirect_gateway')))
-        vbox.pack_start(self.redirect_gw_check, False, False, 0)
+        if self.vpn_type == 'openvpn':
+            vbox.pack_start(self.redirect_gw_check, False, False, 0)
 
         self.route_nopull_check = Gtk.CheckButton(
             label=_("Ignore automatically obtained routes (route-nopull)")
         )
         self.route_nopull_check.set_active(bool(self.cfg.get('route_nopull')))
-        vbox.pack_start(self.route_nopull_check, False, False, 0)
+        if self.vpn_type == 'openvpn':
+            vbox.pack_start(self.route_nopull_check, False, False, 0)
 
         return vbox
 
     def _on_ipv4_route_cell_edited(self, _renderer, path, new_text, col_idx):
-        self.ipv4_routes_store[path][col_idx] = new_text.strip()
+        val = new_text.strip()
+        if col_idx == 0 and '/' in val:
+            net_part, plen_part = val.split('/', 1)
+            self.ipv4_routes_store[path][0] = net_part.strip()
+            self.ipv4_routes_store[path][1] = _normalize_ipv4_netmask(plen_part)
+            return
+        if col_idx == 1 and val:
+            val = _normalize_ipv4_netmask(val)
+        self.ipv4_routes_store[path][col_idx] = val
 
     def _on_add_ipv4_route(self, _widget):
         net = self.r4_net_entry.get_text().strip()
         if not net:
             return
-        mask = self.r4_mask_entry.get_text().strip() or '255.255.255.0'
-        gw = self.r4_gw_entry.get_text().strip() or 'vpn_gateway'
+        mask = self.r4_mask_entry.get_text().strip()
+        if '/' in net:
+            net_part, plen_part = net.split('/', 1)
+            net = net_part.strip()
+            if not mask:
+                mask = _normalize_ipv4_netmask(plen_part)
+            else:
+                mask = _normalize_ipv4_netmask(mask)
+        else:
+            mask = _normalize_ipv4_netmask(mask or '255.255.255.0')
+        default_gw = 'vpn_gateway' if self.vpn_type == 'openvpn' else ''
+        gw = self.r4_gw_entry.get_text().strip() or default_gw
         metric = self.r4_metric_entry.get_text().strip()
         self.ipv4_routes_store.append([net, mask, gw, metric])
         self.r4_net_entry.set_text('')
@@ -1049,7 +1077,7 @@ class VPNConnectionDialog(Gtk.Window):
         self.ipv6_method_combo.append('auto', _("Automatic (VPN)"))
         self.ipv6_method_combo.append('manual', _("Manual (Static IPv6)"))
         self.ipv6_method_combo.append('disabled', _("Disabled / Ignore"))
-        init_m6 = self.cfg.get('ipv6_method', 'auto')
+        init_m6 = str(self.cfg.get('ipv6_method') or 'auto').lower()
         if init_m6 not in ('auto', 'manual', 'disabled'):
             init_m6 = 'auto'
         self.ipv6_method_combo.set_active_id(init_m6)
@@ -1061,21 +1089,21 @@ class VPNConnectionDialog(Gtk.Window):
         self.ifconfig_ipv6_local_entry = Gtk.Entry()
         self.ifconfig_ipv6_local_entry.set_hexpand(True)
         self.ifconfig_ipv6_local_entry.set_placeholder_text("fd00::2")
-        self.ifconfig_ipv6_local_entry.set_text(self.cfg.get('ifconfig_ipv6_local', ''))
+        self.ifconfig_ipv6_local_entry.set_text(self.cfg.get('ifconfig_ipv6_local') or self.cfg.get('ipv6_address') or '')
         top_grid.attach(self.ifconfig_ipv6_local_entry, 1, 1, 2, 1)
 
         plen6_lbl = _field_label(_("Prefix Length:"))
         top_grid.attach(plen6_lbl, 0, 2, 1, 1)
         self.ifconfig_ipv6_prefix_entry = Gtk.Entry()
         self.ifconfig_ipv6_prefix_entry.set_placeholder_text("64")
-        self.ifconfig_ipv6_prefix_entry.set_text(str(self.cfg.get('ifconfig_ipv6_prefix', '64')))
+        self.ifconfig_ipv6_prefix_entry.set_text(str(self.cfg.get('ifconfig_ipv6_prefix') or self.cfg.get('ipv6_prefixlen') or '64'))
         top_grid.attach(self.ifconfig_ipv6_prefix_entry, 1, 2, 1, 1)
 
         gw6_lbl = _field_label(_("IPv6 Gateway / Peer:"))
         top_grid.attach(gw6_lbl, 0, 3, 1, 1)
         self.ifconfig_ipv6_remote_entry = Gtk.Entry()
         self.ifconfig_ipv6_remote_entry.set_placeholder_text("fd00::1")
-        self.ifconfig_ipv6_remote_entry.set_text(self.cfg.get('ifconfig_ipv6_remote', ''))
+        self.ifconfig_ipv6_remote_entry.set_text(self.cfg.get('ifconfig_ipv6_remote') or self.cfg.get('ipv6_gateway') or '')
         top_grid.attach(self.ifconfig_ipv6_remote_entry, 1, 3, 2, 1)
 
         self.ipv6_manual_widgets = (
@@ -1088,9 +1116,14 @@ class VPNConnectionDialog(Gtk.Window):
         vbox.pack_start(_bold_label(_("Static Routes (IPv6)")), False, False, 2)
 
         self.ipv6_routes_store = Gtk.ListStore(str, str, str)
-        for rt6 in self.cfg.get('routes_ipv6', []):
+        routes6_list = self.cfg.get('routes_ipv6') or self.cfg.get('ipv6_routes') or []
+        for rt6 in routes6_list:
+            dest = rt6.get('network', '')
+            if not dest and rt6.get('address'):
+                plen = rt6.get('prefixlen', '64')
+                dest = f"{rt6['address']}/{plen}"
             self.ipv6_routes_store.append([
-                rt6.get('network', ''),
+                dest,
                 rt6.get('gateway', ''),
                 rt6.get('metric', ''),
             ])
@@ -1495,6 +1528,8 @@ class VPNConnectionDialog(Gtk.Window):
         tab2.attach(self.ipsec_defroute_check, 1, r2, 2, 1)
 
         notebook.append_page(tab2, Gtk.Label(label=_("Phase 1/2 & PPP")))
+        notebook.append_page(self._build_ipv4_tab(), Gtk.Label(label=_("IPv4 Settings")))
+        notebook.append_page(self._build_ipv6_tab(), Gtk.Label(label=_("IPv6 Settings")))
 
     def refresh_dynamic_visibility(self):
         """Show only the fields relevant to the selected authentication/IP/TLS/proxy mode."""
@@ -1515,6 +1550,15 @@ class VPNConnectionDialog(Gtk.Window):
             for key, show_flag in vis.items():
                 for widget in self.ipsec_rows.get(key, ()):
                     widget.set_visible(show_flag)
+
+            ipv4_manual = self.ipv4_method_combo.get_active_id() == 'manual'
+            for widget in getattr(self, 'ipv4_manual_widgets', ()):
+                widget.set_sensitive(ipv4_manual)
+
+            ipv6_mode = self.ipv6_method_combo.get_active_id() or 'auto'
+            ipv6_manual = ipv6_mode == 'manual'
+            for widget in getattr(self, 'ipv6_manual_widgets', ()):
+                widget.set_sensitive(ipv6_manual)
             return
         auth_type = self.auth_type_combo.get_active_id() or 'tls'
         visibility = {
@@ -1599,6 +1643,12 @@ class VPNConnectionDialog(Gtk.Window):
                 target_path = os.path.join(IPSEC_DIR, f'{target_id}.conf')
                 if not self._confirm_overwrite_if_exists(target_path, target_id, orig_id):
                     return
+                # Commit any typed but un-added route from the quick-add bar
+                if self.r4_net_entry.get_text().strip():
+                    self._on_add_ipv4_route(None)
+                if self.r6_net_entry.get_text().strip():
+                    self._on_add_ipv6_route(None)
+
                 self.cfg['protocol'] = (
                     self.ipsec_proto_combo.get_active_id() or 'l2tp-ipsec'
                 )
@@ -1623,7 +1673,63 @@ class VPNConnectionDialog(Gtk.Window):
                 self.cfg['ppp_pap'] = self.ipsec_pap_check.get_active()
                 self.cfg['mppe_required'] = self.ipsec_mppe_check.get_active()
                 self.cfg['default_route'] = self.ipsec_defroute_check.get_active()
-                save_ipsec_config(self.cfg)
+
+                # Collect IPv4 settings for IPsec
+                m4 = self.ipv4_method_combo.get_active_id() or 'auto'
+                self.cfg['ipv4_method'] = 'Manual' if m4 == 'manual' else 'Automatic'
+                self.cfg['ipv4_address'] = self.ifconfig_local_entry.get_text().strip()
+                self.cfg['ipv4_netmask'] = self.ifconfig_remote_entry.get_text().strip()
+                self.cfg['ipv4_gateway'] = self.route_gw_entry.get_text().strip()
+                self.cfg['ipv4_dns'] = self.dns_entry.get_text().strip()
+
+                ipv4_routes = []
+                for row in self.ipv4_routes_store:
+                    r_addr = row[0].strip()
+                    r_mask = row[1].strip() or '255.255.255.0'
+                    if not r_addr:
+                        continue
+                    if '/' in r_addr:
+                        np, pp = r_addr.split('/', 1)
+                        r_addr = np.strip()
+                        if not r_mask or r_mask in ('255.255.255.255', '255.255.255.0'):
+                            r_mask = _normalize_ipv4_netmask(pp)
+                        else:
+                            r_mask = _normalize_ipv4_netmask(r_mask)
+                    else:
+                        r_mask = _normalize_ipv4_netmask(r_mask)
+                    ipv4_routes.append({
+                        'address': r_addr,
+                        'netmask': r_mask,
+                        'gateway': row[2].strip(),
+                        'metric': row[3].strip(),
+                    })
+                self.cfg['ipv4_routes'] = ipv4_routes
+
+                # Collect IPv6 settings for IPsec
+                m6 = self.ipv6_method_combo.get_active_id() or 'auto'
+                self.cfg['ipv6_method'] = 'Manual' if m6 == 'manual' else ('Disabled' if m6 == 'disabled' else 'Automatic')
+                self.cfg['ipv6_address'] = self.ifconfig_ipv6_local_entry.get_text().strip()
+                self.cfg['ipv6_prefixlen'] = self.ifconfig_ipv6_prefix_entry.get_text().strip() or '64'
+                self.cfg['ipv6_gateway'] = self.ifconfig_ipv6_remote_entry.get_text().strip()
+
+                ipv6_routes = []
+                for row in self.ipv6_routes_store:
+                    r6_dest = row[0].strip()
+                    if not r6_dest:
+                        continue
+                    if '/' in r6_dest:
+                        a6, p6 = r6_dest.split('/', 1)
+                    else:
+                        a6, p6 = r6_dest, '64'
+                    ipv6_routes.append({
+                        'address': a6.strip(),
+                        'prefixlen': p6.strip(),
+                        'gateway': row[1].strip(),
+                        'metric': row[2].strip(),
+                    })
+                self.cfg['ipv6_routes'] = ipv6_routes
+
+                save_ipsec_config(self.cfg, target_dir=IPSEC_DIR)
                 saved_id = self.cfg['profile_id']
             else:
                 target_id = sanitize_profile_id(self.cfg['name'])
@@ -1653,16 +1759,28 @@ class VPNConnectionDialog(Gtk.Window):
                 self.cfg['ifconfig_local'] = self.ifconfig_local_entry.get_text().strip()
                 self.cfg['ifconfig_remote'] = self.ifconfig_remote_entry.get_text().strip()
                 self.cfg['route_gateway'] = self.route_gw_entry.get_text().strip()
-                self.cfg['routes'] = [
-                    {
-                        'network': row[0].strip(),
-                        'netmask': row[1].strip() or '255.255.255.0',
+                routes = []
+                for row in self.ipv4_routes_store:
+                    r_net = row[0].strip()
+                    r_mask = row[1].strip() or '255.255.255.0'
+                    if not r_net:
+                        continue
+                    if '/' in r_net:
+                        np, pp = r_net.split('/', 1)
+                        r_net = np.strip()
+                        if not r_mask or r_mask in ('255.255.255.255', '255.255.255.0'):
+                            r_mask = _normalize_ipv4_netmask(pp)
+                        else:
+                            r_mask = _normalize_ipv4_netmask(r_mask)
+                    else:
+                        r_mask = _normalize_ipv4_netmask(r_mask)
+                    routes.append({
+                        'network': r_net,
+                        'netmask': r_mask,
                         'gateway': row[2].strip() or 'vpn_gateway',
                         'metric': row[3].strip(),
-                    }
-                    for row in self.ipv4_routes_store
-                    if row[0].strip()
-                ]
+                    })
+                self.cfg['routes'] = routes
 
                 self.cfg['ipv6_method'] = self.ipv6_method_combo.get_active_id() or 'auto'
                 self.cfg['ifconfig_ipv6_local'] = self.ifconfig_ipv6_local_entry.get_text().strip()

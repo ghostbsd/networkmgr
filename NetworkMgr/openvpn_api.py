@@ -1704,6 +1704,7 @@ def enable_openvpn(profile_id, username=None, password=None, key_password=None, 
             '--log', log_file,
             '--cd', OPENVPN_CONFIG_PATH,
             '--config', conf_path,
+            '--auth-retry', 'nointeract',
         ]
 
         # Protect the VPN server endpoints against routing loops if pushed routes overlap
