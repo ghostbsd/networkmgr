@@ -1,8 +1,13 @@
 #!/usr/bin/env python
 
 import signal
+import sys
+from NetworkMgr.logger import set_verbose
 from NetworkMgr.trayicon import TrayIcon
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+if any(arg in sys.argv for arg in ('--verbose', '-v')):
+    set_verbose(True)
 
 TrayIcon().run()

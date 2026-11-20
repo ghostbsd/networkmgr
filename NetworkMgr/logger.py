@@ -19,14 +19,15 @@ def set_verbose(enabled=True):
     logger.setLevel(level)
 
     logger.handlers.clear()
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(level)
-    formatter = logging.Formatter(
-        fmt='%(asctime)s [%(levelname)s] %(message)s',
-        datefmt='%H:%M:%S',
-    )
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
+    if _VERBOSE:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setLevel(level)
+        formatter = logging.Formatter(
+            fmt='%(asctime)s [%(levelname)s] %(message)s',
+            datefmt='%H:%M:%S',
+        )
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
 
 
 def is_verbose():
@@ -56,3 +57,8 @@ def log_error(msg, *args):
     """Emit an error-level log message if verbose mode is active."""
     if _VERBOSE:
         logger.error(msg, *args)
+
+
+# Enable logging only when the user passes --verbose or -v
+if any(arg in sys.argv for arg in ('--verbose', '-v')):
+    set_verbose(True)

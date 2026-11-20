@@ -211,6 +211,7 @@ class TrayIcon:
         # Set while an attempt runs so the refresh does not draw over the
         # animation. Written from the worker; bool assignment is atomic.
         self.connecting = False
+        self._connecting_openvpn = set()
         self.connect_frame = 0
         # Failed attempts since the user last picked this network from the
         # menu. At three the saved block is removed, see MAX_ATTEMPTS.
@@ -426,6 +427,8 @@ class TrayIcon:
             ovpn_devices = ovpn_info['configs']
             for ovpn_dev, ovpn_meta in ovpn_devices.items():
                 connection_state = ovpn_meta['state']
+                if ovpn_dev in self._connecting_openvpn:
+                    connection_state = "Connecting"
                 connection_info = ovpn_meta['info']
                 ovpn_path = ovpn_meta.get('path', '')
                 is_connected = connection_state == "Connected"
@@ -884,6 +887,8 @@ class TrayIcon:
         if not is_openvpn_installed():
             show_openvpn_not_installed_alert()
             return
+        if ovpn_dev in self._connecting_openvpn:
+            return
         display_name = ovpn_meta.get('info', ovpn_dev)
         if ovpn_meta.get('needs_auth'):
             dialog = OpenVPNAuthDialog(
@@ -903,16 +908,23 @@ class TrayIcon:
         if not is_openvpn_installed():
             show_openvpn_not_installed_alert()
             return
+        if ovpn_dev in self._connecting_openvpn:
+            return
+        self._connecting_openvpn.add(ovpn_dev)
         label_name = display_name or ovpn_dev
 
         def _worker():
-            ok, err_msg = enable_openvpn(ovpn_dev, username=username, password=password)
-            GLib.idle_add(self._on_openvpn_connected, label_name, ok, err_msg)
+            try:
+                ok, err_msg = enable_openvpn(ovpn_dev, username=username, password=password)
+            except Exception as exc:
+                ok, err_msg = False, str(exc)
+            GLib.idle_add(self._on_openvpn_connected, ovpn_dev, label_name, ok, err_msg)
 
         threading.Thread(target=_worker, daemon=True).start()
 
-    def _on_openvpn_connected(self, label_name, ok, err_msg):
+    def _on_openvpn_connected(self, ovpn_dev, label_name, ok, err_msg):
         """Handle OpenVPN connection result on the GTK main thread."""
+        self._connecting_openvpn.discard(ovpn_dev)
         self.update_info()
         if not ok:
             if err_msg == OPENVPN_NOT_INSTALLED_MSG:
@@ -930,6 +942,7 @@ class TrayIcon:
 
     def disconnect_openvpn(self, _widget, ovpn_dev, display_name=None):
         """Take an OpenVPN tunnel down."""
+        self._connecting_openvpn.discard(ovpn_dev)
         disable_openvpn(ovpn_dev)
         self.update_info()
         show_connection_notification(display_name or ovpn_dev, False)

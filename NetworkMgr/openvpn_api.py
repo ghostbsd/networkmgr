@@ -17,9 +17,9 @@ import os
 import re
 import shutil
 import signal
-import socket
 import sys
 import tempfile
+import threading
 from platform import system
 from subprocess import DEVNULL, PIPE, run
 from time import sleep
@@ -30,6 +30,9 @@ PREFIX = '/usr/local' if system() in ('FreeBSD', 'MidnightBSD', 'DragonFly') els
 OPENVPN_CONFIG_PATH = f'{PREFIX}/etc/openvpn/'
 OPENVPN_CERTS_PATH = f'{PREFIX}/etc/openvpn/certs/'
 OPENVPN_PID_DIR = '/var/run'
+
+_CONNECTING_PROFILES = set()
+_CONNECTING_LOCK = threading.Lock()
 
 OPENVPN_NOT_INSTALLED_MSG = (
     "OpenVPN is not installed on this system.\n\n"
@@ -789,6 +792,28 @@ def parse_openvpn_config(filepath):
         if first_cipher:
             cfg['cipher'] = first_cipher
 
+    # Filter out auto-generated net_gateway host routes to remotes
+    remote_hosts = {
+        rem.get('host', '').strip()
+        for rem in cfg.get('remotes', [])
+        if rem.get('host')
+    }
+    if remote_hosts:
+        cleaned_routes = []
+        seen = set()
+        for rt in cfg.get('routes', []):
+            net = rt.get('network', '').strip()
+            mask = rt.get('netmask', '').strip()
+            gw = rt.get('gateway', '').strip()
+            metric = rt.get('metric', '').strip()
+            if gw == 'net_gateway' and mask in ('255.255.255.255', '32') and net in remote_hosts:
+                continue
+            key = (net, mask, gw, metric)
+            if key not in seen:
+                seen.add(key)
+                cleaned_routes.append(rt)
+        cfg['routes'] = cleaned_routes
+
     return cfg
 
 
@@ -1009,12 +1034,6 @@ def save_openvpn_config(cfg):
         else:
             lines.append(f'remote {r_host}')
 
-    # Protect the VPN server endpoints against routing loops if pushed routes overlap
-    for rem in remotes:
-        r_host = rem.get('host', '').strip()
-        if r_host:
-            lines.append(f'route {r_host} 255.255.255.255 net_gateway')
-
     if cfg.get('remote_random'):
         lines.append('remote-random')
     if cfg.get('nobind', True):
@@ -1170,6 +1189,12 @@ def save_openvpn_config(cfg):
         lines.append(f'redirect-gateway {flags}' if flags else 'redirect-gateway def1')
     if cfg.get('route_nopull'):
         lines.append('route-nopull')
+    remote_hosts = {
+        rem.get('host', '').strip()
+        for rem in remotes
+        if rem.get('host')
+    }
+    seen_routes = set()
     for rt in cfg.get('routes', []):
         net = rt.get('network', '').strip()
         if net:
@@ -1184,8 +1209,14 @@ def save_openvpn_config(cfg):
             else:
                 mask = _normalize_ipv4_netmask(mask or '255.255.255.255')
             gw = rt.get('gateway', '').strip() or 'vpn_gateway'
+            # Skip auto-generated net_gateway host routes to remotes
+            if gw == 'net_gateway' and mask in ('255.255.255.255', '32') and net in remote_hosts:
+                continue
             metric = rt.get('metric', '').strip()
-            lines.append(f'route {net} {mask} {gw} {metric}'.strip())
+            route_str = f'route {net} {mask} {gw} {metric}'.strip()
+            if route_str not in seen_routes:
+                seen_routes.add(route_str)
+                lines.append(route_str)
 
     for rt6 in cfg.get('routes_ipv6', []):
         net6 = rt6.get('network', '').strip()
@@ -1424,6 +1455,10 @@ def _tun_device_has_address(dev_name):
 
 def openvpn_status(profile_id):
     """Return 'Connected', 'Connecting', or 'Disconnected' for an OpenVPN profile."""
+    with _CONNECTING_LOCK:
+        if profile_id in _CONNECTING_PROFILES:
+            return 'Connecting'
+
     pid = _profile_pid(profile_id)
     if pid is None:
         return 'Disconnected'
@@ -1586,44 +1621,6 @@ def _sanitize_conf_file_routes(conf_path):
         pass
 
 
-def _get_physical_default_gateway():
-    """Find the current physical IPv4 default gateway IP and interface from netstat."""
-    for args in (['netstat', '-rn', '-f', 'inet'], ['netstat', '-rn']):
-        try:
-            res = run(args, stdout=PIPE, stderr=PIPE, universal_newlines=True, check=False)
-            if res.returncode == 0 and res.stdout:
-                for line in res.stdout.splitlines():
-                    parts = line.split()
-                    if not parts:
-                        continue
-                    if parts[0] in ('default', '0.0.0.0'):
-                        if len(parts) >= 2 and parts[1] not in ('default', '0.0.0.0'):
-                            gw = parts[1]
-                            iface = parts[3] if len(parts) > 3 and parts[2].startswith('UG') and not parts[3].startswith('UG') else parts[-1]
-                            return gw, iface
-        except OSError:
-            pass
-    return None, None
-
-
-def _resolve_ipv4(host):
-    """Resolve a hostname or IP string to an IPv4 address string."""
-    clean_host = str(host or '').strip()
-    if not clean_host:
-        return ''
-    try:
-        return str(IPv4Address(clean_host))
-    except ValueError:
-        pass
-    try:
-        infos = socket.getaddrinfo(clean_host, None, socket.AF_INET)
-        if infos:
-            return infos[0][4][0]
-    except (socket.gaierror, OSError):
-        pass
-    return ''
-
-
 def _extract_remote_gateways(conf_path):
     """Extract list of remote gateway hostnames/IPs from an OpenVPN config."""
     gateways = []
@@ -1631,10 +1628,11 @@ def _extract_remote_gateways(conf_path):
         with open(conf_path, 'r', encoding='utf-8', errors='replace') as fh:
             for line in fh:
                 sline = line.strip()
-                if sline.startswith('remote '):
-                    parts = sline.split()
-                    if len(parts) >= 2 and parts[1] not in gateways:
-                        gateways.append(parts[1])
+                if not sline or sline.startswith(('#', ';')):
+                    continue
+                parts = sline.split()
+                if len(parts) >= 2 and parts[0] == 'remote' and parts[1] not in gateways:
+                    gateways.append(parts[1])
     except OSError:
         pass
     return gateways
@@ -1658,76 +1656,79 @@ def enable_openvpn(profile_id, username=None, password=None, key_password=None, 
         log_error(f'[OpenVPN] Binary not found. {OPENVPN_NOT_INSTALLED_MSG}')
         return False, OPENVPN_NOT_INSTALLED_MSG
 
-    conf_path = None
-    for ext in ('.conf', '.ovpn'):
-        candidate = os.path.join(OPENVPN_CONFIG_PATH, f'{profile_id}{ext}')
-        if os.path.isfile(candidate):
-            conf_path = candidate
-            break
+    with _CONNECTING_LOCK:
+        if profile_id in _CONNECTING_PROFILES:
+            log_info(f'[OpenVPN] Tunnel "{profile_id}" is already connecting')
+            return True, ''
+        if _profile_pid(profile_id) is not None:
+            log_info(f'[OpenVPN] Tunnel "{profile_id}" is already running')
+            return True, ''
+        _CONNECTING_PROFILES.add(profile_id)
 
-    if not conf_path:
-        log_error(f'[OpenVPN] Configuration for "{profile_id}" was not found in {OPENVPN_CONFIG_PATH}')
-        return False, f'Configuration for "{profile_id}" was not found.'
+    temp_files = []
+    try:
+        conf_path = None
+        for ext in ('.conf', '.ovpn'):
+            candidate = os.path.join(OPENVPN_CONFIG_PATH, f'{profile_id}{ext}')
+            if os.path.isfile(candidate):
+                conf_path = candidate
+                break
 
-    log_info(f'[OpenVPN] Starting OpenVPN tunnel "{profile_id}" (config={conf_path})')
-    _sanitize_conf_file_routes(conf_path)
+        if not conf_path:
+            log_error(f'[OpenVPN] Configuration for "{profile_id}" was not found in {OPENVPN_CONFIG_PATH}')
+            return False, f'Configuration for "{profile_id}" was not found.'
 
-    if _profile_pid(profile_id) is not None:
-        log_info(f'[OpenVPN] Tunnel "{profile_id}" is already running')
-        return True, ''
+        log_info(f'[OpenVPN] Starting OpenVPN tunnel "{profile_id}" (config={conf_path})')
+        _sanitize_conf_file_routes(conf_path)
 
-    _ensure_tun_module()
+        _ensure_tun_module()
 
-    pid_file = f'{OPENVPN_PID_DIR}/openvpn_{profile_id}.pid'
-    status_file = f'{OPENVPN_PID_DIR}/openvpn_{profile_id}.status'
-    log_file = f'{OPENVPN_PID_DIR}/openvpn_{profile_id}.log'
+        pid_file = f'{OPENVPN_PID_DIR}/openvpn_{profile_id}.pid'
+        status_file = f'{OPENVPN_PID_DIR}/openvpn_{profile_id}.status'
+        log_file = f'{OPENVPN_PID_DIR}/openvpn_{profile_id}.log'
 
-    # Remove stale runtime files from prior sessions
-    for stale_path in (pid_file, status_file, log_file):
-        if os.path.exists(stale_path):
-            try:
-                os.remove(stale_path)
-            except OSError:
-                pass
+        # Remove stale runtime files from prior sessions
+        for suffix in ('.pid', '.status', '.log', '.endpoint'):
+            stale_path = f'{OPENVPN_PID_DIR}/openvpn_{profile_id}{suffix}'
+            if os.path.exists(stale_path):
+                try:
+                    os.remove(stale_path)
+                except OSError:
+                    pass
 
-    # Pin remote server host route(s) to physical default gateway so that
-    # any pushed routes (like subnets covering the server or default route)
-    # never hijack the OpenVPN outer TCP/UDP transport connection.
-    phys_gw, _ = _get_physical_default_gateway()
-    pinned_endpoints = []
-    for r_gw in _extract_remote_gateways(conf_path):
-        gw_ip = _resolve_ipv4(r_gw)
-        if gw_ip and phys_gw and gw_ip != phys_gw:
-            log_debug(f'[OpenVPN] Pinning VPN server route: route -n add -host {gw_ip} {phys_gw}')
-            run(['route', '-n', 'add', '-host', gw_ip, phys_gw], stdout=PIPE, stderr=PIPE, check=False)
-            pinned_endpoints.append((gw_ip, phys_gw))
+        cmd = [
+            openvpn_bin,
+            '--daemon', f'openvpn_{profile_id}',
+            '--writepid', pid_file,
+            '--status', status_file, '1',
+            '--log', log_file,
+            '--cd', OPENVPN_CONFIG_PATH,
+            '--config', conf_path,
+        ]
 
-    if pinned_endpoints:
-        endpoint_file = f'{OPENVPN_PID_DIR}/openvpn_{profile_id}.endpoint'
+        # Protect the VPN server endpoints against routing loops if pushed routes overlap
+        existing_conf_routes = set()
         try:
-            with open(endpoint_file, 'w', encoding='utf-8') as fh:
-                for ep_ip, ep_gw in pinned_endpoints:
-                    fh.write(f'{ep_ip} {ep_gw}\n')
+            with open(conf_path, 'r', encoding='utf-8', errors='replace') as fh:
+                for line in fh:
+                    sline = line.strip()
+                    if not sline or sline.startswith(('#', ';')):
+                        continue
+                    parts = sline.split()
+                    if len(parts) >= 2 and parts[0] == 'route':
+                        existing_conf_routes.add(parts[1])
         except OSError:
             pass
 
-    cmd = [
-        openvpn_bin,
-        '--daemon', f'openvpn_{profile_id}',
-        '--writepid', pid_file,
-        '--status', status_file, '1',
-        '--log', log_file,
-        '--cd', OPENVPN_CONFIG_PATH,
-        '--config', conf_path,
-    ]
+        for r_gw in _extract_remote_gateways(conf_path):
+            if r_gw not in existing_conf_routes:
+                cmd.extend(['--route', r_gw, '255.255.255.255', 'net_gateway'])
 
-    tmp_dir = (
-        OPENVPN_PID_DIR
-        if os.path.isdir(OPENVPN_PID_DIR) and os.access(OPENVPN_PID_DIR, os.W_OK)
-        else None
-    )
-    temp_files = []
-    try:
+        tmp_dir = (
+            OPENVPN_PID_DIR
+            if os.path.isdir(OPENVPN_PID_DIR) and os.access(OPENVPN_PID_DIR, os.W_OK)
+            else None
+        )
         if username is not None and password is not None:
             fd, tmp_auth = tempfile.mkstemp(
                 prefix=f'openvpn_{profile_id}_auth_',
@@ -1754,15 +1755,18 @@ def enable_openvpn(profile_id, username=None, password=None, key_password=None, 
             result = run(cmd, stdout=PIPE, stderr=PIPE, check=False, text=True)
         except FileNotFoundError:
             log_error(f'[OpenVPN] Executable not found: {openvpn_bin}')
+            disable_openvpn(profile_id)
             return False, OPENVPN_NOT_INSTALLED_MSG
         except OSError as exc:
             log_error(f'[OpenVPN] Failed to execute OpenVPN: {exc}')
+            disable_openvpn(profile_id)
             return False, f'Failed to execute OpenVPN: {exc}'
         if result.returncode != 0:
             err = (result.stderr or result.stdout or '').strip()
             if not err and os.path.isfile(log_file):
                 err = _extract_openvpn_log_error(log_file)
             log_error(f'[OpenVPN] Daemon failed to start (rc={result.returncode}): {err}')
+            disable_openvpn(profile_id)
             return False, err or 'OpenVPN failed to start.'
 
         # Poll the daemon log to verify the tunnel actually finishes initialization
@@ -1805,8 +1809,7 @@ def enable_openvpn(profile_id, username=None, password=None, key_password=None, 
                     break
 
         if not connected:
-            if _profile_pid(profile_id) is not None:
-                disable_openvpn(profile_id)
+            disable_openvpn(profile_id)
             if not last_error:
                 last_error = (
                     _extract_openvpn_log_error(log_file)
@@ -1817,6 +1820,8 @@ def enable_openvpn(profile_id, username=None, password=None, key_password=None, 
 
         return True, ''
     finally:
+        with _CONNECTING_LOCK:
+            _CONNECTING_PROFILES.discard(profile_id)
         for tmp_path in temp_files:
             if os.path.exists(tmp_path):
                 try:
@@ -1831,6 +1836,8 @@ def disable_openvpn(profile_id):
     Args:
         profile_id (str): the profile identifier without extension.
     """
+    with _CONNECTING_LOCK:
+        _CONNECTING_PROFILES.discard(profile_id)
     log_info(f'[OpenVPN] Disconnecting tunnel "{profile_id}"...')
     pid = _profile_pid(profile_id)
     if pid is not None:
@@ -1844,22 +1851,6 @@ def disable_openvpn(profile_id):
             if not _pid_is_alive(pid):
                 break
             sleep(0.1)
-
-    endpoint_file = f'{OPENVPN_PID_DIR}/openvpn_{profile_id}.endpoint'
-    if os.path.isfile(endpoint_file):
-        try:
-            with open(endpoint_file, 'r', encoding='utf-8') as fh:
-                for line in fh:
-                    parts = line.strip().split()
-                    if len(parts) >= 2:
-                        log_debug(f'[OpenVPN] Removing pinned VPN server route: route -n delete -host {parts[0]} {parts[1]}')
-                        run(['route', '-n', 'delete', '-host', parts[0], parts[1]], stdout=PIPE, stderr=PIPE, check=False)
-        except OSError:
-            pass
-        try:
-            os.remove(endpoint_file)
-        except OSError:
-            pass
 
     for suffix in ('.pid', '.status', '.endpoint'):
         path = f'{OPENVPN_PID_DIR}/openvpn_{profile_id}{suffix}'
