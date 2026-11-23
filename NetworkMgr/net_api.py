@@ -10,6 +10,7 @@ in this module touches GTK.
 """
 
 from concurrent.futures import ThreadPoolExecutor
+from ipaddress import IPv6Address
 from subprocess import (
     DEVNULL,
     CalledProcessError,
@@ -21,6 +22,9 @@ import os
 import re
 from string import hexdigits
 from time import monotonic, sleep
+
+from NetworkMgr import validate
+from NetworkMgr.logger import log_debug, log_info
 
 
 # EAP methods supported for enterprise WPA
@@ -405,21 +409,214 @@ def restart_all_nics(_widget):
     _run('service', 'netif', 'restart')
 
 
+def _rc_conf_value(name):
+    """Return the effective value of an rc.conf(5) variable via sysrc.
+
+    Args:
+        name (str): rc.conf variable name, for instance ifconfig_em0.
+
+    Returns:
+        str: trimmed value, or an empty string when unset or unreadable.
+    """
+    res = _run('sysrc', '-n', name)
+    if res.returncode != 0:
+        return ''
+    return res.stdout.strip()
+
+
+def _hex_netmask_to_dotted(mask_text):
+    """Convert a hexadecimal netmask such as 0xffffff00 to dotted-decimal form.
+
+    Args:
+        mask_text (str): netmask token from rc.conf or ifconfig.
+
+    Returns:
+        str: dotted-decimal netmask when input is 0xHHHHHHHH, otherwise
+            mask_text unchanged.
+    """
+    if not re.fullmatch(r'0[xX][0-9a-fA-F]{8}', mask_text):
+        return mask_text
+    octets = [str(int(mask_text[i:i + 2], 16)) for i in range(2, 10, 2)]
+    return '.'.join(octets)
+
+
+def _parse_rc_static_ipv4(value):
+    """Extract a validated static (address, netmask) pair from an ifconfig_<nic> value.
+
+    Args:
+        value (str): effective rc.conf value for ifconfig_<nic>.
+
+    Returns:
+        tuple[str, str] or None: canonical (ipv4, dotted_netmask), or None
+            when the interface uses DHCP or declares no static IPv4 address.
+    """
+    if not value or 'DHCP' in value.upper():
+        return None
+    match = re.search(
+        r'(?:^|\s)(?:inet\s+)?([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)'
+        r'(?:/([0-9]{1,2})|\s+netmask\s+(\S+))',
+        value,
+    )
+    if match is None:
+        return None
+    raw_ip, cidr, raw_mask = match.group(1), match.group(2), match.group(3)
+    mask_input = cidr if cidr is not None else _hex_netmask_to_dotted(raw_mask)
+    try:
+        return (
+            validate.ipv4_address(raw_ip, 'IPv4 Address'),
+            validate.ipv4_netmask(mask_input),
+        )
+    except ValueError:
+        return None
+
+
+def _parse_rc_static_ipv6(value):
+    """Extract a validated static (address, prefixlen) pair from ifconfig_<nic>_ipv6.
+
+    Args:
+        value (str): effective rc.conf value for ifconfig_<nic>_ipv6.
+
+    Returns:
+        tuple[str, str] or None: canonical (ipv6, prefixlen), or None when
+            the interface uses SLAAC or declares no static IPv6 address.
+    """
+    if not value or 'accept_rtadv' in value.lower():
+        return None
+    match = re.search(
+        r'(?:^|\s)inet6\s+([0-9a-fA-F:]+)'
+        r'(?:/([0-9]{1,3})|\s+prefixlen\s+([0-9]{1,3}))',
+        value,
+    )
+    if match is None:
+        return None
+    raw_ip = match.group(1)
+    raw_plen = match.group(2) if match.group(2) is not None else match.group(3)
+    try:
+        return (
+            validate.ipv6_address(raw_ip, 'IPv6 Address'),
+            validate.ipv6_prefixlen(raw_plen),
+        )
+    except ValueError:
+        return None
+
+
+def _extract_interface_addresses(ifconfig_text):
+    """Parse IPv4 and non-link-local IPv6 addresses from ifconfig output.
+
+    IPv6 link-local addresses (fe80::/10) are preserved so neighbor discovery
+    and SLAAC continue to function cleanly when the interface is re-enabled
+    or re-associated.
+
+    Args:
+        ifconfig_text (str): output of `ifconfig -f inet:dotted <card>`.
+
+    Returns:
+        tuple[list[str], list[str]]: validated `(ipv4_addrs, ipv6_addrs)`.
+    """
+    ipv4_addrs = []
+    ipv6_addrs = []
+    for line in ifconfig_text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith('inet '):
+            parts = stripped.split()
+            if len(parts) >= 2:
+                try:
+                    addr = validate.ipv4_address(parts[1], 'IPv4 Address')
+                except ValueError:
+                    continue
+                if addr not in ipv4_addrs:
+                    ipv4_addrs.append(addr)
+        elif stripped.startswith('inet6 '):
+            parts = stripped.split()
+            if len(parts) >= 2:
+                raw_addr = parts[1]
+                base_addr, _, _scope = raw_addr.partition('%')
+                try:
+                    if IPv6Address(base_addr).is_link_local:
+                        continue
+                    addr = validate.ipv6_address(
+                        raw_addr, 'IPv6 Address', allow_scope=True
+                    )
+                except ValueError:
+                    continue
+                if addr not in ipv6_addrs:
+                    ipv6_addrs.append(addr)
+    return ipv4_addrs, ipv6_addrs
+
+
+def _flush_interface_addresses(card):
+    """Stop dhclient and delete all IPv4 and non-link-local IPv6 addresses.
+
+    Stopping dhclient first avoids a race where the daemon re-applies a lease
+    while addresses are being removed. Explicitly deleting each address ensures
+    `ifconfig <card>` no longer reports stale IPs and prompts the kernel to
+    drop routes bound to those addresses.
+
+    Args:
+        card (str): interface name, for instance em0 or wlan0.
+    """
+    card = validate.interface(card)
+    _run('service', 'dhclient', 'onestop', card)
+    ifoutput = _run('ifconfig', '-f', 'inet:dotted', card).stdout
+    ipv4_addrs, ipv6_addrs = _extract_interface_addresses(ifoutput)
+    for addr in ipv4_addrs:
+        log_debug(f'[Net] Removing IPv4 address {addr} from {card}')
+        _run('ifconfig', card, 'inet', addr, 'delete')
+    for addr6 in ipv6_addrs:
+        log_debug(f'[Net] Removing IPv6 address {addr6} from {card}')
+        _run('ifconfig', card, 'inet6', addr6, 'delete')
+
+
+def _failover_default_route(exclude_card):
+    """Hand the default route to another active physical interface if available.
+
+    Called only after disconnecting an interface that previously held the
+    default route and when no default route remains in the routing table.
+
+    Args:
+        exclude_card (str): the interface that was just disconnected.
+    """
+    snapshot = ifconfig_snapshot()
+    for card in nics_list(snapshot):
+        if card == exclude_card:
+            continue
+        text = snapshot.get(card, '')
+        if _is_disabled(text) or not card_has_address(text):
+            continue
+        if 'status: active' not in text and 'status: associated' not in text:
+            continue
+        try:
+            valid_card = validate.interface(card)
+        except ValueError:
+            continue
+        rc_nic = validate.rc_conf_interface(valid_card)
+        v4_cfg = _rc_conf_value(f'ifconfig_{rc_nic}')
+        log_info(f'[Net] Failing over default route to active interface {valid_card}')
+        if 'DHCP' in v4_cfg.upper():
+            _run('service', 'dhclient', 'restart', valid_card)
+        else:
+            _run('service', 'routing', 'start')
+        break
+
+
 def stop_network_card(netcard):
-    """Take one interface down.
+    """Take one wired interface down and release its IP addresses.
 
-    dhclient watches the routing socket, sees RTF_UP cleared and exits
-    through its FAIL path, which deletes the address, deletes the routes and
-    restores resolv.conf. A static card keeps its address, deliberately, so
-    that bringing it back up needs nothing but the up.
-
-    Handing the default route to another interface is devd's: the link
-    going down fires src/auto-switch.py, which does exactly that.
+    Stops dhclient on the interface, removes all IPv4 and non-link-local IPv6
+    addresses so no stale IP remains in `ifconfig`, and marks the interface
+    administratively down. If this interface held the default route, hands it
+    over to another active physical interface.
 
     Args:
         netcard (str): interface name, for instance em0.
     """
+    netcard = validate.interface(netcard)
+    log_info(f'[Net] Disconnecting wired interface {netcard}')
+    was_default = default_card() == netcard
+    _flush_interface_addresses(netcard)
     _run('ifconfig', netcard, 'down')
+    if was_default and default_card() is None:
+        _failover_default_route(netcard)
 
 
 def restart_card_network(netcard):
@@ -495,23 +692,40 @@ def disable_slaac(netcard):
 
 
 def start_network_card(netcard):
-    """Bring one interface up.
+    """Bring one wired interface up and restore its configured addressing.
 
-    Nothing else is needed. The link coming up fires devd's IFNET LINK_UP
-    event, and our action for it, src/link-up.py, starts dhclient, which
-    installs the address and the routes.
+    Runs `service netif start` so both DHCP/SLAAC and static IPv4/IPv6
+    configurations declared in rc.conf are restored cleanly after
+    stop_network_card() flushed the interface's addresses. For static
+    configurations, `service routing start` restores default and static
+    routes without flushing unrelated active interfaces.
 
     Args:
         netcard (str): interface name, for instance em0.
     """
-    _run('ifconfig', netcard, 'up')
+    netcard = validate.interface(netcard)
+    log_info(f'[Net] Connecting wired interface {netcard}')
+    _run('service', 'netif', 'start', netcard)
+    if _is_disabled(_ifconfig(netcard)):
+        _run('ifconfig', netcard, 'up')
+
+    rc_nic = validate.rc_conf_interface(netcard)
+    v4_cfg = _rc_conf_value(f'ifconfig_{rc_nic}')
+    v6_cfg = _rc_conf_value(f'ifconfig_{rc_nic}_ipv6')
+    if (_parse_rc_static_ipv4(v4_cfg) is not None
+            or _parse_rc_static_ipv6(v6_cfg) is not None):
+        _run('service', 'routing', 'start')
+    elif 'DHCP' in v4_cfg.upper() and not card_has_address(_ifconfig(netcard)):
+        _run('service', 'dhclient', 'quietstart', netcard)
 
 
 def disconnect_wifi(wifi_card):
-    """Drop the current wireless association and stay disconnected.
+    """Drop the current wireless association, flush IPs, and stay disconnected.
 
     `disconnect` stays disconnected until a network is selected. Downing the
     interface does not: the daemon rejoins as soon as it comes back up.
+    Stopping dhclient and removing assigned addresses ensures `ifconfig`
+    does not retain stale IPv4 or global IPv6 addresses while disconnected.
 
     Args:
         wifi_card (str): wireless interface name, for instance wlan0.
@@ -519,27 +733,88 @@ def disconnect_wifi(wifi_card):
     Returns:
         bool: True when the daemon accepted the command.
     """
-    return wpa_cli(wifi_card, 'disconnect') is not None
+    wifi_card = validate.interface(wifi_card)
+    log_info(f'[WiFi] Disconnecting wireless interface {wifi_card}')
+    was_default = default_card() == wifi_card
+    disconnected = wpa_cli(wifi_card, 'disconnect') is not None
+    if disconnected:
+        _flush_interface_addresses(wifi_card)
+        if was_default and default_card() is None:
+            _failover_default_route(wifi_card)
+    return disconnected
 
 
 def disable_wifi(wifi_card):
-    """Take a wireless interface down.
+    """Take a wireless interface down and flush its IP addresses.
+
+    Never stops or restarts wpa_supplicant; stops dhclient, removes assigned
+    addresses, and marks the interface down.
 
     Args:
         wifi_card (str): wireless interface name, for instance wlan0.
     """
+    wifi_card = validate.interface(wifi_card)
+    log_info(f'[WiFi] Disabling wireless interface {wifi_card}')
+    was_default = default_card() == wifi_card
+    _flush_interface_addresses(wifi_card)
     _run('ifconfig', wifi_card, 'down')
+    if was_default and default_card() is None:
+        _failover_default_route(wifi_card)
+
+
+def restore_wifi_network(wifi_card, start_dhcp=False):
+    """Restore IPv4/IPv6 addressing on a wireless card without touching wpa_supplicant.
+
+    Re-applies static IPv4/IPv6 addresses (and static routing) declared in
+    rc.conf after disconnect_wifi() or disable_wifi() flushed them. When
+    start_dhcp is True and the interface uses DHCP without an IPv4 address
+    yet, ensures dhclient is running.
+
+    Args:
+        wifi_card (str): wireless interface name, for instance wlan0.
+        start_dhcp (bool): True after wireless association completes to
+            ensure dhclient is running on DHCP interfaces.
+    """
+    wifi_card = validate.interface(wifi_card)
+    rc_nic = validate.rc_conf_interface(wifi_card)
+    v4_cfg = _rc_conf_value(f'ifconfig_{rc_nic}')
+    v6_cfg = _rc_conf_value(f'ifconfig_{rc_nic}_ipv6')
+
+    restored_static = False
+    static_v4 = _parse_rc_static_ipv4(v4_cfg)
+    if static_v4 is not None:
+        addr, netmask = static_v4
+        log_debug(f'[WiFi] Restoring static IPv4 {addr}/{netmask} on {wifi_card}')
+        _run('ifconfig', wifi_card, 'inet', addr, 'netmask', netmask)
+        restored_static = True
+    elif start_dhcp and 'DHCP' in v4_cfg.upper() \
+            and not card_has_address(_ifconfig(wifi_card)):
+        log_debug(f'[WiFi] Ensuring dhclient is running on {wifi_card}')
+        _run('service', 'dhclient', 'quietstart', wifi_card)
+
+    static_v6 = _parse_rc_static_ipv6(v6_cfg)
+    if static_v6 is not None:
+        addr6, prefixlen = static_v6
+        log_debug(f'[WiFi] Restoring static IPv6 {addr6}/{prefixlen} on {wifi_card}')
+        _run('ifconfig', wifi_card, 'inet6', addr6, 'prefixlen', prefixlen)
+        restored_static = True
+
+    if restored_static:
+        _run('service', 'routing', 'start')
 
 
 def enable_wifi(wifi_card):
-    """Bring a wireless interface up.
+    """Bring a wireless interface up and restore static addressing if configured.
 
     No scan here: the refresh loop requests one on its own clock.
 
     Args:
         wifi_card (str): wireless interface name, for instance wlan0.
     """
+    wifi_card = validate.interface(wifi_card)
+    log_info(f'[WiFi] Enabling wireless interface {wifi_card}')
     _run('ifconfig', wifi_card, 'up')
+    restore_wifi_network(wifi_card, start_dhcp=False)
 
 
 def wpa_cli(wifi_card, *args):

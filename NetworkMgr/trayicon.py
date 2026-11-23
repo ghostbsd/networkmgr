@@ -27,6 +27,7 @@ from NetworkMgr.net_api import (
     enable_wifi,
     network_dictionary,
     request_scan_all,
+    restore_wifi_network,
     scan_networks,
     tray_state,
     forget_network,
@@ -37,6 +38,7 @@ from NetworkMgr.net_api import (
     wpa_networks,
     wpa_reconfigure,
     wpa_save_config,
+    wait_for_address,
     wait_for_connection,
     EAP_METHODS,
     PHASE2_METHODS,
@@ -1296,6 +1298,8 @@ class TrayIcon:
                 # network existed only in the daemon.
                 log_info(f'[WiFi] Successfully connected and associated with "{ssid}" on {card}')
                 wpa_save_config(card)
+                restore_wifi_network(card, start_dhcp=True)
+                wait_for_address(card, timeout=5)
                 GLib.idle_add(show_connection_notification, ssid, True)
             else:
                 self.connect_attempts += 1
