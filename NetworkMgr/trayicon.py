@@ -816,9 +816,10 @@ class TrayIcon:
                 self.cardinfo['cards'][wifi_card]['state'].get('ssid')
                 or wifi_card
             )
-        disconnect_wifi(wifi_card)
+        disconnected = disconnect_wifi(wifi_card)
         self.update_info()
-        show_connection_notification(ssid, False)
+        if disconnected:
+            show_connection_notification(ssid, False)
 
     def disable_wifi(self, _widget, wifi_card):
         """Take a wireless interface down.
@@ -827,9 +828,10 @@ class TrayIcon:
             _widget (Gtk.Widget): the menu item, unused.
             wifi_card (str): wireless interface name.
         """
-        disable_wifi(wifi_card)
+        disabled = disable_wifi(wifi_card)
         self.update_info()
-        show_connection_notification(wifi_card, False)
+        if disabled:
+            show_connection_notification(wifi_card, False)
 
     def enable_wifi(self, _widget, wifi_card):
         """Bring a wireless interface back up.
@@ -860,9 +862,10 @@ class TrayIcon:
             _widget (Gtk.Widget): the menu item, unused.
             netcard (str): interface name.
         """
-        stop_network_card(netcard)
+        stopped = stop_network_card(netcard)
         self.update_info()
-        show_connection_notification(netcard, False)
+        if stopped:
+            show_connection_notification(netcard, False)
 
     def connect_wg(self, _widget, wg_device):
         """Bring a WireGuard tunnel up.
@@ -1298,9 +1301,9 @@ class TrayIcon:
                 # network existed only in the daemon.
                 log_info(f'[WiFi] Successfully connected and associated with "{ssid}" on {card}')
                 wpa_save_config(card)
-                restore_wifi_network(card, start_dhcp=True)
-                wait_for_address(card, timeout=5)
-                GLib.idle_add(show_connection_notification, ssid, True)
+                if restore_wifi_network(card, start_dhcp=True, expected_ssid=ssid):
+                    wait_for_address(card, timeout=5)
+                    GLib.idle_add(show_connection_notification, ssid, True)
             else:
                 self.connect_attempts += 1
                 log_warning(f'[WiFi] Connection attempt {self.connect_attempts}/{MAX_ATTEMPTS} to "{ssid}" timed out or failed')

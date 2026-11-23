@@ -21,10 +21,11 @@ from subprocess import (
 import os
 import re
 from string import hexdigits
+from threading import Lock, RLock
 from time import monotonic, sleep
 
 from NetworkMgr import validate
-from NetworkMgr.logger import log_debug, log_info
+from NetworkMgr.logger import log_debug, log_error, log_info
 
 
 # EAP methods supported for enterprise WPA
@@ -38,6 +39,21 @@ IP_REGEX = r'[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'
 
 # Threads for one refresh pass. They wait on subprocesses, not the CPU.
 _REFRESH_WORKERS = 6
+
+# Per-interface reentrant locks serialize Wi-Fi state transitions
+# (disconnect, disable, enable, restore) across the GTK and worker threads.
+_CARD_LOCKS_GUARD = Lock()
+_CARD_LOCKS = {}
+
+
+def _card_lock(card):
+    """Return the reentrant lock serializing state changes for one interface."""
+    with _CARD_LOCKS_GUARD:
+        lock = _CARD_LOCKS.get(card)
+        if lock is None:
+            lock = RLock()
+            _CARD_LOCKS[card] = lock
+        return lock
 
 
 def _run(*args, check=False):
@@ -87,15 +103,17 @@ def ifconfig_snapshot():
 
 def card_has_address(ifconfig_text):
     """
-    Report whether an interface has an IPv4 address.
+    Report whether an interface has an IPv4 or non-link-local IPv6 address.
 
     Args:
         ifconfig_text (str): that interface's block from ifconfig_snapshot().
 
     Returns:
-        bool: True when ifconfig lists an inet address on the interface.
+        bool: True when ifconfig lists an IPv4 address or a non-link-local
+            IPv6 address on the interface.
     """
-    return 'inet ' in ifconfig_text
+    ipv4_addrs, ipv6_addrs = _extract_interface_addresses(ifconfig_text)
+    return bool(ipv4_addrs or ipv6_addrs)
 
 
 def default_card():
@@ -441,63 +459,134 @@ def _hex_netmask_to_dotted(mask_text):
 
 
 def _parse_rc_static_ipv4(value):
-    """Extract a validated static (address, netmask) pair from an ifconfig_<nic> value.
+    """Extract all validated static (address, netmask) pairs from an rc.conf value.
 
     Args:
-        value (str): effective rc.conf value for ifconfig_<nic>.
+        value (str): rc.conf value such as ifconfig_<nic>, ipv4_addrs_<nic>,
+            ifconfig_<nic>_aliases, or ifconfig_<nic>_aliasN.
 
     Returns:
-        tuple[str, str] or None: canonical (ipv4, dotted_netmask), or None
-            when the interface uses DHCP or declares no static IPv4 address.
+        list[tuple[str, str]]: canonical (ipv4, dotted_netmask) pairs in order,
+            or an empty list when the value uses DHCP or declares no static
+            IPv4 addresses.
     """
     if not value or 'DHCP' in value.upper():
-        return None
-    match = re.search(
+        return []
+    addresses = []
+    pattern = (
         r'(?:^|\s)(?:inet\s+)?([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)'
-        r'(?:/([0-9]{1,2})|\s+netmask\s+(\S+))',
-        value,
+        r'(?:/([0-9]{1,2})|\s+netmask\s+(\S+))'
     )
-    if match is None:
-        return None
-    raw_ip, cidr, raw_mask = match.group(1), match.group(2), match.group(3)
-    mask_input = cidr if cidr is not None else _hex_netmask_to_dotted(raw_mask)
-    try:
-        return (
-            validate.ipv4_address(raw_ip, 'IPv4 Address'),
-            validate.ipv4_netmask(mask_input),
-        )
-    except ValueError:
-        return None
+    for match in re.finditer(pattern, value):
+        raw_ip, cidr, raw_mask = match.group(1), match.group(2), match.group(3)
+        mask_input = cidr if cidr is not None else _hex_netmask_to_dotted(raw_mask)
+        try:
+            pair = (
+                validate.ipv4_address(raw_ip, 'IPv4 Address'),
+                validate.ipv4_netmask(mask_input),
+            )
+        except ValueError:
+            continue
+        if pair not in addresses:
+            addresses.append(pair)
+    return addresses
 
 
 def _parse_rc_static_ipv6(value):
-    """Extract a validated static (address, prefixlen) pair from ifconfig_<nic>_ipv6.
+    """Extract all validated static (address, prefixlen) pairs from an rc.conf value.
 
     Args:
-        value (str): effective rc.conf value for ifconfig_<nic>_ipv6.
+        value (str): rc.conf value such as ifconfig_<nic>_ipv6,
+            ifconfig_<nic>_aliases, or ifconfig_<nic>_aliasN.
 
     Returns:
-        tuple[str, str] or None: canonical (ipv6, prefixlen), or None when
-            the interface uses SLAAC or declares no static IPv6 address.
+        list[tuple[str, str]]: canonical (ipv6, prefixlen) pairs in order, or
+            an empty list when no static IPv6 addresses are declared.
     """
-    if not value or 'accept_rtadv' in value.lower():
-        return None
-    match = re.search(
+    if not value:
+        return []
+    addresses = []
+    pattern = (
         r'(?:^|\s)inet6\s+([0-9a-fA-F:]+)'
-        r'(?:/([0-9]{1,3})|\s+prefixlen\s+([0-9]{1,3}))',
-        value,
+        r'(?:/([0-9]{1,3})|\s+prefixlen\s+([0-9]{1,3}))'
     )
-    if match is None:
-        return None
-    raw_ip = match.group(1)
-    raw_plen = match.group(2) if match.group(2) is not None else match.group(3)
-    try:
-        return (
-            validate.ipv6_address(raw_ip, 'IPv6 Address'),
-            validate.ipv6_prefixlen(raw_plen),
-        )
-    except ValueError:
-        return None
+    for match in re.finditer(pattern, value):
+        raw_ip = match.group(1)
+        raw_plen = match.group(2) if match.group(2) is not None else match.group(3)
+        try:
+            pair = (
+                validate.ipv6_address(raw_ip, 'IPv6 Address'),
+                validate.ipv6_prefixlen(raw_plen),
+            )
+        except ValueError:
+            continue
+        if pair not in addresses:
+            addresses.append(pair)
+    return addresses
+
+
+def _rc_static_addresses(rc_nic, v4_cfg=None, v6_cfg=None):
+    """Collect all primary and alias static IPv4/IPv6 addresses from rc.conf.
+
+    Reads primary `ifconfig_<nic>` and `ifconfig_<nic>_ipv6`, `ipv4_addrs_<nic>`,
+    `ifconfig_<nic>_aliases`, and indexed `ifconfig_<nic>_alias0`, `alias1`, ...
+    entries (stopping at the first unset index, matching FreeBSD network.subr).
+
+    Args:
+        rc_nic (str): rc.conf-normalized interface name, for instance wlan0.
+        v4_cfg (str or None): pre-fetched `ifconfig_<rc_nic>` value if available.
+        v6_cfg (str or None): pre-fetched `ifconfig_<rc_nic>_ipv6` value if available.
+
+    Returns:
+        tuple[list[tuple[str, str, bool]], list[tuple[str, str, bool]]]:
+            `(v4_entries, v6_entries)` where each item is
+            `(address, mask_or_prefixlen, is_alias)`.
+    """
+    if v4_cfg is None:
+        v4_cfg = _rc_conf_value(f'ifconfig_{rc_nic}')
+    if v6_cfg is None:
+        v6_cfg = _rc_conf_value(f'ifconfig_{rc_nic}_ipv6')
+
+    v4_entries = []
+    v6_entries = []
+    seen_v4 = set()
+    seen_v6 = set()
+
+    def _add_v4(pairs, force_alias=False):
+        for addr, mask in pairs:
+            if (addr, mask) not in seen_v4:
+                seen_v4.add((addr, mask))
+                is_alias = force_alias or bool(v4_entries)
+                v4_entries.append((addr, mask, is_alias))
+
+    def _add_v6(pairs, force_alias=False):
+        for addr6, plen in pairs:
+            if (addr6, plen) not in seen_v6:
+                seen_v6.add((addr6, plen))
+                is_alias = force_alias or bool(v6_entries)
+                v6_entries.append((addr6, plen, is_alias))
+
+    _add_v4(_parse_rc_static_ipv4(v4_cfg))
+    _add_v6(_parse_rc_static_ipv6(v4_cfg))
+    _add_v6(_parse_rc_static_ipv6(v6_cfg))
+
+    ipv4_addrs_cfg = _rc_conf_value(f'ipv4_addrs_{rc_nic}')
+    _add_v4(_parse_rc_static_ipv4(ipv4_addrs_cfg), force_alias=bool(v4_entries))
+
+    aliases_cfg = _rc_conf_value(f'ifconfig_{rc_nic}_aliases')
+    _add_v4(_parse_rc_static_ipv4(aliases_cfg), force_alias=True)
+    _add_v6(_parse_rc_static_ipv6(aliases_cfg), force_alias=True)
+
+    alias_idx = 0
+    while True:
+        alias_cfg = _rc_conf_value(f'ifconfig_{rc_nic}_alias{alias_idx}')
+        if not alias_cfg:
+            break
+        _add_v4(_parse_rc_static_ipv4(alias_cfg), force_alias=True)
+        _add_v6(_parse_rc_static_ipv6(alias_cfg), force_alias=True)
+        alias_idx += 1
+
+    return v4_entries, v6_entries
 
 
 def _extract_interface_addresses(ifconfig_text):
@@ -554,17 +643,51 @@ def _flush_interface_addresses(card):
 
     Args:
         card (str): interface name, for instance em0 or wlan0.
+
+    Returns:
+        bool: True when dhclient was stopped (or was already not running) and
+            every IPv4 and non-link-local IPv6 address was removed.
     """
     card = validate.interface(card)
-    _run('service', 'dhclient', 'onestop', card)
-    ifoutput = _run('ifconfig', '-f', 'inet:dotted', card).stdout
-    ipv4_addrs, ipv6_addrs = _extract_interface_addresses(ifoutput)
+    stop_res = _run('service', 'dhclient', 'onestop', card)
+    if stop_res.returncode != 0:
+        combined = f'{stop_res.stdout} {stop_res.stderr}'.lower()
+        if 'not running' not in combined:
+            log_error(
+                f'[Net] Failed to stop dhclient on {card} '
+                f'(rc={stop_res.returncode}): {stop_res.stderr.strip()}'
+            )
+            return False
+
+    if_res = _run('ifconfig', '-f', 'inet:dotted', card)
+    if if_res.returncode != 0:
+        log_error(
+            f'[Net] Failed to inspect addresses on {card} '
+            f'(rc={if_res.returncode}): {if_res.stderr.strip()}'
+        )
+        return False
+
+    ipv4_addrs, ipv6_addrs = _extract_interface_addresses(if_res.stdout)
+    flushed = True
     for addr in ipv4_addrs:
         log_debug(f'[Net] Removing IPv4 address {addr} from {card}')
-        _run('ifconfig', card, 'inet', addr, 'delete')
+        res = _run('ifconfig', card, 'inet', addr, 'delete')
+        if res.returncode != 0:
+            log_error(
+                f'[Net] Failed to remove IPv4 address {addr} from {card} '
+                f'(rc={res.returncode}): {res.stderr.strip()}'
+            )
+            flushed = False
     for addr6 in ipv6_addrs:
         log_debug(f'[Net] Removing IPv6 address {addr6} from {card}')
-        _run('ifconfig', card, 'inet6', addr6, 'delete')
+        res = _run('ifconfig', card, 'inet6', addr6, 'delete')
+        if res.returncode != 0:
+            log_error(
+                f'[Net] Failed to remove IPv6 address {addr6} from {card} '
+                f'(rc={res.returncode}): {res.stderr.strip()}'
+            )
+            flushed = False
+    return flushed
 
 
 def _failover_default_route(exclude_card):
@@ -609,14 +732,26 @@ def stop_network_card(netcard):
 
     Args:
         netcard (str): interface name, for instance em0.
+
+    Returns:
+        bool: True when addresses were flushed and the interface was downed.
     """
     netcard = validate.interface(netcard)
     log_info(f'[Net] Disconnecting wired interface {netcard}')
     was_default = default_card() == netcard
-    _flush_interface_addresses(netcard)
-    _run('ifconfig', netcard, 'down')
+    if not _flush_interface_addresses(netcard):
+        log_error(f'[Net] Aborting disconnect of wired interface {netcard}')
+        return False
+    down_res = _run('ifconfig', netcard, 'down')
+    if down_res.returncode != 0:
+        log_error(
+            f'[Net] Failed to bring down wired interface {netcard} '
+            f'(rc={down_res.returncode}): {down_res.stderr.strip()}'
+        )
+        return False
     if was_default and default_card() is None:
         _failover_default_route(netcard)
+    return True
 
 
 def restart_card_network(netcard):
@@ -712,10 +847,11 @@ def start_network_card(netcard):
     rc_nic = validate.rc_conf_interface(netcard)
     v4_cfg = _rc_conf_value(f'ifconfig_{rc_nic}')
     v6_cfg = _rc_conf_value(f'ifconfig_{rc_nic}_ipv6')
-    if (_parse_rc_static_ipv4(v4_cfg) is not None
-            or _parse_rc_static_ipv6(v6_cfg) is not None):
+    static_v4, static_v6 = _rc_static_addresses(rc_nic, v4_cfg, v6_cfg)
+    if static_v4 or static_v6:
         _run('service', 'routing', 'start')
-    elif 'DHCP' in v4_cfg.upper() and not card_has_address(_ifconfig(netcard)):
+    if 'DHCP' in v4_cfg.upper() \
+            and not _extract_interface_addresses(_ifconfig(netcard))[0]:
         _run('service', 'dhclient', 'quietstart', netcard)
 
 
@@ -731,17 +867,21 @@ def disconnect_wifi(wifi_card):
         wifi_card (str): wireless interface name, for instance wlan0.
 
     Returns:
-        bool: True when the daemon accepted the command.
+        bool: True when the daemon disconnected and all addresses were flushed.
     """
     wifi_card = validate.interface(wifi_card)
-    log_info(f'[WiFi] Disconnecting wireless interface {wifi_card}')
-    was_default = default_card() == wifi_card
-    disconnected = wpa_cli(wifi_card, 'disconnect') is not None
-    if disconnected:
-        _flush_interface_addresses(wifi_card)
+    with _card_lock(wifi_card):
+        log_info(f'[WiFi] Disconnecting wireless interface {wifi_card}')
+        was_default = default_card() == wifi_card
+        disconnected = wpa_cli(wifi_card, 'disconnect') is not None
+        if not disconnected:
+            return False
+        if not _flush_interface_addresses(wifi_card):
+            log_error(f'[WiFi] Failed to flush addresses on {wifi_card}')
+            return False
         if was_default and default_card() is None:
             _failover_default_route(wifi_card)
-    return disconnected
+        return True
 
 
 def disable_wifi(wifi_card):
@@ -752,59 +892,111 @@ def disable_wifi(wifi_card):
 
     Args:
         wifi_card (str): wireless interface name, for instance wlan0.
+
+    Returns:
+        bool: True when addresses were flushed and the interface was downed.
     """
     wifi_card = validate.interface(wifi_card)
-    log_info(f'[WiFi] Disabling wireless interface {wifi_card}')
-    was_default = default_card() == wifi_card
-    _flush_interface_addresses(wifi_card)
-    _run('ifconfig', wifi_card, 'down')
-    if was_default and default_card() is None:
-        _failover_default_route(wifi_card)
+    with _card_lock(wifi_card):
+        log_info(f'[WiFi] Disabling wireless interface {wifi_card}')
+        was_default = default_card() == wifi_card
+        if not _flush_interface_addresses(wifi_card):
+            log_error(f'[WiFi] Aborting disable of wireless interface {wifi_card}')
+            return False
+        down_res = _run('ifconfig', wifi_card, 'down')
+        if down_res.returncode != 0:
+            log_error(
+                f'[WiFi] Failed to bring down wireless interface {wifi_card} '
+                f'(rc={down_res.returncode}): {down_res.stderr.strip()}'
+            )
+            return False
+        if was_default and default_card() is None:
+            _failover_default_route(wifi_card)
+        return True
 
 
-def restore_wifi_network(wifi_card, start_dhcp=False):
+def restore_wifi_network(wifi_card, start_dhcp=True, expected_ssid=None):
     """Restore IPv4/IPv6 addressing on a wireless card without touching wpa_supplicant.
 
     Re-applies static IPv4/IPv6 addresses (and static routing) declared in
     rc.conf after disconnect_wifi() or disable_wifi() flushed them. When
     start_dhcp is True and the interface uses DHCP without an IPv4 address
-    yet, ensures dhclient is running.
+    yet, ensures dhclient is running. When the interface uses SLAAC
+    (accept_rtadv) without a global IPv6 address yet, solicits router
+    advertisements via rtsol.
+
+    Serialized per interface with disconnect_wifi() and disable_wifi() so a
+    connection worker cannot re-apply addresses after the user disconnects or
+    disables the card.
 
     Args:
         wifi_card (str): wireless interface name, for instance wlan0.
-        start_dhcp (bool): True after wireless association completes to
-            ensure dhclient is running on DHCP interfaces.
+        start_dhcp (bool): True to ensure dhclient is running on DHCP
+            interfaces after enabling or associating.
+        expected_ssid (str or None): when given, verify the interface is still
+            associated with this SSID before restoring addresses.
+
+    Returns:
+        bool: True when restoration proceeded, False if skipped because the
+            interface was disabled or disconnected.
     """
     wifi_card = validate.interface(wifi_card)
-    rc_nic = validate.rc_conf_interface(wifi_card)
-    v4_cfg = _rc_conf_value(f'ifconfig_{rc_nic}')
-    v6_cfg = _rc_conf_value(f'ifconfig_{rc_nic}_ipv6')
+    with _card_lock(wifi_card):
+        iftext = _ifconfig(wifi_card)
+        if _is_disabled(iftext):
+            log_debug(f'[WiFi] Skipping network restore on disabled interface {wifi_card}')
+            return False
+        if expected_ssid is not None:
+            status = wpa_status(wifi_card)
+            if (status.get('wpa_state') != 'COMPLETED'
+                    or status.get('ssid') != expected_ssid):
+                log_debug(
+                    f'[WiFi] Skipping network restore on {wifi_card}: '
+                    f'interface is no longer connected to "{expected_ssid}"'
+                )
+                return False
 
-    restored_static = False
-    static_v4 = _parse_rc_static_ipv4(v4_cfg)
-    if static_v4 is not None:
-        addr, netmask = static_v4
-        log_debug(f'[WiFi] Restoring static IPv4 {addr}/{netmask} on {wifi_card}')
-        _run('ifconfig', wifi_card, 'inet', addr, 'netmask', netmask)
-        restored_static = True
-    elif start_dhcp and 'DHCP' in v4_cfg.upper() \
-            and not card_has_address(_ifconfig(wifi_card)):
-        log_debug(f'[WiFi] Ensuring dhclient is running on {wifi_card}')
-        _run('service', 'dhclient', 'quietstart', wifi_card)
+        rc_nic = validate.rc_conf_interface(wifi_card)
+        v4_cfg = _rc_conf_value(f'ifconfig_{rc_nic}')
+        v6_cfg = _rc_conf_value(f'ifconfig_{rc_nic}_ipv6')
+        static_v4, static_v6 = _rc_static_addresses(rc_nic, v4_cfg, v6_cfg)
 
-    static_v6 = _parse_rc_static_ipv6(v6_cfg)
-    if static_v6 is not None:
-        addr6, prefixlen = static_v6
-        log_debug(f'[WiFi] Restoring static IPv6 {addr6}/{prefixlen} on {wifi_card}')
-        _run('ifconfig', wifi_card, 'inet6', addr6, 'prefixlen', prefixlen)
-        restored_static = True
+        ipv4_addrs, ipv6_addrs = _extract_interface_addresses(iftext)
+        restored_static = False
+        if start_dhcp and 'DHCP' in v4_cfg.upper() and not ipv4_addrs:
+            log_debug(f'[WiFi] Ensuring dhclient is running on {wifi_card}')
+            _run('service', 'dhclient', 'quietstart', wifi_card)
 
-    if restored_static:
-        _run('service', 'routing', 'start')
+        for addr, netmask, is_alias in static_v4:
+            log_debug(f'[WiFi] Restoring static IPv4 {addr}/{netmask} on {wifi_card}')
+            cmd = ['ifconfig', wifi_card, 'inet', addr, 'netmask', netmask]
+            if is_alias:
+                cmd.append('alias')
+            _run(*cmd)
+            restored_static = True
+
+        for addr6, prefixlen, is_alias in static_v6:
+            log_debug(f'[WiFi] Restoring static IPv6 {addr6}/{prefixlen} on {wifi_card}')
+            cmd = ['ifconfig', wifi_card, 'inet6', addr6, 'prefixlen', prefixlen]
+            if is_alias:
+                cmd.append('alias')
+            _run(*cmd)
+            restored_static = True
+
+        static_v6_addrs = {addr6 for addr6, _, _ in static_v6}
+        has_slaac_v6 = any(a not in static_v6_addrs for a in ipv6_addrs)
+        if 'accept_rtadv' in v6_cfg.lower() and not has_slaac_v6:
+            log_debug(f'[WiFi] Soliciting IPv6 router advertisements on {wifi_card}')
+            _run('ifconfig', wifi_card, 'inet6', 'accept_rtadv')
+            _run('rtsol', wifi_card)
+
+        if restored_static:
+            _run('service', 'routing', 'start')
+        return True
 
 
 def enable_wifi(wifi_card):
-    """Bring a wireless interface up and restore static addressing if configured.
+    """Bring a wireless interface up and restore its configured addressing.
 
     No scan here: the refresh loop requests one on its own clock.
 
@@ -812,9 +1004,10 @@ def enable_wifi(wifi_card):
         wifi_card (str): wireless interface name, for instance wlan0.
     """
     wifi_card = validate.interface(wifi_card)
-    log_info(f'[WiFi] Enabling wireless interface {wifi_card}')
-    _run('ifconfig', wifi_card, 'up')
-    restore_wifi_network(wifi_card, start_dhcp=False)
+    with _card_lock(wifi_card):
+        log_info(f'[WiFi] Enabling wireless interface {wifi_card}')
+        _run('ifconfig', wifi_card, 'up')
+        restore_wifi_network(wifi_card, start_dhcp=True)
 
 
 def wpa_cli(wifi_card, *args):
