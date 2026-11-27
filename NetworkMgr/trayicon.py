@@ -17,6 +17,9 @@ gi.require_version('GdkPixbuf', '2.0')
 from gi.repository import Gtk, Gdk, GdkPixbuf, GObject, GLib, Pango
 from time import sleep
 from NetworkMgr.net_api import (
+    begin_wifi_connection,
+    card_lock,
+    end_wifi_connection,
     stop_network_card,
     start_network_card,
     disconnect_wifi,
@@ -27,6 +30,7 @@ from NetworkMgr.net_api import (
     enable_wifi,
     network_dictionary,
     request_scan_all,
+    restore_wifi_network,
     scan_networks,
     tray_state,
     forget_network,
@@ -37,6 +41,7 @@ from NetworkMgr.net_api import (
     wpa_networks,
     wpa_reconfigure,
     wpa_save_config,
+    wait_for_address,
     wait_for_connection,
     EAP_METHODS,
     PHASE2_METHODS,
@@ -220,6 +225,7 @@ class TrayIcon:
         # Set while an attempt runs so the refresh does not draw over the
         # animation. Written from the worker; bool assignment is atomic.
         self.connecting = False
+        self._active_wifi_connections = set()
         self._connecting_openvpn = set()
         self.connect_frame = 0
         # Failed attempts since the user last picked this network from the
@@ -814,9 +820,10 @@ class TrayIcon:
                 self.cardinfo['cards'][wifi_card]['state'].get('ssid')
                 or wifi_card
             )
-        disconnect_wifi(wifi_card)
+        disconnected = disconnect_wifi(wifi_card)
         self.update_info()
-        show_connection_notification(ssid, False)
+        if disconnected:
+            show_connection_notification(ssid, False)
 
     def disable_wifi(self, _widget, wifi_card):
         """Take a wireless interface down.
@@ -825,9 +832,10 @@ class TrayIcon:
             _widget (Gtk.Widget): the menu item, unused.
             wifi_card (str): wireless interface name.
         """
-        disable_wifi(wifi_card)
+        disabled = disable_wifi(wifi_card)
         self.update_info()
-        show_connection_notification(wifi_card, False)
+        if disabled:
+            show_connection_notification(wifi_card, False)
 
     def enable_wifi(self, _widget, wifi_card):
         """Bring a wireless interface back up.
@@ -836,9 +844,10 @@ class TrayIcon:
             _widget (Gtk.Widget): the menu item, unused.
             wifi_card (str): wireless interface name.
         """
-        enable_wifi(wifi_card)
+        enabled = enable_wifi(wifi_card)
         self.update_info()
-        show_connection_notification(wifi_card, True)
+        if enabled:
+            show_connection_notification(wifi_card, True)
 
     def enable_card(self, _widget, netcard):
         """Start a wired interface.
@@ -847,9 +856,10 @@ class TrayIcon:
             _widget (Gtk.Widget): the menu item, unused.
             netcard (str): interface name.
         """
-        start_network_card(netcard)
+        started = start_network_card(netcard)
         self.update_info()
-        show_connection_notification(netcard, True)
+        if started:
+            show_connection_notification(netcard, True)
 
     def disable_card(self, _widget, netcard):
         """Stop a wired interface.
@@ -858,9 +868,10 @@ class TrayIcon:
             _widget (Gtk.Widget): the menu item, unused.
             netcard (str): interface name.
         """
-        stop_network_card(netcard)
+        stopped = stop_network_card(netcard)
         self.update_info()
-        show_connection_notification(netcard, False)
+        if stopped:
+            show_connection_notification(netcard, False)
 
     def connect_wg(self, _widget, wg_device):
         """Bring a WireGuard tunnel up.
@@ -1248,6 +1259,13 @@ class TrayIcon:
             return
         self.start_connection(ssid, network, card)
 
+    def _finish_connection_ui(self, cancel_event):
+        """Remove a finished Wi-Fi worker and stop the animation if none remain."""
+        self._active_wifi_connections.discard(cancel_event)
+        if not self._active_wifi_connections:
+            self.stop_icon_animation()
+        return False
+
     def start_connection(self, ssid, network, card, enterprise=False):
         """
         Begin joining a network on a worker thread.
@@ -1264,17 +1282,22 @@ class TrayIcon:
             enterprise (bool): True to reopen the EAP dialog rather than the
                 passphrase one when credentials are refused.
         """
+        cancel_event = begin_wifi_connection(card)
+        self._active_wifi_connections.add(cancel_event)
         _thread.start_new_thread(
             self.try_to_connect_to_ssid,
-            (ssid, network, card, enterprise)
+            (ssid, network, card, enterprise, cancel_event)
         )
 
-    def try_to_connect_to_ssid(self, ssid, network, card, enterprise=False):
+    def try_to_connect_to_ssid(self, ssid, network, card, enterprise=False,
+                               cancel_event=None):
         """
         Connect, then report the outcome.
 
         Runs on its own thread, so it must reach the UI through
-        GLib.idle_add.
+        GLib.idle_add. Holds the per-card lock across network selection,
+        association, and restoration so a concurrent disconnect or disable
+        cannot be undone by a pending worker.
 
         Args:
             ssid (str): the network name.
@@ -1282,41 +1305,87 @@ class TrayIcon:
                 an open network.
             card (str): the interface to connect.
             enterprise (bool): True to reopen the EAP dialog on refusal.
+            cancel_event (threading.Event or None): cancellation event from
+                begin_wifi_connection().
         """
+        if cancel_event is None:
+            cancel_event = begin_wifi_connection(card)
         log_info(f'[WiFi] Starting association attempt to "{ssid}" on interface {card}')
         GLib.idle_add(self.start_icon_animation)
+        restored = False
         try:
-            if not connect_to_ssid(ssid, card):
-                log_error(f'[WiFi] Daemon rejected selection of "{ssid}" on {card}')
-                GLib.idle_add(self.connection_failed, ssid, card)
-                return
-            log_debug(f'[WiFi] Selected network "{ssid}"; waiting up to 30s for association and DHCP...')
-            if wait_for_connection(card, ssid):
-                # It works, so now it is worth keeping. Until this point the
-                # network existed only in the daemon.
-                log_info(f'[WiFi] Successfully connected and associated with "{ssid}" on {card}')
-                wpa_save_config(card)
-                GLib.idle_add(show_connection_notification, ssid, True)
-            else:
-                self.connect_attempts += 1
-                log_warning(f'[WiFi] Connection attempt {self.connect_attempts}/{MAX_ATTEMPTS} to "{ssid}" timed out or failed')
-                if network is not None and self.connect_attempts < MAX_ATTEMPTS:
-                    GLib.idle_add(self.reopen_credentials_dialog, network, card,
-                                  enterprise)
-                else:
-                    # Out of tries, or an open network with nothing to
-                    # retype. Either way the block does not work, so it goes.
-                    log_error(f'[WiFi] Max attempts exceeded; forgetting network "{ssid}" on {card}')
-                    forget_network(ssid, card)
-                    GLib.idle_add(self.connection_failed, ssid, card, True)
+            with card_lock(card):
+                if cancel_event.is_set():
+                    log_debug(
+                        f'[WiFi] Connection attempt to "{ssid}" on {card} '
+                        f'cancelled before selection'
+                    )
+                    return
+                selected = False
+                try:
+                    if not connect_to_ssid(ssid, card, cancel_event=cancel_event):
+                        if cancel_event.is_set():
+                            log_debug(
+                                f'[WiFi] Connection attempt to "{ssid}" on {card} '
+                                f'cancelled during selection'
+                            )
+                            return
+                        log_error(f'[WiFi] Daemon rejected selection of "{ssid}" on {card}')
+                        GLib.idle_add(self.connection_failed, ssid, card)
+                        return
+                    selected = True
+                    log_debug(f'[WiFi] Selected network "{ssid}"; waiting up to 30s for association and DHCP...')
+                    if wait_for_connection(card, ssid, cancel_event=cancel_event):
+                        if cancel_event.is_set():
+                            log_debug(
+                                f'[WiFi] Connection attempt to "{ssid}" on {card} '
+                                f'cancelled after association'
+                            )
+                            return
+                        # It works, so now it is worth keeping. Until this point the
+                        # network existed only in the daemon.
+                        log_info(f'[WiFi] Successfully connected and associated with "{ssid}" on {card}')
+                        wpa_save_config(card)
+                        restored = restore_wifi_network(
+                            card,
+                            start_dhcp=True,
+                            expected_ssid=ssid,
+                            cancel_event=cancel_event,
+                        )
+                    elif cancel_event.is_set():
+                        log_debug(
+                            f'[WiFi] Connection attempt to "{ssid}" on {card} '
+                            f'cancelled while waiting for association'
+                        )
+                        return
+                    else:
+                        self.connect_attempts += 1
+                        log_warning(f'[WiFi] Connection attempt {self.connect_attempts}/{MAX_ATTEMPTS} to "{ssid}" timed out or failed')
+                        if network is not None and self.connect_attempts < MAX_ATTEMPTS:
+                            GLib.idle_add(self.reopen_credentials_dialog, network, card,
+                                          enterprise)
+                        else:
+                            # Out of tries, or an open network with nothing to
+                            # retype. Either way the block does not work, so it goes.
+                            log_error(f'[WiFi] Max attempts exceeded; forgetting network "{ssid}" on {card}')
+                            forget_network(ssid, card)
+                            GLib.idle_add(self.connection_failed, ssid, card, True)
+                finally:
+                    # select_network disabled the others; leaving them disabled
+                    # would strand the card. Run inside the per-card lock so a
+                    # concurrent disconnect_wifi() always runs after this.
+                    if selected:
+                        enable_all_networks(card)
+            if restored and not cancel_event.is_set():
+                wait_for_address(card, timeout=5, cancel_event=cancel_event)
+                if not cancel_event.is_set():
+                    GLib.idle_add(show_connection_notification, ssid, True)
         finally:
-            # select_network disabled the others; leaving them disabled
-            # would strand the card.
-            enable_all_networks(card)
+            end_wifi_connection(card, cancel_event)
             # Refresh before the animation ends: stop_icon_animation draws
             # whatever traystate holds.
             self.update_info()
-            GLib.idle_add(self.stop_icon_animation)
+            GLib.idle_add(self._finish_connection_ui, cancel_event)
 
     def reopen_credentials_dialog(self, network, card, enterprise=False):
         """

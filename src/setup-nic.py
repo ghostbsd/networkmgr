@@ -14,8 +14,30 @@ import os
 import re
 import shutil
 import sys
+from fnmatch import fnmatchcase
 from pathlib import Path
-from subprocess import run
+from subprocess import PIPE, run
+
+
+def _is_unmanaged(iface):
+    """Return True if iface is excluded via rc.conf or /usr/local/etc/networkmgr/unmanaged."""
+    patterns = []
+    res = run(
+        ['sysrc', '-n', 'networkmgr_ignore_interfaces'],
+        stdout=PIPE, stderr=PIPE, universal_newlines=True, check=False,
+    )
+    if res.returncode == 0 and res.stdout.strip():
+        patterns.extend(t for t in re.split(r'[\s,]+', res.stdout.strip()) if t)
+    unmanaged_file = Path('/usr/local/etc/networkmgr/unmanaged')
+    if unmanaged_file.is_file():
+        try:
+            for line in unmanaged_file.read_text(encoding='utf-8', errors='replace').splitlines():
+                entry = line.split('#', 1)[0].strip()
+                if entry:
+                    patterns.append(entry)
+        except OSError:
+            pass
+    return any(fnmatchcase(iface, pat) for pat in patterns)
 
 
 def file_content(paths):
@@ -92,7 +114,7 @@ NOT_NICS_REGEX = r"(enc|lo|fwe|fwip|tap|plip|pfsync|pflog|ipfw|tun|sl|faith|" \
 WIFI_DRIVER_REGEX = "(ath|ath[0-9]+k|bwi|bwn|ipw|iwlwifi|iwi|iwm|iwn|malo|mwl|mt79|otus|" \
     "ral|rsu|rtw|rtwn|rum|run|uath|upgt|ural|urtw|wpi|wtap|zyd)[0-9]+"
 
-if re.search(NOT_NICS_REGEX, nic):
+if re.search(NOT_NICS_REGEX, nic) or _is_unmanaged(nic):
     sys.exit(0)
 
 if re.search(WIFI_DRIVER_REGEX, nic):
