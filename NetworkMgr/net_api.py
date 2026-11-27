@@ -10,6 +10,7 @@ in this module touches GTK.
 """
 
 from concurrent.futures import ThreadPoolExecutor
+from fnmatch import fnmatchcase
 from ipaddress import IPv6Address
 from subprocess import (
     DEVNULL,
@@ -39,6 +40,10 @@ IP_REGEX = r'[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'
 
 # Threads for one refresh pass. They wait on subprocesses, not the CPU.
 _REFRESH_WORKERS = 6
+
+# Interfaces excluded from NetworkMgr management (rc.conf variable and optional file).
+UNMANAGED_RC_VAR = 'networkmgr_ignore_interfaces'
+UNMANAGED_CONF_PATH = '/usr/local/etc/networkmgr/unmanaged'
 
 # Per-interface reentrant locks and active-connection cancellation events
 # serialize Wi-Fi state transitions (connect, disconnect, disable, enable,
@@ -201,7 +206,99 @@ def _is_disabled(ifconfig_text):
     return 'UP' not in flags.group(1).split(',')
 
 
-def nics_list(snapshot=None):
+def unmanaged_interfaces():
+    """Return interface names or glob patterns excluded from NetworkMgr management.
+
+    Reads space- or comma-separated entries from the `networkmgr_ignore_interfaces`
+    rc.conf variable and, if present, one entry per line from
+    `/usr/local/etc/networkmgr/unmanaged` (ignoring blank lines and `#` comments).
+
+    Returns:
+        list[str]: deduplicated interface names / fnmatch patterns.
+    """
+    patterns = []
+    rc_val = _rc_conf_value(UNMANAGED_RC_VAR)
+    if rc_val:
+        for token in re.split(r'[\s,]+', rc_val.strip()):
+            if token and token not in patterns:
+                patterns.append(token)
+    if os.path.isfile(UNMANAGED_CONF_PATH):
+        try:
+            with open(UNMANAGED_CONF_PATH, 'r', encoding='utf-8', errors='replace') as fh:
+                for line in fh:
+                    entry = line.split('#', 1)[0].strip()
+                    if entry and entry not in patterns:
+                        patterns.append(entry)
+        except OSError:
+            pass
+    return patterns
+
+
+def is_interface_unmanaged(nic, patterns=None):
+    """Return True when `nic` is excluded from NetworkMgr management."""
+    if patterns is None:
+        patterns = unmanaged_interfaces()
+    return any(fnmatchcase(nic, pattern) for pattern in patterns)
+
+
+def set_interface_managed(nic, managed):
+    """Include or exclude a single interface from NetworkMgr management.
+
+    Updates `networkmgr_ignore_interfaces` in rc.conf via `sysrc` (and removes
+    an exact match from `/usr/local/etc/networkmgr/unmanaged` when re-enabling
+    management).
+
+    Args:
+        nic (str): interface name, for instance em0 or wlan0.
+        managed (bool): True to let NetworkMgr manage the interface, False
+            to exclude it.
+
+    Returns:
+        bool: True when the configuration was updated successfully.
+    """
+    nic = validate.interface(nic)
+    rc_val = _rc_conf_value(UNMANAGED_RC_VAR)
+    entries = [t for t in re.split(r'[\s,]+', rc_val.strip()) if t] if rc_val else []
+    if managed:
+        new_entries = [e for e in entries if e != nic]
+    else:
+        new_entries = list(entries)
+        if nic not in new_entries:
+            new_entries.append(nic)
+
+    if new_entries:
+        res = _run('sysrc', f'{UNMANAGED_RC_VAR}={" ".join(new_entries)}')
+    elif entries:
+        res = _run('sysrc', '-x', UNMANAGED_RC_VAR)
+    else:
+        res = None
+    if res is not None and res.returncode != 0:
+        log_error(
+            f'[Net] Failed to update {UNMANAGED_RC_VAR} for {nic} '
+            f'(rc={res.returncode}): {res.stderr.strip()}'
+        )
+        return False
+
+    if managed and os.path.isfile(UNMANAGED_CONF_PATH):
+        try:
+            with open(UNMANAGED_CONF_PATH, 'r', encoding='utf-8', errors='replace') as fh:
+                lines = fh.readlines()
+            filtered = [
+                line for line in lines
+                if line.split('#', 1)[0].strip() != nic
+            ]
+            if len(filtered) != len(lines):
+                with open(UNMANAGED_CONF_PATH, 'w', encoding='utf-8') as fh:
+                    fh.writelines(filtered)
+        except OSError as exc:
+            log_error(
+                f'[Net] Failed to update {UNMANAGED_CONF_PATH} for {nic}: {exc}'
+            )
+            return False
+    return True
+
+
+def nics_list(snapshot=None, include_unmanaged=False):
     """
     List the interfaces networkmgr manages.
 
@@ -209,10 +306,12 @@ def nics_list(snapshot=None):
         snapshot (dict or None): an ifconfig_snapshot() result to take the
             names from. Left None by callers that have no snapshot to hand,
             which then costs one `ifconfig -l`.
+        include_unmanaged (bool): when True, keep interfaces listed in
+            `networkmgr_ignore_interfaces` or `/usr/local/etc/networkmgr/unmanaged`.
 
     Returns:
-        list[str]: sorted interface names, with the virtual and tunnel
-            devices such as lo, bridge, tun and wg removed.
+        list[str]: sorted interface names, with virtual/tunnel devices and
+            (by default) user-excluded unmanaged interfaces removed.
     """
     not_nics_regex = r"(enc|lo|fwe|fwip|tap|plip|pfsync|pflog|ipfw|tun|sl|" \
         r"faith|ppp|bridge|wg|ng|gre|gif|epair)[0-9]+[a-z]?(\s*)|vm-[a-z]+(\s*)"
@@ -220,7 +319,13 @@ def nics_list(snapshot=None):
         nics = _run('ifconfig', '-l').stdout.strip()
     else:
         nics = ' '.join(snapshot)
-    return sorted(re.sub(not_nics_regex, '', nics).strip().split())
+    candidates = sorted(re.sub(not_nics_regex, '', nics).strip().split())
+    if include_unmanaged:
+        return candidates
+    patterns = unmanaged_interfaces()
+    if not patterns:
+        return candidates
+    return [nic for nic in candidates if not is_interface_unmanaged(nic, patterns)]
 
 
 def card_has_carrier(ifconfig_text):

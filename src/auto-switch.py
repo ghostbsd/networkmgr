@@ -3,9 +3,37 @@
 auto-switch - is used to automatically switch the default interface go down.
 """
 
+from fnmatch import fnmatchcase
+import os
 import sys
 import re
 from subprocess import run, PIPE
+
+
+def _unmanaged_patterns():
+    """Load interface exclusion patterns from rc.conf and /usr/local/etc/networkmgr/unmanaged."""
+    patterns = []
+    res = run(
+        ['sysrc', '-n', 'networkmgr_ignore_interfaces'],
+        stdout=PIPE, stderr=PIPE, universal_newlines=True, check=False,
+    )
+    if res.returncode == 0 and res.stdout.strip():
+        patterns.extend(t for t in re.split(r'[\s,]+', res.stdout.strip()) if t)
+    unmanaged_file = '/usr/local/etc/networkmgr/unmanaged'
+    if os.path.isfile(unmanaged_file):
+        try:
+            with open(unmanaged_file, 'r', encoding='utf-8', errors='replace') as fh:
+                for line in fh:
+                    entry = line.split('#', 1)[0].strip()
+                    if entry:
+                        patterns.append(entry)
+        except OSError:
+            pass
+    return patterns
+
+
+def _is_unmanaged(iface, patterns):
+    return any(fnmatchcase(iface, pat) for pat in patterns)
 
 args = sys.argv
 if len(args) != 2:
@@ -33,11 +61,15 @@ nics = run(
     check=False
 )
 
+unmanaged = _unmanaged_patterns()
 nics_left_over = nics.stdout.replace(nic, '').strip()
-nic_list = sorted(re.sub(NOT_NICS_REGEX, '', nics_left_over).strip().split())
+nic_list = [
+    n for n in sorted(re.sub(NOT_NICS_REGEX, '', nics_left_over).strip().split())
+    if not _is_unmanaged(n, unmanaged)
+]
 
-# Stop the script if the nic is not valid or not in the default route.
-if re.search(NOT_NICS_REGEX, nic):
+# Stop the script if the nic is not valid, unmanaged, or not in the default route.
+if re.search(NOT_NICS_REGEX, nic) or _is_unmanaged(nic, unmanaged):
     sys.exit(0)
 elif nic not in DEFAULT_NIC:
     sys.exit(0)
