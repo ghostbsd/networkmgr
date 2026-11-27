@@ -2081,18 +2081,18 @@ class NetworkSettingsWindow(Gtk.Window):
         if item['category'] == 'nic':
             if item['subtype'] == 'wifi':
                 if is_connected:
-                    disable_wifi(ident)
-                    show_connection_notification(ident, False)
+                    if disable_wifi(ident):
+                        show_connection_notification(ident, False)
                 else:
-                    enable_wifi(ident)
-                    show_connection_notification(ident, True)
+                    if enable_wifi(ident):
+                        show_connection_notification(ident, True)
             else:
                 if is_connected:
-                    stop_network_card(ident)
-                    show_connection_notification(ident, False)
+                    if stop_network_card(ident):
+                        show_connection_notification(ident, False)
                 else:
-                    start_network_card(ident)
-                    show_connection_notification(ident, True)
+                    if start_network_card(ident):
+                        show_connection_notification(ident, True)
             self._notify_changed()
             return
 
