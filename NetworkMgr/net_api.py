@@ -1012,30 +1012,42 @@ def restart_routing_and_dhcp(netcard):
     _run('service', 'dhclient', 'restart', netcard)
 
 
-def start_static_network(netcard, inet, netmask):
-    """Put a static IPv4 address on an interface and rebuild the routes.
+def start_static_network(netcard, inet, netmask, defaultrouter=None):
+    """Put a static IPv4 address on an interface without flushing other routes.
+
+    Avoids `service routing restart`, which flushes the entire routing table
+    and would remove an existing default route on another interface when this
+    interface is configured without a gateway.
 
     Args:
         netcard (str): interface name, for instance em0.
         inet (str): IPv4 address in dotted-decimal form.
         netmask (str): netmask in dotted-decimal form.
+        defaultrouter (str or None): optional IPv4 default gateway to install.
+            When omitted or empty, any existing default route is preserved.
     """
     _run('ifconfig', netcard, 'inet', inet, 'netmask', netmask)
-    _run('service', 'routing', 'restart')
+    if defaultrouter:
+        _run('route', 'delete', '-inet', 'default')
+        _run('route', 'add', '-inet', 'default', defaultrouter)
 
 
 # IPv6 configuration functions
 
-def start_static_ipv6_network(netcard, inet6, prefixlen):
-    """Configure a static IPv6 address on an interface and rebuild the routes.
+def start_static_ipv6_network(netcard, inet6, prefixlen, defaultrouter=None):
+    """Configure a static IPv6 address on an interface without flushing routes.
 
     Args:
         netcard (str): interface name, for instance em0.
         inet6 (str): IPv6 address.
         prefixlen (str or int): prefix length, for instance 64.
+        defaultrouter (str or None): optional IPv6 default gateway to install.
+            When omitted or empty, existing default routes are preserved.
     """
     _run('ifconfig', netcard, 'inet6', inet6, 'prefixlen', str(prefixlen))
-    _run('service', 'routing', 'restart')
+    if defaultrouter:
+        _run('route', 'delete', '-inet6', 'default')
+        _run('route', 'add', '-inet6', 'default', defaultrouter)
 
 
 def enable_slaac(netcard):
